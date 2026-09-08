@@ -1,0 +1,15 @@
+[Unit]
+Description=SWAMP game server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/frog/frog/game/server
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=3
+# NODE_ENV не используется кодом, просто для порядка
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

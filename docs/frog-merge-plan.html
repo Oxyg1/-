@@ -1,0 +1,193 @@
+<title>Frog Merge для Kissed Frog Holders</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Nunito:wght@400;600;800&display=swap">
+<style>
+:root{
+  --paper:#f2f5ec; --paper2:#e6ecdd; --ink:#15271f; --ink2:#48604f; --mute:#7a8f83;
+  --moss:#2c7a52; --moss2:#d9ecdf; --gold:#d99a13; --gold2:#fff1c6; --kiss:#d94f7f; --line:#cbd8cc;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f231b; --paper2:#163126; --ink:#eef4ea; --ink2:#b8cbbd; --mute:#84a08f;
+    --moss:#5fc98f; --moss2:#1d3c2d; --gold:#f2c14e; --gold2:#3c3113; --kiss:#ff7fa8; --line:#2b4a3a;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f231b; --paper2:#163126; --ink:#eef4ea; --ink2:#b8cbbd; --mute:#84a08f;
+  --moss:#5fc98f; --moss2:#1d3c2d; --gold:#f2c14e; --gold2:#3c3113; --kiss:#ff7fa8; --line:#2b4a3a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 17px/1.6 Nunito,"Segoe UI",system-ui,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:40px 22px 80px}
+.eyebrow{font:800 12px/1 Nunito,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--moss)}
+h1{font:800 clamp(28px,5vw,40px)/1.15 Unbounded,Nunito,sans-serif;margin:10px 0 14px;text-wrap:balance;letter-spacing:-.01em}
+h2{font:800 22px/1.25 Unbounded,Nunito,sans-serif;margin:56px 0 14px;text-wrap:balance}
+h3{font:800 17px/1.3 Nunito,sans-serif;margin:28px 0 8px}
+p{margin:0 0 14px}
+.lead{font-size:19px;color:var(--ink2)}
+ul,ol{padding-left:22px;margin:0 0 16px}
+li{margin:0 0 7px}
+li::marker{color:var(--moss)}
+strong{font-weight:800}
+code{font:600 14px/1 ui-monospace,Consolas,monospace;background:var(--paper2);padding:2px 6px;border-radius:6px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:22px 0 8px}
+.fact{background:var(--paper2);border-radius:14px;padding:14px 14px 12px}
+.fact b{display:block;font:800 26px/1.1 Unbounded,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)}
+.fact span{font-size:13px;color:var(--mute)}
+.note{border-left:4px solid var(--gold);background:var(--gold2);padding:12px 16px;border-radius:0 12px 12px 0;margin:18px 0;font-size:15.5px}
+.note.moss{border-color:var(--moss);background:var(--moss2)}
+.note.kiss{border-color:var(--kiss);background:var(--paper2)}
+.tbl{overflow-x:auto;margin:14px 0 22px;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:15px;min-width:520px}
+th{text-align:left;font:800 12px/1.2 Nunito,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);padding:10px 12px;border-bottom:1px solid var(--line);background:var(--paper2)}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:800}
+.tag{display:inline-block;font:800 11px/1 Nunito,sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:999px;background:var(--moss2);color:var(--moss);margin-right:4px;vertical-align:middle}
+.tag.gold{background:var(--gold2);color:var(--gold)}
+.tag.kiss{background:var(--paper2);color:var(--kiss)}
+.flow{display:grid;gap:8px;margin:16px 0 20px}
+.step{display:grid;grid-template-columns:36px 1fr;gap:12px;align-items:start;background:var(--paper2);border-radius:12px;padding:12px 14px}
+.step i{font:800 14px/36px Unbounded,sans-serif;font-style:normal;text-align:center;width:36px;height:36px;border-radius:10px;background:var(--moss);color:#fff}
+.step b{display:block}
+.step span{font-size:15px;color:var(--ink2)}
+.toc{background:var(--paper2);border-radius:14px;padding:14px 18px;margin:26px 0 10px;font-size:15px}
+.toc a{color:var(--moss);text-decoration:none;font-weight:800}
+.toc ol{margin:6px 0 0;padding-left:20px}
+a{color:var(--moss)}
+.muted{color:var(--mute);font-size:14px}
+</style>
+
+<div class="wrap">
+<div class="eyebrow">Frog Merge · план развития · сентябрь 2026</div>
+<h1>Что после Happy Pepe, как затащить чат и на чём зарабатывать</h1>
+<p class="lead">Три решения в одном документе: концовка игры, интеграция в чат Kissed Frog Holders и магазин на Telegram Stars. Всё, что касается возможностей Telegram, сверено с Bot API 10.3 и документацией Mini Apps.</p>
+
+<div class="facts">
+  <div class="fact"><b>14 278</b><span>выпущено Kissed Frog, 50 моделей</span></div>
+  <div class="fact"><b>371</b><span>участник чата, ~210 онлайн</span></div>
+  <div class="fact"><b>50</b><span>уровней в игре = 50 моделей подарка</span></div>
+  <div class="fact"><b>API 10.3</b><span>бот видит подарки игрока</span></div>
+</div>
+
+<div class="note moss"><strong>Главная находка.</strong> Метод <code>getUserGifts</code> возвращает боту уникальные подарки пользователя вместе с названием модели и её редкостью. Значит, игра может узнать, какая именно лягушка у человека в профиле, и построить вокруг неё и концовку, и статус в чате, и часть магазина. На этом держится весь план.</div>
+
+<div class="toc">Разделы
+<ol>
+<li><a href="#end">Концовка: что делать, когда дошёл до Happy Pepe</a></li>
+<li><a href="#chat">Чат: как игра живёт внутри Kissed Frog Holders</a></li>
+<li><a href="#stars">Stars: что продаём и почём</a></li>
+<li><a href="#build">Что придётся построить и в каком порядке</a></li>
+<li><a href="#risks">Риски</a></li>
+</ol></div>
+
+<h2 id="end">1. Концовка</h2>
+<p>Сейчас лестница из 50 уровней линейная, и после Happy Pepe игроку нечего делать. Предлагаю не одну концовку, а три слоя, которые включаются по очереди. Так игра остаётся «СДВГ-игрой» с короткими циклами, но у неё появляется горизонт на месяцы.</p>
+
+<h3>Слой 1. Своя лягушка как личный финал</h3>
+<p>Для холдера настоящий финал не Happy Pepe, а <strong>та модель, что у него в профиле</strong>. Когда игрок доращивает до неё, игра сверяет с <code>getUserGifts</code> и выдаёт особую сцену: его реальный подарок с настоящим бэкдропом и символом появляется на кликере, а рядом с именем в лидерборде закрепляется значок «Хозяин». Владелец Cranberry получает финал на 4-м уровне и празднует через час, владелец Lucifrog идёт к своему на 45-й. Это честно отражает редкость подарка и даёт каждому свою историю.</p>
+<p>Дальше кликер можно переключать на любую открытую модель, но «своя» остаётся с настоящим бэкдропом. Это единственный скин, который нельзя купить, и это правильно: он подтверждает владение.</p>
+
+<h3>Слой 2. Пруд (престиж)</h3>
+<p>Дошёл до Happy Pepe, значит «выпускаешь» его в пруд. Поле обнуляется, но:</p>
+<ul>
+<li>постоянный множитель дохода растёт с каждым выпуском, так что второй проход заметно короче первого;</li>
+<li>стартовый уровень призыва начинается выше, поэтому первые 10 уровней пролетают за минуты;</li>
+<li>открывается новый фон поля. Фоны берём из реальных бэкдропов подарка: Azure Blue, и дальше по списку. Это напрямую говорит с аудиторией, они эти названия знают наизусть;</li>
+<li>в пруду под кликером накапливаются выпущенные лягушки. Их видно, они прыгают, и это витрина прогресса.</li>
+</ul>
+<p>Престиж закрывает вопрос «дошёл и всё» и одновременно нормализует темп. Сейчас до 50-го уровня примерно 27 слияний на уровень при спокойной игре, это недели. С престижем первый проход можно спокойно делать длиной 7–10 дней, а следующие в два раза короче.</p>
+
+<h3>Слой 3. Сезоны и лидерборд</h3>
+<p>Сезон длится две недели. Считаем не монеты, они инфлируют, а <strong>очки пруда</strong>: сумму уровней всех слитых лягушек. Прогресс не сбрасывается, сбрасывается только сезонный счёт. Топ сезона получает призы из раздела Stars. Лидерборд живёт в чате, см. следующий раздел.</p>
+
+<div class="note"><strong>Что не делать.</strong> Не добавлять 51-й, 52-й уровень выдуманных лягушек. Ценность игры в том, что 50 уровней это 50 настоящих моделей, которые есть у людей в чате. Придуманные модели эту связь разрушат.</div>
+
+<h2 id="chat">2. Чат Kissed Frog Holders</h2>
+<p>Чат небольшой и очень живой: 210 онлайн из 371. Такой чат легко перекормить. Правило: <strong>бот пишет в чат не чаще одного раза в день</strong>, всё остальное делают сами участники через шаринг. Ниже точка входа, верификация, шаринг и общие события.</p>
+
+<h3>Вход</h3>
+<div class="flow">
+<div class="step"><i>1</i><div><b>Бот добавляется в чат</b><span>Команда /play и закреплённое сообщение с кнопкой. В группах кнопка ведёт на прямую ссылку Mini App вида <code>t.me/бот/игра?startapp=chat</code>. Запущенная из группы игра получает <code>chat_type</code> и <code>chat_instance</code>, так что мы знаем, что человек пришёл из чата холдеров.</span></div></div>
+<div class="step"><i>2</i><div><b>Верификация холдера</b><span>При первом запуске бэкенд вызывает <code>getUserGifts(user_id)</code>, ищет уникальный подарок с <code>base_name</code> «Kissed Frog» и берёт <code>model.name</code>. Модель отображается на уровень игры, редкость <code>rarity_per_mille</code> совпадает с процентами из твоего списка.</span></div></div>
+<div class="step"><i>3</i><div><b>Режим холдера</b><span>Значок «Хозяин», своя лягушка как личный финал, +25% к доходу, имя в лидерборде с моделью. Не холдеры играют без значка и без личного финала. Это мягкий стимул купить лягушку, что чату только на руку: игра поддерживает спрос на подарок.</span></div></div>
+</div>
+
+<h3>Шаринг вместо спама</h3>
+<ul>
+<li><strong>Карточка новой лягушки.</strong> Через <code>savePreparedInlineMessage</code> и <code>WebApp.shareMessage</code> игрок сам отправляет в чат карточку «Вырастил Count Croakula, 0,5%» с кнопкой «Играть». Разрешаем только групповые чаты и не чаще одной карточки на новую модель. Это единственный способ, каким игра появляется в чате в течение дня, и появляется от человека, а не от бота.</li>
+<li><strong>Истории.</strong> <code>shareToStory</code> для больших событий: своя лягушка, престиж, топ-3 сезона. Работает на 14 тысяч владельцев за пределами чата.</li>
+<li><strong>Эмодзи-статус.</strong> Собираем набор кастомных эмодзи из тех же TGS и через <code>setEmojiStatus</code> предлагаем поставить текущую лягушку в статус. Люди в этом чате уже показывают подарок в профиле, статус для них естественен, а для игры это бесплатная реклама в каждом чате, где они пишут.</li>
+</ul>
+
+<h3>Что пишет бот</h3>
+<p>Одно сообщение в день в фиксированное время, лидерборд редактируется через <code>editMessageText</code>, а не постится заново. Содержание:</p>
+<ul>
+<li>топ-10 сезона с моделями лягушек рядом с именами;</li>
+<li>кто за сутки вырастил редкое (1% и реже): три-пять имён, не больше;</li>
+<li>прогресс общей цели.</li>
+</ul>
+
+<h3>Общий пруд</h3>
+<p>Одна цель на весь чат: например, 50 000 слияний за неделю. При достижении все получают бустер на сутки. Это единственная механика, где выгодно звать других играть, и она делает чат командой, а не списком одиночек. Пороги видны в игре и в дневном сообщении.</p>
+
+<h3>Рефералы</h3>
+<p>Ссылка <code>?startapp=ref_ID</code> даёт бонус обоим. Отдельно считаем «привёл холдера», такая приглашённая лягушка ценнее.</p>
+
+<div class="note kiss"><strong>Про верификацию.</strong> <code>getUserGifts</code> появился недавно, и документация не описывает ограничения по приватности. Скорее всего, метод работает только для пользователей, которые запустили бота, и это нам подходит: игрок запускает игру и есть контакт. Первым делом при разработке проверить это на живом аккаунте. Запасной вариант: игрок присылает ссылку <code>t.me/nft/KissedFrog-N</code>, а бэкенд сверяет владельца на публичной странице подарка. Слабее, но работает.</div>
+
+<h2 id="stars">3. Магазин на Telegram Stars</h2>
+<p>Принципы: продаём время, косметику и статус, не продаём места в лидерборде. Ничего случайного за деньги, никаких сундуков с реальными подарками. Цены в Stars, при оплате через магазины приложений пользователь платит примерно 2 цента за звезду, разработчик при выводе через Fragment получает около 1,3 цента, вывод возможен через 21 день после платежа.</p>
+
+<div class="tbl"><table>
+<tr><th>Товар</th><th>Что даёт</th><th>Цена</th><th>Тип</th></tr>
+<tr><td><strong>Мушка</strong></td><td>Автокликер: лягушка сама тапает, пока игра открыта. Отвечает на «постепенно», которое ты отложил, и делает это платным.</td><td class="num">50★ / сутки<br>490★ навсегда</td><td><span class="tag">время</span></td></tr>
+<tr><td><strong>Ускорение ×2</strong></td><td>Двойной доход с тапа.</td><td class="num">25★ / час<br>99★ / сутки</td><td><span class="tag">время</span></td></tr>
+<tr><td><strong>Большой пруд 6×6</strong></td><td>Одиннадцать дополнительных клеток навсегда. Самая ценная покупка: поле 5×5 быстро забивается.</td><td class="num">299★</td><td><span class="tag gold">навсегда</span></td></tr>
+<tr><td><strong>Дикая лягушка ×3</strong></td><td>Джокер, который сливается с любыми двумя одинаковыми. Спасает от тупика.</td><td class="num">39★</td><td><span class="tag">расходник</span></td></tr>
+<tr><td><strong>Бэкдропы и символы</strong></td><td>Фон поля и узор из реальных бэкдропов и символов подарка. Чистая косметика.</td><td class="num">59★ за штуку</td><td><span class="tag kiss">косметика</span></td></tr>
+<tr><td><strong>Абонемент пруда</strong></td><td>Подписка на 30 дней через <code>subscription_period</code>: ежедневный подарок, мушка включена, рамка в лидерборде, ранний доступ к сезонным фонам.</td><td class="num">199★ / мес</td><td><span class="tag gold">подписка</span></td></tr>
+<tr><td><strong>Покормить пруд</strong></td><td>Донат от 1 до 500★ через <code>max_tip_amount</code>. Ускоряет общую цель чата, имя донатера попадает в дневное сообщение. Это социальная покупка, и в чате холдеров она будет работать лучше любого бустера.</td><td class="num">1–500★</td><td><span class="tag kiss">социальное</span></td></tr>
+</table></div>
+
+<h3>Призы сезона</h3>
+<p>Часть выручки возвращаем в чат. Два механизма, оба есть в Bot API:</p>
+<ul>
+<li><strong>Обычные подарки</strong> через <code>sendGift</code>: бот отправляет топ-3 подарки за Stars прямо со своего баланса. Просто и автоматически.</li>
+<li><strong>Настоящий Kissed Frog</strong> победителю сезона через <code>transferGift</code>. Для этого владелец проекта подключает свой аккаунт как бизнес-аккаунт и даёт боту право <code>can_transfer_and_upgrade_gifts</code>. Подарок покупается на рынке заранее и лежит на этом аккаунте. Один такой приз в месяц даст чату повод обсуждать игру сильнее любой рекламы.</li>
+</ul>
+
+<h3>Как проходит платёж</h3>
+<div class="flow">
+<div class="step"><i>1</i><div><b>Бэкенд создаёт ссылку</b><span><code>createInvoiceLink</code> с <code>currency: "XTR"</code>, пустым <code>provider_token</code>, одной позицией в <code>prices</code> и полезной нагрузкой с ID игрока и товара.</span></div></div>
+<div class="step"><i>2</i><div><b>Игра открывает оплату</b><span><code>WebApp.openInvoice(link)</code>, результат приходит в событие <code>invoiceClosed</code>.</span></div></div>
+<div class="step"><i>3</i><div><b>Бот подтверждает</b><span>На <code>pre_checkout_query</code> ответить за 10 секунд, затем в <code>successful_payment</code> сохранить <code>telegram_payment_charge_id</code> и только после этого выдать товар на сервере.</span></div></div>
+<div class="step"><i>4</i><div><b>Поддержка</b><span><code>refundStarPayment</code> для возвратов, <code>getMyStarBalance</code> и <code>getStarTransactions</code> для сверки, <code>editUserStarSubscription</code> для отмены абонемента.</span></div></div>
+</div>
+
+<h3>Честная оценка денег</h3>
+<p>Чат из 371 человека сам по себе не бизнес. Если играть начнёт половина, а платить четверть из них по 300★ в месяц, это около 14 000★ в месяц, то есть примерно 180 долларов при выводе. Ценность чата в другом: это ядро, которое протестирует игру и разнесёт её по 14 тысячам владельцев через истории, статусы и карточки. А у самой игры есть путь роста, который важнее любого бустера: <strong>тот же движок переодевается под любую коллекцию подарков</strong>. У каждой коллекции есть свой чат холдеров с теми же людьми и тем же желанием показать свою редкость. Kissed Frog это пилот франшизы, а не конечный продукт.</p>
+
+<h2 id="build">4. Что придётся построить</h2>
+<p>Сейчас вся игра живёт в браузере, и это нормально для прототипа. Верификация, лидерборд и платежи требуют сервера, который считает экономику сам и не верит клиенту.</p>
+
+<div class="tbl"><table>
+<tr><th>Этап</th><th>Что делаем</th><th>Зачем именно сейчас</th></tr>
+<tr><td class="num">Недели 1–2</td><td>Бот и API: проверка <code>initData</code>, серверное состояние игрока, тапы пачками с лимитом в секунду, <code>getUserGifts</code> и режим холдера, лидерборд.</td><td>Без сервера любой лидерборд накрутят за минуту, а без холдерского режима игра ничем не отличается от чужой.</td></tr>
+<tr><td class="num">Неделя 3</td><td>Бот в чате: /play, дневное сообщение, общая цель, карточки через <code>shareMessage</code>, рефералы.</td><td>Это момент запуска в чате. До него игру никому не показывать, первое впечатление в маленьком чате единственное.</td></tr>
+<tr><td class="num">Неделя 4</td><td>Магазин: инвойсы, обработка платежей, мушка, поле 6×6, дикие лягушки, «покормить пруд».</td><td>Продавать можно, когда есть кому. К этому моменту есть неделя данных, что людям не хватает.</td></tr>
+<tr><td class="num">Недели 5–6</td><td>Своя лягушка как финал, престиж с бэкдропами, первый сезон с призом, эмодзи-статусы.</td><td>Первые игроки как раз доходят до верха лестницы.</td></tr>
+</table></div>
+<p class="muted">Стек не принципиален. Разумный минимум: Node с grammY для бота, Postgres для состояния и покупок, Redis для лидерборда и лимитов, статика Mini App на любом HTTPS-хостинге. Готовый файл игры уже собран одним HTML.</p>
+
+<h2 id="risks">5. Риски</h2>
+<ul>
+<li><strong>Приватность подарков.</strong> Если <code>getUserGifts</code> окажется недоступен для части пользователей, режим холдера получат не все. Проверить в первый день разработки, держать запасной вариант со ссылкой на подарок.</li>
+<li><strong>Усталость чата.</strong> Один пост в день и лимит на карточки. Если админы попросят реже, сделать раз в неделю без обсуждений.</li>
+<li><strong>Накрутка.</strong> Серверный счёт, лимит тапов, аномалии в дневном отчёте админам. Призы выдавать вручную после проверки первые два сезона.</li>
+<li><strong>Возвраты Stars.</strong> Telegram позволяет пользователям запрашивать возврат. Хранить историю покупок, при возврате отзывать товар.</li>
+<li><strong>Правила Telegram.</strong> Продаём только цифровые товары внутри игры, без случайных призов за деньги. Реальный подарок только за место в сезоне, не за лотерею.</li>
+<li><strong>Зависимость от одной коллекции.</strong> Если интерес к Kissed Frog упадёт, упадёт и игра. Лечится франшизой: движок с первого дня писать так, чтобы список моделей и стикеры были данными, а не кодом. В текущем прототипе это уже так.</li>
+</ul>
+
+<p class="muted">Источники: Bot API 10.3 (методы getUserGifts, transferGift, sendGift, createInvoiceLink, savePreparedInlineMessage, refundStarPayment), документация Telegram Mini Apps (shareMessage, shareToStory, setEmojiStatus, openInvoice, startapp), публичные страницы t.me/kissed_frog_holders и t.me/nft/KissedFrog-1.</p>
+</div>

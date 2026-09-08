@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b3527">
+<title>SWAMP</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<script src="levels.js"></script>
+<script src="backdrops.js"></script>
+<!--CONFIG-->
+<style>
+:root{
+  --acc:#ffd23f; --acc2:#f5a800; --acc-dark:#a86f00; --txt:#fff;
+  --bg1:#3aa373; --bg2:#1b6b4a; --bg3:#0c3a2a; --card1:#2a8a5e; --card2:#155a3d;
+}
+/* фон подарка: цвета приходят из бэкдропа лягушки, которой владеет игрок */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
+body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;background:#0c3a2a;color:var(--txt);touch-action:manipulation}
+#app{height:100dvh;height:var(--tg-viewport-stable-height,100dvh);display:flex;flex-direction:column;gap:8px;
+  background:radial-gradient(130% 70% at 50% -10%,var(--bg1) 0%,var(--bg2) 40%,var(--bg3) 100%);transition:background .4s;
+  padding:calc(var(--tg-safe-area-inset-top,env(safe-area-inset-top,0px)) + var(--tg-content-safe-area-inset-top,0px) + 16px) 12px calc(var(--tg-safe-area-inset-bottom,env(safe-area-inset-bottom,0px)) + 12px)}
+
+/* HUD */
+.hud{display:flex;align-items:center;gap:5px}
+.pill{display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.3);border-radius:999px;padding:3px 10px 3px 3px;font-weight:900;font-size:16px;box-shadow:inset 0 2px 0 rgba(255,255,255,.1),0 3px 8px rgba(0,0,0,.25);white-space:nowrap}
+.pill img{width:28px;height:28px}
+.pill.coins{flex:1;min-width:0}
+.pill.coins span{overflow:hidden;text-overflow:ellipsis}
+.pill.bump{animation:bump .25s}
+@keyframes bump{40%{transform:scale(1.12)}}
+.iconbtn{width:37px;height:37px;flex:none;border:0;border-radius:12px;background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;padding:0;box-shadow:inset 0 2px 0 rgba(255,255,255,.1),0 3px 8px rgba(0,0,0,.25);position:relative}
+.iconbtn img{width:28px;height:28px}
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+.ic{display:inline-block;flex:none;width:1.1em;height:1.1em;vertical-align:-.18em}
+.iconbtn .ic{width:23px;height:23px}
+.btn .ic{width:19px;height:19px;vertical-align:-.2em}
+.chip .ic,.item .buy .ic{width:16px;height:16px;vertical-align:-.2em}
+.head h2 .ic{width:21px;height:21px;vertical-align:-.2em}
+.pond .t .ic{width:16px;height:16px;vertical-align:-.22em}
+.lb .rk .ic{width:25px;height:25px;vertical-align:-.4em}
+.ic.m1{color:#ffd23f}.ic.m2{color:#d3dae0}.ic.m3{color:#cd8032}
+.ic.gold{color:#ffd23f}
+.badge .ic{width:11px;height:11px;vertical-align:-.12em}
+#hint .ic{width:16px;height:16px;vertical-align:-.22em}
+#loading h2 .ic{width:26px;height:26px;vertical-align:-.25em}
+.float .ic{width:19px;height:19px;vertical-align:-.2em}
+.frog .lvl .ic{width:9px;height:9px;vertical-align:0}
+.iconbtn:active{transform:scale(.92)}
+
+#hint{text-align:center;font-size:15px;min-height:20px;opacity:.9;transition:opacity .3s;line-height:1.25}
+#hint.hide{opacity:0}
+
+/* BOARD */
+.board-wrap{display:flex;justify-content:center}
+#board{position:relative;width:min(100%,calc(100dvh - 370px));min-width:240px;aspect-ratio:1;border-radius:22px;background:rgba(0,0,0,.25);box-shadow:inset 0 4px 14px rgba(0,0,0,.35),0 2px 0 rgba(255,255,255,.06);touch-action:none}
+.cell{position:absolute;border-radius:14px;background:rgba(255,255,255,.09);box-shadow:inset 0 2px 0 rgba(255,255,255,.06);transition:background .15s,box-shadow .15s}
+.cell.hl{background:rgba(255,210,63,.35);box-shadow:inset 0 0 0 3px var(--acc)}
+/* тень висит на статичном контейнере, а не на картинке, которая крутится в idle-анимации —
+   иначе телефон каждый кадр пересчитывает drop-shadow разом для четверти доски, и всё тормозит */
+.frog{position:absolute;left:0;top:0;width:var(--cs);height:var(--cs);transform:translate(var(--x),var(--y));transition:transform .2s cubic-bezier(.2,.8,.2,1.15);will-change:transform;display:flex;align-items:center;justify-content:center;pointer-events:none;filter:drop-shadow(0 4px 3px rgba(0,0,0,.35))}
+.frog img{width:96%;height:96%;object-fit:contain;transform-origin:50% 90%;will-change:transform}
+.frog .lvl{position:absolute;right:3px;bottom:2px;font-size:11px;font-weight:900;line-height:16px;background:rgba(0,0,0,.5);border-radius:8px;padding:0 5px;color:#ffe680}
+.frog.wild .lvl{background:linear-gradient(90deg,#ff5d7a,#ffd23f,#7fe3ff);color:#222}
+.frog.wild{filter:drop-shadow(0 0 6px #ffd23f) drop-shadow(0 4px 3px rgba(0,0,0,.35))}
+.frog.junk::after{content:"";position:absolute;left:2px;top:1px;width:14px;height:14px;background:url("icons/meat.png") center/contain no-repeat;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
+.frog.selected img{animation:wiggle .45s ease-in-out infinite}
+@keyframes wiggle{0%,100%{transform:rotate(-6deg) scale(1.06)}50%{transform:rotate(6deg) scale(1.06)}}
+.frog.dragging{transition:none;z-index:20}
+.frog.dragging img{transform:scale(1.18);filter:drop-shadow(0 12px 10px rgba(0,0,0,.45))}
+.frog.pop img{animation:pop .5s cubic-bezier(.2,.9,.3,1.5)}
+@keyframes pop{0%{transform:scale(0)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
+.frog.merging{transition:transform .22s cubic-bezier(.5,0,.8,.4);z-index:5}
+.frog.merging img{transform:scale(.6);opacity:.8}
+.frog.idle img{animation:idle 2.6s ease-in-out infinite}
+@keyframes idle{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-2px) scaleY(1.03)}}
+.frog.eaten{transition:transform .25s cubic-bezier(.5,0,.9,.4),opacity .25s;opacity:0}
+
+/* ACTION BAR */
+#actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;min-height:0}
+#actions:empty{display:none}
+.chip{border:0;border-radius:999px;padding:8px 14px;font:900 14px Nunito,system-ui;color:#fff;background:rgba(0,0,0,.35);display:flex;align-items:center;gap:6px;box-shadow:inset 0 2px 0 rgba(255,255,255,.1)}
+.chip.gold{background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00;box-shadow:0 3px 0 var(--acc-dark)}
+.chip.red{background:linear-gradient(#ff8fa3,#e0405f);color:#fff;box-shadow:0 3px 0 #8f1f36}
+.chip:active{transform:translateY(2px);box-shadow:none}
+.chip img{width:20px;height:20px}
+
+/* CLICKER */
+.clicker-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;min-height:0;position:relative}
+#combo{position:absolute;top:0;left:0;right:0;display:flex;justify-content:center;pointer-events:none;opacity:0;transition:opacity .25s;transform:translateY(-4px)}
+#combo.on{opacity:1}
+#combo .cb{display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.35);border-radius:999px;padding:3px 12px 3px 6px;font-size:16px;font-weight:900;color:#ffd23f}
+#combo img{width:24px;height:24px}
+#clicker{flex:1;min-height:110px;width:100%;display:flex;align-items:center;justify-content:center;touch-action:none;position:relative;border-radius:24px;transition:background .15s}
+#clicker.feed{background:rgba(255,210,63,.18);box-shadow:inset 0 0 0 3px rgba(255,210,63,.6)}
+#clicker::before{content:"";position:absolute;left:50%;bottom:6%;width:46%;height:8%;transform:translateX(-50%);background:rgba(0,0,0,.28);border-radius:50%;filter:blur(4px)}
+#clickerLottie{height:100%;aspect-ratio:1;max-height:230px;transition:transform .09s cubic-bezier(.2,.8,.2,1);position:relative;transform-origin:50% 92%}
+#clickerLottie svg{display:block}
+#clickerLottie.squash{transform:scale(1.1,.88)}
+#fly{position:absolute;right:14%;top:12%;width:30px;height:30px;display:none;animation:fly 1.6s ease-in-out infinite;filter:drop-shadow(0 2px 2px rgba(0,0,0,.4))}
+#fly .ic{width:100%;height:100%}
+#fly.on{display:block}
+@keyframes fly{0%,100%{transform:translate(0,0) rotate(-10deg)}50%{transform:translate(-14px,10px) rotate(10deg)}}
+#frogName{font-size:17px;font-weight:900;text-shadow:0 2px 4px rgba(0,0,0,.4);display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center}
+#frogName small{font-size:13px;opacity:.8;font-weight:800}
+.boost{font-size:12px;background:rgba(255,93,122,.35);border-radius:999px;padding:2px 8px;color:#ffd23f}
+
+#btnSpawn{width:100%;max-width:380px;border:0;border-radius:24px;padding:9px 14px 9px 9px;background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00;font:900 20px/1 Nunito,system-ui;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 0 var(--acc-dark),0 12px 18px rgba(0,0,0,.35);transition:transform .07s,box-shadow .07s,filter .2s;touch-action:none}
+#btnSpawn img.fr{width:44px;height:44px;background:rgba(255,255,255,.35);border-radius:14px}
+#btnSpawn .cost{display:flex;align-items:center;gap:4px;background:rgba(90,59,0,.15);border-radius:999px;padding:4px 10px 4px 5px;font-size:17px}
+#btnSpawn .cost img{width:22px;height:22px}
+#btnSpawn.down,#btnSpawn:active{transform:translateY(5px);box-shadow:0 1px 0 var(--acc-dark),0 4px 8px rgba(0,0,0,.35)}
+#btnSpawn.poor{filter:grayscale(.55) brightness(.85)}
+#btnSpawn.shake{animation:shake .35s}
+@keyframes shake{20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+
+/* FX */
+#fx{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden}
+.float{position:absolute;font-size:22px;font-weight:900;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.5),0 0 10px rgba(0,0,0,.4);animation:floatUp .85s cubic-bezier(.1,.7,.3,1) forwards;transform:translate(-50%,-50%);white-space:nowrap}
+.float.crit{color:#ffd23f;font-size:32px;animation-duration:1.1s}
+.float.big{color:#9dffb0;font-size:26px}
+.float.small{font-size:15px;opacity:.8}
+@keyframes floatUp{to{transform:translate(-50%,-160%) scale(1.1);opacity:0}}
+.coinp{position:absolute;width:26px;height:26px;transform:translate(-50%,-50%);animation:coinp .7s cubic-bezier(.2,.7,.3,1) forwards}
+.coinp img{width:100%;height:100%}
+@keyframes coinp{0%{transform:translate(-50%,-50%) scale(.4)}30%{opacity:1}100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(.9) rotate(var(--r));opacity:0}}
+.spark{position:absolute;width:10px;height:10px;border-radius:50%;background:var(--c,#fff);transform:translate(-50%,-50%);animation:spark .6s ease-out forwards}
+@keyframes spark{to{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(0);opacity:0}}
+#toast{position:fixed;left:50%;top:18%;transform:translate(-50%,0);background:rgba(0,0,0,.75);border-radius:16px;padding:10px 16px;font-size:16px;opacity:0;transition:opacity .25s,transform .25s;z-index:200;pointer-events:none;text-align:center;max-width:82vw}
+#toast.on{opacity:1;transform:translate(-50%,-8px)}
+
+/* OVERLAYS */
+/* поверх #app свой fixed-слой на весь экран — safe-area сюда сам не приходит,
+   прописываем те же отступы явно, иначе шапка окна лезет под чёлку/статус-бар в фулскрине */
+.overlay{position:fixed;inset:0;background:rgba(3,25,17,.88);display:flex;align-items:center;justify-content:center;z-index:100;
+  padding:calc(var(--tg-safe-area-inset-top,env(safe-area-inset-top,0px)) + var(--tg-content-safe-area-inset-top,0px) + 16px) 16px calc(var(--tg-safe-area-inset-bottom,env(safe-area-inset-bottom,0px)) + 16px)}
+.overlay.hidden{display:none}
+.card{background:linear-gradient(var(--card1),var(--card2));border-radius:28px;padding:18px 16px;width:100%;max-width:400px;max-height:92dvh;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 20px 50px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,255,255,.15);position:relative;overflow:hidden;animation:cardIn .4s cubic-bezier(.2,.9,.3,1.4)}
+@keyframes cardIn{from{transform:scale(.6);opacity:0}}
+.card h2{margin:0;font-size:24px;font-weight:900;text-shadow:0 2px 0 rgba(0,0,0,.3)}
+.card .sub{opacity:.85;font-size:15px;text-align:center}
+.head{display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px}
+.head h2{font-size:22px}
+.scroll{width:100%;overflow:auto;flex:1;min-height:0;padding:2px}
+#luLottie{width:200px;height:200px}
+#luName{font-size:24px;color:#ffd23f;font-weight:900;text-shadow:0 2px 0 rgba(0,0,0,.4)}
+#luLv{display:flex;align-items:center;gap:6px;font-size:17px}
+#luLv img{width:24px;height:24px}
+.btn{border:0;border-radius:18px;padding:12px 24px;background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00;font:900 18px Nunito,system-ui;box-shadow:0 5px 0 var(--acc-dark);margin-top:4px;display:inline-flex;align-items:center;gap:8px;justify-content:center}
+.btn:active{transform:translateY(4px);box-shadow:0 1px 0 var(--acc-dark)}
+.btn.ghost{background:rgba(0,0,0,.3);color:#fff;box-shadow:0 5px 0 rgba(0,0,0,.4);font-size:15px;padding:9px 16px}
+.btn.sm{font-size:15px;padding:9px 16px}
+.row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;width:100%}
+.conf{position:absolute;width:10px;height:14px;top:-20px;background:var(--c);animation:conf 2.2s linear infinite;border-radius:2px}
+@keyframes conf{to{transform:translateY(120vh) rotate(720deg)}}
+.rar{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:rgba(0,0,0,.35);color:#ffe680}
+
+#colGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%}
+.slot{aspect-ratio:1;border-radius:14px;background:rgba(0,0,0,.28);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;text-align:center;padding:4px;gap:2px;position:relative}
+.slot img{width:70%;height:70%;object-fit:contain}
+.slot.locked{opacity:.55}
+.slot.locked img{filter:brightness(0) opacity(.5)}
+.slot .n{position:absolute;top:2px;left:6px;font-size:10px;color:#ffe680}
+.slot.cur{box-shadow:inset 0 0 0 3px var(--acc)}
+.slot.mine{box-shadow:inset 0 0 0 3px #ff5d7a}
+
+/* SHOP */
+.item{display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:center;background:rgba(0,0,0,.25);border-radius:16px;padding:10px;margin-bottom:8px}
+.item img{width:52px;height:52px;object-fit:contain}
+.bdview{width:52px;height:52px;border-radius:14px;display:block;box-shadow:inset 0 2px 0 rgba(255,255,255,.25),0 2px 6px rgba(0,0,0,.35)}
+.item b{display:block;font-size:15px}
+.item span{font-size:12.5px;opacity:.85;font-weight:700;line-height:1.25;display:block}
+.item .buy{border:0;border-radius:14px;padding:9px 12px;background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00;font:900 14px Nunito,system-ui;box-shadow:0 3px 0 var(--acc-dark);white-space:nowrap}
+.item .buy:active{transform:translateY(2px);box-shadow:0 1px 0 var(--acc-dark)}
+.item .buy.owned{background:rgba(0,0,0,.35);color:#9dffb0;box-shadow:none}
+.item .buy.time{background:rgba(0,0,0,.35);color:#ffe680;box-shadow:none}
+.item.donate{grid-template-columns:52px 1fr}
+.item.donate .row{justify-content:flex-start;margin-top:6px}
+.item.donate .buy{padding:7px 10px}
+.stars{font-size:12px;opacity:.85;text-align:center}
+
+/* LEADERBOARD */
+.pond{width:100%;background:rgba(0,0,0,.25);border-radius:14px;padding:10px 12px}
+.pond .t{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+.pond .bar{height:10px;border-radius:6px;background:rgba(0,0,0,.35);overflow:hidden}
+.pond .bar i{display:block;height:100%;background:linear-gradient(90deg,#9dffb0,#ffd23f);width:0;transition:width .5s}
+.lb{display:grid;grid-template-columns:30px 44px 1fr auto;gap:8px;align-items:center;padding:6px 8px;border-radius:12px;font-size:14px}
+.lb.me{background:rgba(255,210,63,.18);box-shadow:inset 0 0 0 2px rgba(255,210,63,.6)}
+.lb .rk{font-weight:900;color:#ffe680;text-align:center}
+.lb .rk.top{font-size:18px}
+.lb img{width:44px;height:44px;object-fit:contain}
+.lb .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb .nm small{display:block;font-size:11px;opacity:.75}
+.lb .sc{font-weight:900;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:999px;background:#ff5d7a;color:#fff;margin-left:4px;vertical-align:middle}
+.demo{font-size:12px;opacity:.75;text-align:center}
+
+/* CARD PREVIEW */
+#cardImg{max-width:100%;max-height:60dvh;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+
+#loading .card{align-items:center}
+#loading .bar{width:100%;height:12px;border-radius:8px;background:rgba(0,0,0,.35);overflow:hidden}
+#loading .bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
+@media (prefers-reduced-motion:reduce){.frog.idle img,#fly{animation:none}}
+</style>
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-trophy" viewBox="0 0 24 24">
+  <path d="M5.2 3.4h13.6v4.8c0 3.9-3 6.9-6.8 6.9s-6.8-3-6.8-6.9V3.4z" fill="#ffd23f"/>
+  <path d="M5.2 5.2H2.9v1.3c0 2 1.6 3.7 3.6 3.8" fill="none" stroke="#ffd23f" stroke-width="1.9" stroke-linecap="round"/>
+  <path d="M18.8 5.2h2.3v1.3c0 2-1.6 3.7-3.6 3.8" fill="none" stroke="#ffd23f" stroke-width="1.9" stroke-linecap="round"/>
+  <path d="M10.4 14.7h3.2v2.5h-3.2z" fill="#d99a13"/>
+  <rect x="6.8" y="17" width="10.4" height="3.4" rx="1.5" fill="#f5a800"/>
+  <path d="M8.3 5.1h1.8v3.4a.9.9 0 1 1-1.8 0V5.1z" fill="#fff" opacity=".4"/>
+</symbol>
+<symbol id="i-chat" viewBox="0 0 24 24">
+  <path d="M12 3.6c-5.2 0-9.4 3.2-9.4 7.4 0 2.4 1.4 4.6 3.5 5.9-.2 1.2-.9 2.5-2 3.5 2-.1 4-.9 5.3-1.9.8.2 1.7.3 2.6.3 5.2 0 9.4-3.3 9.4-7.5S17.2 3.6 12 3.6z" fill="#eaf6ee"/>
+  <path d="M8.2 11h.01M12 11h.01M15.8 11h.01" stroke="#2c7a52" stroke-width="2.7" stroke-linecap="round"/>
+</symbol>
+<symbol id="i-sound-on" viewBox="0 0 24 24">
+  <path d="M4 9.3h3.2l4.4-3.9a.9.9 0 0 1 1.5.7v11.8a.9.9 0 0 1-1.5.7l-4.4-3.9H4a1.1 1.1 0 0 1-1.1-1.1v-3.2A1.1 1.1 0 0 1 4 9.3z" fill="#fff"/>
+  <path d="M15.9 9.3a3.9 3.9 0 0 1 0 5.4M18.5 6.8a7.5 7.5 0 0 1 0 10.4" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/>
+</symbol>
+<symbol id="i-sound-off" viewBox="0 0 24 24">
+  <path d="M4 9.3h3.2l4.4-3.9a.9.9 0 0 1 1.5.7v11.8a.9.9 0 0 1-1.5.7l-4.4-3.9H4a1.1 1.1 0 0 1-1.1-1.1v-3.2A1.1 1.1 0 0 1 4 9.3z" fill="#fff"/>
+  <path d="M16.1 9.6l4.6 4.8M20.7 9.6l-4.6 4.8" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+</symbol>
+<symbol id="i-close" viewBox="0 0 24 24">
+  <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
+</symbol>
+<symbol id="i-send" viewBox="0 0 24 24">
+  <path d="M21.3 3.2L2.6 10.5c-.8.3-.7 1.4.1 1.6l4.9 1.4 1.6 5c.2.8 1.2.9 1.6.2l2.2-3 4.5 3.3c.5.4 1.3.1 1.4-.5l3.3-14c.2-.8-.6-1.4-1-1.3z" fill="#eaf6ee"/>
+  <path d="M7.6 13.5L20 4.9l-9.9 10.4-.4 3.2z" fill="#a9cdb8"/>
+</symbol>
+<symbol id="i-story" viewBox="0 0 24 24">
+  <path d="M4 6.9h2.9l1.2-1.8c.2-.4.6-.6 1-.6h5.8c.4 0 .8.2 1 .6l1.2 1.8H20a1.7 1.7 0 0 1 1.7 1.7v8.9a1.7 1.7 0 0 1-1.7 1.7H4a1.7 1.7 0 0 1-1.7-1.7V8.6A1.7 1.7 0 0 1 4 6.9z" fill="#eaf6ee"/>
+  <circle cx="12" cy="13" r="3.7" fill="#2c7a52"/>
+  <circle cx="10.7" cy="11.7" r="1.2" fill="#eaf6ee" opacity=".55"/>
+</symbol>
+<symbol id="i-wave" viewBox="0 0 24 24">
+  <path d="M2.4 8.4c1.6 0 1.6-1.7 3.2-1.7s1.6 1.7 3.2 1.7 1.6-1.7 3.2-1.7 1.6 1.7 3.2 1.7 1.6-1.7 3.2-1.7 1.6 1.7 3.2 1.7" fill="none" stroke="#9beeff" stroke-width="2" stroke-linecap="round"/>
+  <path d="M2.4 13.4c1.6 0 1.6-1.7 3.2-1.7s1.6 1.7 3.2 1.7 1.6-1.7 3.2-1.7 1.6 1.7 3.2 1.7 1.6-1.7 3.2-1.7 1.6 1.7 3.2 1.7" fill="none" stroke="#5cc8e8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M2.4 18.4c1.6 0 1.6-1.7 3.2-1.7s1.6 1.7 3.2 1.7 1.6-1.7 3.2-1.7 1.6 1.7 3.2 1.7 1.6-1.7 3.2-1.7 1.6 1.7 3.2 1.7" fill="none" stroke="#2f9fc4" stroke-width="2" stroke-linecap="round"/>
+</symbol>
+<symbol id="i-sparkle" viewBox="0 0 24 24">
+  <path d="M10 1.8c.7 4.1 2.4 6.6 6.4 7.4-4 .8-5.7 3.3-6.4 7.4-.7-4.1-2.4-6.6-6.4-7.4 4-.8 5.7-3.3 6.4-7.4z" fill="#ffd23f"/>
+  <path d="M18 14.4c.3 1.9 1.1 3 2.9 3.4-1.8.4-2.6 1.5-2.9 3.4-.3-1.9-1.1-3-2.9-3.4 1.8-.4 2.6-1.5 2.9-3.4z" fill="#fff2b8"/>
+</symbol>
+<symbol id="i-down" viewBox="0 0 24 24">
+  <path d="M12 3.8v11.6" fill="none" stroke="#ffd23f" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M6.7 11.4l5.3 6 5.3-6" fill="none" stroke="#ffd23f" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+</symbol>
+<symbol id="i-crown" viewBox="0 0 24 24">
+  <path d="M2.6 6.6l4 3.4L12 3.4l5.4 6.6 4-3.4-1.7 10.4H4.3z" fill="#ffd23f"/>
+  <rect x="4" y="18.2" width="16" height="2.6" rx="1.1" fill="#f5a800"/>
+</symbol>
+<symbol id="i-medal" viewBox="0 0 24 24">
+  <path d="M7.2 2.2h3.4l2.6 6.2H8.9z" fill="#e0405f"/>
+  <path d="M16.8 2.2h-3.4l-2.6 6.2h4.3z" fill="#4a90d9"/>
+  <circle cx="12" cy="15.3" r="6.4" fill="currentColor"/>
+  <circle cx="12" cy="15.3" r="4.4" fill="#000" opacity=".13"/>
+  <path d="M9.4 12.5a3.7 3.7 0 0 1 2.4-1.2" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity=".55"/>
+</symbol>
+<symbol id="i-fly" viewBox="0 0 24 24">
+  <ellipse cx="6.6" cy="9.2" rx="4.4" ry="2.4" transform="rotate(-30 6.6 9.2)" fill="#dff2ff" opacity=".9"/>
+  <ellipse cx="17.4" cy="9.2" rx="4.4" ry="2.4" transform="rotate(30 17.4 9.2)" fill="#dff2ff" opacity=".9"/>
+  <ellipse cx="12" cy="14.4" rx="3.3" ry="4.7" fill="#333a45"/>
+  <ellipse cx="12" cy="9.6" rx="3" ry="2.7" fill="#4a5361"/>
+  <circle cx="10.3" cy="9.2" r="1.4" fill="#e0405f"/>
+  <circle cx="13.7" cy="9.2" r="1.4" fill="#e0405f"/>
+</symbol>
+<symbol id="i-frog" viewBox="0 0 24 24">
+  <circle cx="7.4" cy="7" r="3.6" fill="#5cbf7d"/>
+  <circle cx="16.6" cy="7" r="3.6" fill="#5cbf7d"/>
+  <path d="M12 6.6c4.5 0 7.8 3.2 7.8 7.1 0 3.6-3.2 5.9-7.8 5.9s-7.8-2.3-7.8-5.9c0-3.9 3.3-7.1 7.8-7.1z" fill="#5cbf7d"/>
+  <circle cx="7.4" cy="6.8" r="2.2" fill="#fff"/>
+  <circle cx="16.6" cy="6.8" r="2.2" fill="#fff"/>
+  <circle cx="7.7" cy="7" r="1.15" fill="#16341f"/>
+  <circle cx="16.3" cy="7" r="1.15" fill="#16341f"/>
+  <path d="M8.6 14.4c1.1 1.3 5.7 1.3 6.8 0" fill="none" stroke="#2f7d4b" stroke-width="1.7" stroke-linecap="round"/>
+</symbol>
+</defs></svg>
+<div id="app">
+  <div class="hud">
+    <div class="pill coins" id="coinPill"><img src="icons/coin.png" alt=""><span id="coins">0</span></div>
+    <div class="pill lv"><img src="icons/lv.png" alt=""><span id="lv">1</span></div>
+    <button class="iconbtn" id="btnTop" title="Лидерборд"><svg class="ic "><use href="#i-trophy"></use></svg></button>
+    <button class="iconbtn" id="btnShop" title="Магазин"><img class="ic" src="icons/tgstar.png" alt=""></button>
+    <button class="iconbtn" id="btnCol" title="Коллекция"><img src="icons/ticket-green.png" alt=""></button>
+    <button class="iconbtn" id="btnChat" title="Чат"><svg class="ic "><use href="#i-chat"></use></svg></button>
+  </div>
+  <div id="hint"></div>
+  <div class="board-wrap"><div id="board"></div></div>
+  <div id="actions"></div>
+  <div class="clicker-area">
+    <div id="combo"><div class="cb"><img src="icons/fire.png" alt=""><span id="comboTxt">x2</span></div></div>
+    <div id="clicker"><div id="clickerLottie"></div><div id="fly"><svg class="ic "><use href="#i-fly"></use></svg></div></div>
+    <div id="frogName"></div>
+    <button id="btnSpawn"><img class="fr" id="spawnIcon" alt=""><span>Призвать</span><span class="cost"><img src="icons/coin.png" alt=""><b id="cost">6</b></span></button>
+  </div>
+</div>
+<div id="fx"></div>
+<div id="toast"></div>
+
+<div id="levelup" class="overlay hidden">
+  <div class="card">
+    <h2>Новая лягушка!</h2>
+    <div class="sub">Скин кликера обновлён</div>
+    <div id="luLottie"></div>
+    <div id="luName"></div>
+    <div id="luLv"><img src="icons/lv.png" alt="">Уровень <b id="luLvN"></b> <span class="rar" id="luRar"></span></div>
+    <div class="row"><button class="btn ghost" id="luChat"><svg class="ic "><use href="#i-send"></use></svg> В чат</button><button class="btn ghost" id="luStory"><svg class="ic "><use href="#i-story"></use></svg> В сторис</button></div>
+    <button class="btn" id="luOk">Круто!</button>
+  </div>
+</div>
+
+<div id="collection" class="overlay hidden">
+  <div class="card" style="height:92dvh">
+    <div class="head"><h2>Коллекция <span id="colCount"></span></h2><div class="row" style="width:auto"><button class="iconbtn" id="btnSound" title="Звук"></button><button class="iconbtn" id="colClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div></div>
+    <div class="scroll"><div id="colGrid"></div></div>
+    <div class="row"><button class="btn ghost" id="btnHolders" hidden>Чат холдеров</button><button class="btn ghost" id="btnReset">Сбросить прогресс</button></div>
+  </div>
+</div>
+
+<div id="shop" class="overlay hidden">
+  <div class="card" style="height:92dvh">
+    <div class="head"><h2><img class="ic" src="icons/tgstar.png" alt=""> Магазин</h2><button class="iconbtn" id="shopClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
+    <div class="stars" id="shopNote"></div>
+    <div class="scroll" id="shopList"></div>
+  </div>
+</div>
+
+<div id="top" class="overlay hidden">
+  <div class="card" style="height:92dvh">
+    <div class="head"><h2><svg class="ic "><use href="#i-trophy"></use></svg> Лидерборд</h2><button class="iconbtn" id="topClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
+    <div class="pond"><div class="t"><span><svg class="ic "><use href="#i-wave"></use></svg> Общий пруд чата</span><b id="pondTxt"></b></div><div class="bar"><i id="pondBar"></i></div></div>
+    <div class="scroll" id="topList"></div>
+    <div class="demo" id="topNote"></div>
+    <div class="row"><button class="btn ghost sm" id="topShare"><svg class="ic "><use href="#i-send"></use></svg> Поделиться результатом</button></div>
+  </div>
+</div>
+
+<div id="cardPrev" class="overlay hidden">
+  <div class="card">
+    <div class="head"><h2 id="cardTitle">Карточка</h2><button class="iconbtn" id="cardClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
+    <img id="cardImg" alt="">
+    <div class="sub" id="cardNote"></div>
+    <div class="row" id="cardBtns"></div>
+  </div>
+</div>
+
+<div id="ask" class="overlay hidden">
+  <div class="card">
+    <h2 id="askTitle">Вопрос</h2>
+    <div class="sub" id="askText"></div>
+    <div class="row"><button class="btn ghost" id="askNo">Отмена</button><button class="btn" id="askYes">Да</button></div>
+  </div>
+</div>
+
+<div id="loading" class="overlay">
+  <div class="card">
+    <h2><svg class="ic "><use href="#i-frog"></use></svg> Лягушки просыпаются…</h2>
+    <div class="bar"><i id="loadBar"></i></div>
+  </div>
+</div>
+
+<script>
+(()=>{
+'use strict';
+const CFG=Object.assign({api:'',appLink:'https://t.me/swampis_bot',chat:'https://t.me/FrogGame',holders:'https://t.me/kissed_frog_holders',pondGoal:50000},window.FROG_CFG||{});
+const WILD=99, GAP=5, PAD=7, SAVE_KEY='frogmerge.v2', THUMB_FRAME=0, DAY=86400e3;
+const $=s=>document.querySelector(s);
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const now=()=>Date.now();
+const ic=(n,cls='')=>`<svg class="ic ${cls}"><use href="#i-${n}"></use></svg>`;
+
+/* ---------- TELEGRAM ---------- */
+const TG=(window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.initData!==undefined)?window.Telegram.WebApp:null;
+const inTG=!!(TG&&TG.initData);
+const tgv=v=>{if(!TG||!TG.version)return false;const [a,b]=TG.version.split('.').map(Number),[c,d]=v.split('.').map(Number);return a>c||(a===c&&b>=d);};
+if(TG){
+  try{TG.ready();TG.expand();}catch(e){}
+  try{TG.setHeaderColor('#0c3a2a');TG.setBackgroundColor('#0c3a2a');if(tgv('7.10'))TG.setBottomBarColor('#0c3a2a');}catch(e){}
+  try{if(tgv('7.7'))TG.disableVerticalSwipes();}catch(e){}
+  // полноэкранный режим: Telegram сам скрывает свою шапку, наш отступ сверху — единственное,
+  // что защищает интерфейс от чёлки/статус-бара, поэтому safe-area-инсеты здесь особенно важны
+  try{if(tgv('8.0')&&typeof TG.requestFullscreen==='function')TG.requestFullscreen();}catch(e){}
+}
+const haptic={
+  light:()=>{try{TG?TG.HapticFeedback.impactOccurred('light'):navigator.vibrate&&navigator.vibrate(8);}catch(e){}},
+  medium:()=>{try{TG?TG.HapticFeedback.impactOccurred('medium'):navigator.vibrate&&navigator.vibrate(20);}catch(e){}},
+  heavy:()=>{try{TG?TG.HapticFeedback.impactOccurred('heavy'):navigator.vibrate&&navigator.vibrate([20,30,40]);}catch(e){}},
+  success:()=>{try{TG?TG.HapticFeedback.notificationOccurred('success'):navigator.vibrate&&navigator.vibrate([30,40,30,40,80]);}catch(e){}},
+  error:()=>{try{TG?TG.HapticFeedback.notificationOccurred('error'):navigator.vibrate&&navigator.vibrate(40);}catch(e){}},
+  select:()=>{try{TG?TG.HapticFeedback.selectionChanged():navigator.vibrate&&navigator.vibrate(6);}catch(e){}},
+};
+const openTg=url=>{if(TG&&tgv('6.1'))TG.openTelegramLink(url);else window.open(url,'_blank');};
+const tgUser=(TG&&TG.initDataUnsafe&&TG.initDataUnsafe.user)||null;
+const myName=tgUser?(tgUser.first_name||tgUser.username||'Игрок'):'Ты';
+
+/* ---------- STATE ---------- */
+const state={coins:0,maxLv:1,n:5,cells:Array(25).fill(0),disc:[1],sound:true,merges:0,score:0,taps:0,wild:0,theme:'',inv:{},order:null,own:[],t:0};
+// базовый порядок уровней — как в списке редкости. Лягушки, которыми игрок владеет,
+// поднимаются в самый верх лестницы, поэтому у каждого владельца свой финал.
+const BASE=LEVELS.slice();
+const slugOf=name=>{const L=BASE.find(l=>l.n.toLowerCase()===String(name||'').toLowerCase());return L?L.f:null;};
+function buildOrder(models){
+  const own=[...new Set((models||[]).map(slugOf).filter(Boolean))];
+  if(!own.length)return BASE.map(l=>l.f);
+  const mine=own.map(f=>BASE.find(l=>l.f===f));
+  // среди своих сохраняем ту же логику: самая редкая — самой последней
+  mine.sort((a,b)=>BASE.indexOf(a)-BASE.indexOf(b));
+  return [...BASE.filter(l=>!own.includes(l.f)),...mine].map(l=>l.f);
+}
+// перестановка лестницы с переносом уже добытых лягушек: на поле остаются те же виды
+function applyOrder(order){
+  if(!order||order.length!==BASE.length)return false;
+  if(order.join()===LEVELS.map(l=>l.f).join())return false;
+  const old=LEVELS.slice();
+  const next=order.map(f=>BASE.find(l=>l.f===f)).filter(Boolean);
+  if(next.length!==BASE.length)return false;
+  const idx=f=>next.findIndex(l=>l.f===f)+1;
+  state.cells=state.cells.map(v=>(v&&v!==WILD&&old[v-1])?idx(old[v-1].f):v);
+  state.disc=(state.disc||[]).map(v=>old[v-1]?idx(old[v-1].f):v).filter(v=>v>=1&&v<=next.length);
+  LEVELS.length=0;LEVELS.push(...next);
+  state.order=order;
+  return true;
+}
+const ownsLevel=lv=>{const L=LEVELS[lv-1];return !!(L&&(state.own||[]).some(m=>slugOf(m)===L.f));};
+let N=5,CELLS=25;
+function applySave(s){
+  if(!s||!Array.isArray(s.cells))return;
+  if((s.t||0)<(state.t||0))return;
+  Object.assign(state,s);
+  if(!state.inv)state.inv={};
+  // лечим сейвы с уровнем выше последнего: такой прогресс раньше падал на несуществующей лягушке
+  state.maxLv=Math.max(1,Math.min(state.maxLv|0||1,LEVELS.length));
+  state.cells=state.cells.map(v=>v===WILD?v:Math.min(v|0,LEVELS.length));
+  state.disc=(Array.isArray(state.disc)?state.disc:[1]).filter(l=>l>=1&&l<=LEVELS.length);
+  if(Array.isArray(state.order)&&state.order.length===BASE.length){const o=state.order;state.order=null;applyOrder(o);}
+  N=state.n||5;CELLS=N*N;
+  if(state.cells.length!==CELLS){const old=state.cells,on=Math.round(Math.sqrt(old.length));const nc=Array(CELLS).fill(0);for(let r=0;r<Math.min(on,N);r++)for(let c=0;c<Math.min(on,N);c++)nc[r*N+c]=old[r*on+c]||0;state.cells=nc;}
+}
+const cloudOk=()=>TG&&tgv('6.9')&&TG.CloudStorage;
+async function load(){
+  try{applySave(JSON.parse(localStorage.getItem(SAVE_KEY)));}catch(e){}
+  if(!state.t){try{const o=JSON.parse(localStorage.getItem('frogmerge.v1'));if(o){o.t=1;applySave(o);}}catch(e){}}
+  if(cloudOk()){try{const v=await Promise.race([new Promise((res,rej)=>TG.CloudStorage.getItem(SAVE_KEY,(err,val)=>err?rej(err):res(val))),wait(2500).then(()=>null)]);if(v)applySave(JSON.parse(v));}catch(e){}}
+}
+let saveT=null,resetting=false;
+function save(){
+  if(resetting)return;
+  state.t=now();
+  const json=JSON.stringify(state);
+  try{localStorage.setItem(SAVE_KEY,json);}catch(e){}
+  if(cloudOk()){clearTimeout(saveT);saveT=setTimeout(()=>{try{TG.CloudStorage.setItem(SAVE_KEY,json,()=>{});}catch(e){}},800);}
+}
+
+/* ---------- ECONOMY ---------- */
+const boostMult=()=>(state.inv.boostUntil||0)>now()?2:1;
+const autoOn=()=>!!state.inv.autoForever||(state.inv.autoUntil||0)>now()||(state.inv.subUntil||0)>now();
+const tapValue=()=>Math.ceil(Math.pow(1.5,state.maxLv-1))*boostMult();
+const baseSpawnLv=()=>Math.max(1,state.maxLv-2);
+const spawnCapLv=()=>Math.max(1,state.maxLv-1);
+function nice(n){n=Math.max(1,Math.round(n));if(n<30)return n;const p=Math.pow(10,Math.floor(Math.log10(n))-1);return Math.round(n/p)*p;}
+const spawnCost=()=>nice(Math.ceil(Math.pow(1.5,state.maxLv-1))*(5+state.maxLv*0.4));
+const isFrog=v=>v>0&&v!==WILD;
+function levelCounts(){const c={};state.cells.forEach(v=>{if(isFrog(v))c[v]=(c[v]||0)+1;});return c;}
+function rollSpawnLevel(){
+  const b=baseSpawnLv(),cap=spawnCapLv(),counts=levelCounts();
+  const cands=[];for(let l=b;l<=Math.min(b+2,cap);l++)cands.push(l);
+  if(!cands.length)return b;
+  const w=cands.map((l,i)=>{let x=[0.6,0.3,0.1][i]||0.1;const m=(counts[l]||0)%3;if(m===2)x*=3;else if(m===1)x*=1.6;return x;});
+  let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let i=0;i<cands.length;i++){r-=w[i];if(r<=0)return cands[i];}
+  return cands[cands.length-1];
+}
+const mergeReward=(newLv,combo)=>nice(spawnCost()*0.4*Math.pow(1.5,newLv-baseSpawnLv()-1)*combo);
+const feedReward=lv=>lv===WILD?nice(spawnCost()*0.3):nice(spawnCost()*0.35*Math.pow(2.6,lv-baseSpawnLv()));
+const isJunk=lv=>isFrog(lv)&&lv<baseSpawnLv();
+function fmt(n){if(n<1000)return String(Math.round(n));const u=['K','M','B','T','q','Q'];let i=-1;while(n>=1000&&i<u.length-1){n/=1000;i++;}return (n<100?n.toFixed(1):Math.round(n))+u[i];}
+const rarity=lv=>lv>=1&&lv<=LEVELS.length?LEVELS[lv-1].r:null;
+const rarTxt=lv=>{const r=rarity(lv);return r==null?'':String(r).replace('.',',')+'%';};
+
+/* ---------- ASSETS ---------- */
+const frogFile=lv=>(lv===0||lv===WILD)?'original':LEVELS[lv-1].f;
+const frogName=lv=>lv===WILD?'Дикая лягушка':lv===0?'Original':LEVELS[lv-1].n;
+const dataCache=new Map();
+function loadFrogData(lv){
+  if(!dataCache.has(lv)){
+    dataCache.set(lv,(async()=>{
+      let bytes;const f=frogFile(lv);
+      if(window.EMBED&&window.EMBED[f]){const b=atob(EMBED[f]);bytes=new Uint8Array(b.length);for(let i=0;i<b.length;i++)bytes[i]=b.charCodeAt(i);}
+      else{const r=await fetch('frogs/'+f+'.tgs');if(!r.ok)throw new Error('load '+f);bytes=new Uint8Array(await r.arrayBuffer());}
+      let text;
+      if(window.DecompressionStream){try{const s=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));text=await new Response(s).text();}catch(e){text=null;}}
+      if(!text)text=pako.ungzip(bytes,{to:'string'});
+      return JSON.parse(text);
+    })());
+  }
+  return dataCache.get(lv);
+}
+async function bake(lv,size){
+  const data=structuredClone(await loadFrogData(lv));
+  const c=document.createElement('canvas');c.width=c.height=size;
+  const anim=lottie.loadAnimation({renderer:'canvas',loop:false,autoplay:false,animationData:data,rendererSettings:{context:c.getContext('2d'),clearCanvas:true,preserveAspectRatio:'xMidYMid meet'}});
+  await new Promise(r=>{anim.addEventListener('DOMLoaded',r);setTimeout(r,400);});
+  anim.goToAndStop(THUMB_FRAME,true);
+  anim.destroy();return c;
+}
+const thumbs=new Map(),thumbPromises=new Map();
+function thumb(lv){
+  if(thumbPromises.has(lv))return thumbPromises.get(lv);
+  const p=bake(lv,256).then(c=>{const u=c.toDataURL('image/png');thumbs.set(lv,u);return u;});
+  thumbPromises.set(lv,p);return p;
+}
+
+/* ---------- SOUND ---------- */
+let ac=null;
+function audio(){if(!ac){try{ac=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}if(ac&&ac.state==='suspended')ac.resume();return ac;}
+function tone(f0,f1,dur,type='sine',vol=.18,t0=0){const a=audio();if(!a||!state.sound)return;const t=a.currentTime+t0;const o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+dur);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g).connect(a.destination);o.start(t);o.stop(t+dur+.02);}
+const S={
+  pop:c=>c?(tone(700,1400,.15,'square',.12),tone(1000,2000,.2,'sine',.15,.03)):tone(520+Math.random()*80,260,.09,'sine',.16),
+  spawn:()=>{tone(300,700,.12,'triangle',.14);tone(600,900,.1,'sine',.1,.06);},
+  merge:c=>{const b=1+Math.min(c-1,4)*.15;[0,.07,.14].forEach((d,i)=>tone([523,659,784][i]*b,[523,659,784][i]*b*1.01,.22,'triangle',.16,d));},
+  level:()=>{[523,659,784,1046,1318].forEach((f,i)=>tone(f,f,.35,'triangle',.16,i*.09));tone(1046,2093,.6,'sine',.08,.45);},
+  eat:()=>{tone(400,120,.18,'sawtooth',.1);tone(200,90,.2,'square',.06,.05);},
+  err:()=>tone(200,140,.16,'square',.09),
+  ui:()=>tone(800,1200,.06,'sine',.08),
+  buy:()=>{[784,1046,1318].forEach((f,i)=>tone(f,f,.25,'triangle',.14,i*.08));},
+};
+
+/* ---------- FX ---------- */
+const fx=$('#fx');
+function floatText(x,y,txt,cls='',html=false){const el=document.createElement('div');el.className='float '+cls;if(html)el.innerHTML=txt;else el.textContent=txt;el.style.left=x+'px';el.style.top=y+'px';fx.appendChild(el);setTimeout(()=>el.remove(),1200);}
+function coinBurst(x,y,n){for(let i=0;i<n;i++){const el=document.createElement('div');el.className='coinp';el.innerHTML='<img src="icons/coin.png" alt="">';const a=rnd(-Math.PI,0)+rnd(-.5,.5),d=rnd(40,110);el.style.setProperty('--dx',Math.cos(a)*d+'px');el.style.setProperty('--dy',(Math.sin(a)*d-30)+'px');el.style.setProperty('--r',rnd(-180,180)+'deg');el.style.left=x+'px';el.style.top=y+'px';fx.appendChild(el);setTimeout(()=>el.remove(),800);}}
+function sparks(x,y,n,colors){for(let i=0;i<n;i++){const el=document.createElement('div');el.className='spark';const a=rnd(0,Math.PI*2),d=rnd(30,90);el.style.setProperty('--dx',Math.cos(a)*d+'px');el.style.setProperty('--dy',Math.sin(a)*d+'px');el.style.setProperty('--c',pick(colors));el.style.left=x+'px';el.style.top=y+'px';fx.appendChild(el);setTimeout(()=>el.remove(),700);}}
+let toastT=null;function toast(t,ms=1800){const el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('on'),ms);}
+
+/* ---------- NETWORK ---------- */
+const net={online:false,me:null,top:[],pond:{count:0,goal:CFG.pondGoal},holder:null,lastSync:0};
+async function api(path,body){
+  if(!CFG.api)throw new Error('no api');
+  const r=await fetch(CFG.api+'/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({initData:TG?TG.initData:'',dev:!inTG},body||{}))});
+  if(!r.ok)throw new Error('api '+r.status);
+  return r.json();
+}
+function applyOwnership(){
+  const frogs=(net.holder&&net.holder.frogs)||[];
+  const models=frogs.map(f=>f.model).filter(Boolean);
+  state.own=models;
+  const want=buildOrder(models);
+  if(applyOrder(want)){
+    // лестница поменялась — перерисовываем поле и кликер под новый порядок
+    if(cellEls.length)buildBoard();
+    setClickerSkin(Math.max(1,Math.min(state.maxLv,LEVELS.length)));
+    save();
+  }
+}
+function applyServer(r){
+  if(!r||!r.ok)return;
+  net.online=true;net.me=r.me||null;net.top=r.top||[];if(r.pond)net.pond=r.pond;net.holder=r.holder||null;net.lastSync=now();
+  applyOwnership();
+  if(r.inv){Object.assign(state.inv,r.inv);applyInv();}
+  if(r.wild!=null&&r.wild>state.wild)state.wild=r.wild;
+}
+async function sync(force){
+  if(!CFG.api)return null;
+  if(!force&&now()-net.lastSync<15000)return null;
+  try{const r=await api('sync',{name:myName,coins:Math.round(state.coins),maxLv:state.maxLv,score:state.score,merges:state.merges,taps:state.taps,theme:state.theme,wild:state.wild});applyServer(r);save();updateHud();return r;}
+  catch(e){net.online=false;return null;}
+}
+
+/* ---------- HUD ---------- */
+function updateHud(){
+  $('#coins').textContent=fmt(state.coins);
+  $('#lv').textContent=state.maxLv;
+  $('#cost').textContent=fmt(spawnCost());
+  $('#btnSpawn').classList.toggle('poor',state.coins<spawnCost());
+  $('#btnSound').innerHTML=ic(state.sound?'sound-on':'sound-off');
+  $('#fly').classList.toggle('on',autoOn());
+  const nm=$('#frogName');const b=nm.querySelector('.boost');if(b)b.remove();
+  if(boostMult()>1){const s=document.createElement('span');s.className='boost';s.innerHTML='<img src="icons/fire.png" alt="" style="width:14px;height:14px;vertical-align:-.2em"> ×2';nm.appendChild(s);}
+  updateHint();renderActions();
+}
+function addCoins(v){state.coins+=v;const p=$('#coinPill');p.classList.remove('bump');void p.offsetWidth;p.classList.add('bump');updateHud();}
+function canMergeAny(){const c=levelCounts();const w=state.cells.filter(v=>v===WILD).length;const lv=Object.keys(c).map(Number);if(lv.some(l=>c[l]>=3))return true;if(w>=1&&lv.some(l=>c[l]>=2))return true;if(w>=2&&lv.length)return true;return false;}
+function updateHint(){
+  const h=$('#hint');let t='';
+  const count=state.cells.filter(Boolean).length,c=levelCounts();
+  const full=count===CELLS;
+  if(count===0&&state.coins<spawnCost())t=ic('down')+' Тапай по лягушке — копи монеты';
+  else if(count<3&&state.coins>=spawnCost())t='Жми «Призвать» — лягушки появятся на поле';
+  else if(count>=3&&state.merges===0)t='Собери 3 одинаковых в ряд — перетащи лягушку';
+  else if(full&&!canMergeAny())t='Тупик! Скорми слабых кликеру или используй дикую лягушку';
+  else if(full){const l=Object.keys(c).map(Number).filter(l=>c[l]>=3).sort((a,b)=>b-a)[0];t=l?`Поле заполнено. Собери три лягушки ур. ${l} в ряд`:'Поле заполнено. Поставь дикую лягушку к двум одинаковым';}
+  h.innerHTML=t;h.classList.toggle('hide',!t);
+}
+function renderActions(){
+  const a=$('#actions');a.innerHTML='';
+  const junk=state.cells.map((v,i)=>isJunk(v)?i:-1).filter(i=>i>=0);
+  const full=state.cells.filter(Boolean).length===CELLS;
+  if(selected>=0&&state.cells[selected]){
+    const lv=state.cells[selected];
+    const b=document.createElement('button');b.className='chip red';b.innerHTML=`<img src="icons/meat.png" alt="">Скормить <b>+${fmt(feedReward(lv))}</b>`;b.onclick=()=>{const i=selected;setSelected(-1);feedFrog(i);};a.appendChild(b);
+    const c=document.createElement('button');c.className='chip';c.textContent='Отмена';c.onclick=()=>{setSelected(-1);};a.appendChild(c);
+    return;
+  }
+  if(junk.length>=2){
+    const total=junk.reduce((s,i)=>s+feedReward(state.cells[i]),0);
+    const b=document.createElement('button');b.className='chip red';b.innerHTML=`<img src="icons/meat.png" alt="">Скормить слабых (${junk.length}) <b>+${fmt(total)}</b>`;b.onclick=feedJunk;a.appendChild(b);
+  }
+  if(state.wild>0){
+    const w=document.createElement('button');w.className='chip gold';w.innerHTML=`<img src="${thumbs.get(WILD)||''}" alt="">Дикая лягушка ×${state.wild}`;w.onclick=placeWild;a.appendChild(w);
+  }else if(full&&!canMergeAny()){
+    const w=document.createElement('button');w.className='chip gold';w.innerHTML=`<img src="${thumbs.get(WILD)||''}" alt="">Дикая лягушка · 39${ic('star')}`;w.onclick=()=>openShop('wild3');a.appendChild(w);
+  }
+}
+
+/* ---------- BOARD ---------- */
+const board=$('#board');
+let cellEls=[],els=[],cs=60;
+const cellXY=i=>[PAD+(i%N)*(cs+GAP),PAD+Math.floor(i/N)*(cs+GAP)];
+function buildBoard(){
+  board.innerHTML='';cellEls=[];els=Array(CELLS).fill(null);
+  for(let i=0;i<CELLS;i++){const c=document.createElement('div');c.className='cell';board.appendChild(c);cellEls.push(c);}
+  layout();
+  state.cells.forEach((lv,i)=>{if(lv)makeFrogEl(i,lv,false);});
+}
+function layout(){
+  const w=board.clientWidth;cs=(w-PAD*2-GAP*(N-1))/N;
+  board.style.setProperty('--cs',cs+'px');
+  cellEls.forEach((c,i)=>{const [x,y]=cellXY(i);c.style.left=x+'px';c.style.top=y+'px';c.style.width=cs+'px';c.style.height=cs+'px';});
+  els.forEach((el,i)=>el&&position(el,i));
+}
+function position(el,i){const [x,y]=cellXY(i);el.style.setProperty('--x',x+'px');el.style.setProperty('--y',y+'px');}
+function makeFrogEl(i,lv,pop=true){
+  const el=document.createElement('div');el.className='frog'+(pop?' pop':'')+(lv===WILD?' wild':'')+(isJunk(lv)?' junk':'');
+  el.innerHTML=`<img alt=""><span class="lvl">${lv===WILD?ic('sparkle'):lv}</span>`;
+  const img=el.firstChild;if(thumbs.has(lv))img.src=thumbs.get(lv);else thumb(lv).then(u=>img.src=u);
+  el.style.transition='none';position(el,i);board.appendChild(el);void el.offsetWidth;el.style.transition='';
+  els[i]=el;setTimeout(()=>{el.classList.remove('pop');el.classList.add('idle');el.querySelector('img').style.animationDelay=(-Math.random()*2.6)+'s';},520);
+  return el;
+}
+function refreshJunk(){els.forEach((el,i)=>{if(el)el.classList.toggle('junk',isJunk(state.cells[i]));});}
+function cellCenter(i){const r=board.getBoundingClientRect();const [x,y]=cellXY(i);return [r.left+x+cs/2,r.top+y+cs/2];}
+function cellAt(clientX,clientY){const r=board.getBoundingClientRect();const x=clientX-r.left-PAD,y=clientY-r.top-PAD;if(x<0||y<0)return -1;const c=Math.floor(x/(cs+GAP)),rr=Math.floor(y/(cs+GAP));if(c<0||c>=N||rr<0||rr>=N)return -1;return rr*N+c;}
+
+/* line finding: any window of 3 in a row/col where non-wild frogs match */
+// последний уровень не сливается дальше: 51-й лягушки не существует, слияние сломало бы сохранение
+function windowLevel(idx){const c=state.cells;let lv=null;for(const i of idx){const v=c[i];if(!v)return null;if(v===WILD)continue;if(lv===null)lv=v;else if(lv!==v)return null;}return lv>=LEVELS.length?null:lv;}
+function findLine(focus){
+  const wins=[];
+  for(let r=0;r<N;r++)for(let x=0;x<=N-3;x++){const idx=[r*N+x,r*N+x+1,r*N+x+2];const lv=windowLevel(idx);if(lv)wins.push({idx,lv});}
+  for(let col=0;col<N;col++)for(let y=0;y<=N-3;y++){const idx=[y*N+col,(y+1)*N+col,(y+2)*N+col];const lv=windowLevel(idx);if(lv)wins.push({idx,lv});}
+  if(!wins.length)return null;
+  const w=wins.find(w=>w.idx.includes(focus))||wins[0];
+  return {win:w.idx,lv:w.lv,target:w.idx.includes(focus)?focus:w.idx[1]};
+}
+let busy=false;
+async function mergeCells(win,lv,target,combo){
+  for(const i of win){if(i!==target&&els[i]){els[i].classList.add('merging');position(els[i],target);}}
+  win.forEach(i=>state.cells[i]=0);
+  await wait(230);
+  for(const i of win){if(els[i]){els[i].remove();els[i]=null;}}
+  const nl=lv+1;state.cells[target]=nl;makeFrogEl(target,nl);state.merges++;state.score+=nl;
+  const [x,y]=cellCenter(target);
+  sparks(x,y,14,['#ffd23f','#9dffb0','#fff','#7fe3ff']);
+  S.merge(combo);haptic.heavy();fullPlay();
+  const reward=mergeReward(nl,combo);addCoins(reward);
+  floatText(x,y-cs*.4,(combo>1?'x'+combo+' КОМБО  ':'')+'+'+fmt(reward),'big');
+  if(nl>state.maxLv){await levelUp(nl);}
+  if(nl<LEVELS.length)thumb(nl+1).catch(()=>{});
+}
+async function resolve(focus){
+  busy=true;let combo=0,line;
+  while((line=findLine(focus))){combo++;await mergeCells(line.win,line.lv,line.target,combo);focus=line.target;await wait(140);}
+  busy=false;refreshJunk();save();updateHud();
+}
+
+/* drag & drop */
+let drag=null,selected=-1;
+function setSelected(i){if(selected>=0&&els[selected])els[selected].classList.remove('selected');selected=i;if(i>=0&&els[i])els[i].classList.add('selected');renderActions();}
+function clearHl(){cellEls.forEach(c=>c.classList.remove('hl'));$('#clicker').classList.remove('feed');}
+board.addEventListener('pointerdown',e=>{
+  if(busy)return;audio();
+  const i=cellAt(e.clientX,e.clientY);if(i<0)return;
+  if(state.cells[i]){drag={from:i,x0:e.clientX,y0:e.clientY,moving:false,over:i};try{board.setPointerCapture(e.pointerId);}catch(err){}}
+  else if(selected>=0){moveFrog(selected,i);setSelected(-1);}
+});
+board.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  const dx=e.clientX-drag.x0,dy=e.clientY-drag.y0;
+  if(!drag.moving){if(Math.hypot(dx,dy)<6)return;drag.moving=true;setSelected(-1);els[drag.from].classList.add('dragging');S.ui();}
+  const el=els[drag.from];const [x,y]=cellXY(drag.from);
+  el.style.setProperty('--x',(x+dx)+'px');el.style.setProperty('--y',(y+dy)+'px');
+  const over=cellAt(e.clientX,e.clientY);
+  const clk=$('#clicker').getBoundingClientRect();
+  const feed=e.clientY>clk.top&&e.clientY<clk.bottom&&e.clientX>clk.left&&e.clientX<clk.right;
+  if(over!==drag.over||feed!==drag.feed){clearHl();if(over>=0)cellEls[over].classList.add('hl');if(feed)$('#clicker').classList.add('feed');drag.over=over;drag.feed=feed;}
+});
+function endDrag(e){
+  if(!drag)return;const d=drag;drag=null;clearHl();
+  const el=els[d.from];if(!el)return;
+  el.classList.remove('dragging');
+  if(!d.moving){if(selected===d.from)setSelected(-1);else if(selected>=0){moveFrog(selected,d.from);setSelected(-1);}else{setSelected(d.from);S.ui();}return;}
+  if(d.feed){feedFrog(d.from);return;}
+  if(d.over>=0&&d.over!==d.from)moveFrog(d.from,d.over);else position(el,d.from);
+}
+board.addEventListener('pointerup',endDrag);board.addEventListener('pointercancel',endDrag);
+function moveFrog(a,b){
+  if(a===b||busy)return;
+  const c=state.cells;const la=c[a],lb=c[b];
+  c[b]=la;c[a]=lb;const ea=els[a],eb=els[b];els[b]=ea;els[a]=eb;
+  if(ea)position(ea,b);if(eb)position(eb,a);
+  S.ui();haptic.select();
+  setTimeout(()=>resolve(b),60);
+}
+function feedFrog(i){
+  const lv=state.cells[i];const el=els[i];if(!lv||!el)return;
+  const clk=$('#clickerLottie').getBoundingClientRect(),br=board.getBoundingClientRect();
+  el.classList.add('eaten');el.style.setProperty('--x',(clk.left+clk.width/2-br.left-cs/2)+'px');el.style.setProperty('--y',(clk.top+clk.height/2-br.top-cs/2)+'px');
+  state.cells[i]=0;els[i]=null;
+  const r=feedReward(lv);
+  setTimeout(()=>{el.remove();addCoins(r);S.eat();haptic.medium();squash();tapBounce();floatText(clk.left+clk.width/2,clk.top,'ням! +'+fmt(r),'big');coinBurst(clk.left+clk.width/2,clk.top+clk.height/2,5);save();updateHud();},260);
+}
+function feedJunk(){
+  if(busy)return;
+  const junk=state.cells.map((v,i)=>isJunk(v)?i:-1).filter(i=>i>=0);
+  if(!junk.length)return;
+  const clk=$('#clickerLottie').getBoundingClientRect(),br=board.getBoundingClientRect();
+  let total=0;
+  junk.forEach((i,k)=>{const lv=state.cells[i],el=els[i];total+=feedReward(lv);state.cells[i]=0;els[i]=null;if(!el)return;setTimeout(()=>{el.classList.add('eaten');el.style.setProperty('--x',(clk.left+clk.width/2-br.left-cs/2)+'px');el.style.setProperty('--y',(clk.top+clk.height/2-br.top-cs/2)+'px');setTimeout(()=>el.remove(),300);},k*40);});
+  setSelected(-1);
+  setTimeout(()=>{addCoins(total);S.eat();haptic.heavy();squash();tapBounce();floatText(clk.left+clk.width/2,clk.top,'ням-ням! +'+fmt(total),'big');coinBurst(clk.left+clk.width/2,clk.top+clk.height/2,8);save();updateHud();},junk.length*40+280);
+}
+function placeWild(){
+  if(state.wild<=0||busy)return;
+  const empty=[];state.cells.forEach((v,i)=>{if(!v)empty.push(i);});
+  let idx;
+  if(empty.length)idx=pick(empty);
+  else{
+    const cand=state.cells.map((v,i)=>isJunk(v)?i:-1).filter(i=>i>=0);
+    const c=levelCounts();const lv=Object.keys(c).map(Number).filter(l=>c[l]>=2).sort((a,b)=>b-a)[0];
+    idx=cand.length?cand[0]:state.cells.findIndex(v=>isFrog(v)&&v!==lv);
+    if(idx<0)idx=0;
+    const el=els[idx];if(el){el.remove();els[idx]=null;}
+  }
+  state.wild--;state.cells[idx]=WILD;makeFrogEl(idx,WILD);
+  const [x,y]=cellCenter(idx);sparks(x,y,12,['#ffd23f','#ff5d7a','#7fe3ff']);S.spawn();haptic.medium();
+  toast('Дикая лягушка сливается с любыми двумя одинаковыми');
+  setSelected(-1);resolve(idx);
+}
+
+/* ---------- SPAWN ---------- */
+function spawn(){
+  if(busy)return false;
+  const cost=spawnCost();const btn=$('#btnSpawn');
+  if(state.coins<cost){btn.classList.remove('shake');void btn.offsetWidth;btn.classList.add('shake');S.err();haptic.error();return false;}
+  const empty=[];state.cells.forEach((v,i)=>{if(!v)empty.push(i);});
+  if(!empty.length){toast(canMergeAny()?'Поле заполнено! Соедини три одинаковых':'Тупик! Скорми слабых лягушек кликеру');S.err();renderActions();return false;}
+  state.coins-=cost;
+  const i=pick(empty),lv=rollSpawnLevel();
+  state.cells[i]=lv;makeFrogEl(i,lv);
+  const [x,y]=cellCenter(i);sparks(x,y,8,['#9dffb0','#fff']);
+  if(lv>baseSpawnLv())floatText(x,y-cs*.5,ic('sparkle')+' ур.'+lv,'',true);
+  S.spawn();haptic.light();updateHud();
+  resolve(i);
+  return true;
+}
+{
+  const btn=$('#btnSpawn');let t=null;
+  const stop=()=>{clearTimeout(t);t=null;btn.classList.remove('down');};
+  btn.addEventListener('pointerdown',e=>{e.preventDefault();audio();btn.classList.add('down');if(!spawn())return;let delay=380;const rep=()=>{if(!spawn()){stop();return;}delay=Math.max(140,delay*.8);t=setTimeout(rep,delay);};t=setTimeout(rep,delay);});
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>btn.addEventListener(ev,stop));
+}
+
+/* ---------- CLICKER ---------- */
+// в покое лягушка стоит статичным кадром (loop:false, autoplay:false, застыла на кадре 0).
+// тап проигрывает только короткий кусок анимации один раз и возвращает её обратно на кадр 0 —
+// без глобального loop:true тут нечему зациклиться само по себе.
+let clickerAnim=null,bounceT=null;
+// слияние — событие крупное, тут лягушка отыгрывает свою анимацию целиком
+function fullPlay(){
+  if(!clickerAnim)return;
+  const tf=clickerAnim.totalFrames||60,fr=clickerAnim.frameRate||60;
+  clearTimeout(bounceT);
+  clickerAnim.playSegments([0,tf],true);
+  bounceT=setTimeout(()=>{if(clickerAnim)clickerAnim.goToAndStop(0,true);},(tf/fr)*1000+40);
+}
+function tapBounce(){
+  if(!clickerAnim)return;
+  const tf=clickerAnim.totalFrames||60,fr=clickerAnim.frameRate||60;
+  const end=Math.max(6,Math.min(tf,Math.round(tf*0.2)));
+  clearTimeout(bounceT);
+  clickerAnim.playSegments([0,end],true);
+  bounceT=setTimeout(()=>{if(clickerAnim)clickerAnim.goToAndStop(0,true);},(end/fr)*1000+20);
+}
+async function setClickerSkin(lv){
+  const data=structuredClone(await loadFrogData(lv));
+  clearTimeout(bounceT);
+  if(clickerAnim){clickerAnim.destroy();clickerAnim=null;}
+  $('#clickerLottie').innerHTML='';
+  clickerAnim=lottie.loadAnimation({container:$('#clickerLottie'),renderer:'svg',loop:false,autoplay:false,animationData:data,rendererSettings:{preserveAspectRatio:'xMidYMid meet',progressiveLoad:false}});
+  clickerAnim.addEventListener('DOMLoaded',()=>clickerAnim&&clickerAnim.goToAndStop(0,true));
+  $('#frogName').innerHTML=`${frogName(lv)} <small>+${fmt(tapValue())} за тап</small>`;
+  updateHud();
+}
+function squash(){const el=$('#clickerLottie');el.classList.add('squash');setTimeout(()=>el.classList.remove('squash'),90);}
+let lastTap=0,streak=0,comboT=null;
+function tap(e){
+  audio();
+  const t=performance.now();streak=(t-lastTap<650)?streak+1:1;lastTap=t;
+  const mult=Math.min(3,1+Math.floor(streak/12));
+  const crit=Math.random()<0.08;
+  let v=tapValue()*mult;if(crit)v*=5;
+  state.taps++;addCoins(v);
+  const x=e.clientX,y=e.clientY;
+  floatText(x+rnd(-20,20),y-20,(crit?'КРИТ! ':'')+'+'+fmt(v),crit?'crit':'');
+  coinBurst(x,y,crit?7:2);if(crit)sparks(x,y,10,['#ffd23f','#fff']);
+  squash();S.pop(crit);crit?haptic.medium():haptic.light();
+  tapBounce();
+  const cb=$('#combo');if(mult>1){$('#comboTxt').textContent='x'+mult+' · '+streak;cb.classList.add('on');}
+  clearTimeout(comboT);comboT=setTimeout(()=>{cb.classList.remove('on');streak=0;},700);
+}
+$('#clicker').addEventListener('pointerdown',e=>{e.preventDefault();tap(e);});
+setInterval(()=>{
+  if(!autoOn()||document.hidden||!$('#loading').classList.contains('hidden'))return;
+  const v=tapValue();state.coins+=v;state.taps++;
+  const r=$('#clickerLottie').getBoundingClientRect();
+  floatText(r.left+r.width*.75,r.top+r.height*.2,ic('fly')+' +'+fmt(v),'small',true);squash();tapBounce();
+  $('#coins').textContent=fmt(state.coins);$('#btnSpawn').classList.toggle('poor',state.coins<spawnCost());
+},1000);
+setInterval(()=>{if(boostMult()===1&&$('#frogName .boost'))updateHud();if(!autoOn()&&$('#fly').classList.contains('on'))updateHud();},5000);
+
+/* ---------- LEVEL UP ---------- */
+let luAnim=null,luLv=1;
+async function levelUp(lv){
+  state.maxLv=lv;luLv=lv;if(!state.disc.includes(lv))state.disc.push(lv);
+  save();updateHud();refreshJunk();
+  await setClickerSkin(lv);
+  const ov=$('#levelup');
+  $('#luName').textContent=frogName(lv);$('#luLvN').textContent=lv;$('#luRar').textContent='редкость '+rarTxt(lv);
+  const mine=ownsLevel(lv),last=lv===LEVELS.length;
+  const card0=ov.querySelector('.card h2'),sub=ov.querySelector('.card .sub');
+  card0.textContent=mine?'Твоя лягушка!':last?'Вершина болота!':'Новая лягушка!';
+  sub.textContent=mine?'Самая лучшая лягушка — твоя. Цени её.':last?'Это последняя лягушка в списке':'Скин кликера обновлён';
+  const card=ov.querySelector('.card');card.querySelectorAll('.conf').forEach(c=>c.remove());
+  for(let i=0;i<26;i++){const c=document.createElement('i');c.className='conf';c.style.left=rnd(0,100)+'%';c.style.setProperty('--c',pick(['#ffd23f','#9dffb0','#7fe3ff','#ff8fa3','#fff']));c.style.animationDelay=rnd(-2,0)+'s';c.style.animationDuration=rnd(1.8,3)+'s';card.appendChild(c);}
+  if(luAnim)luAnim.destroy();$('#luLottie').innerHTML='';
+  luAnim=lottie.loadAnimation({container:$('#luLottie'),renderer:'svg',loop:true,autoplay:true,animationData:structuredClone(await loadFrogData(lv))});
+  ov.classList.remove('hidden');S.level();haptic.success();
+  sync(true);
+  await new Promise(r=>{$('#luOk').onclick=()=>{ov.classList.add('hidden');if(luAnim){luAnim.destroy();luAnim=null;}S.ui();r();};});
+}
+$('#luChat').onclick=()=>share('chat',luLv);
+$('#luStory').onclick=()=>share('story',luLv);
+
+/* ---------- SHARE CARDS ---------- */
+function rr(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+function fitText(g,t,x,y,maxW,size,F){let s=size;g.font=`900 ${s}px ${F}`;while(g.measureText(t).width>maxW&&s>30){s-=4;g.font=`900 ${s}px ${F}`;}g.fillText(t,x,y);}
+function pill(g,cx,cy,t,font){g.font=font;const w=g.measureText(t).width+80,h=90;g.save();g.shadowBlur=0;g.shadowOffsetY=0;g.fillStyle='rgba(0,0,0,.35)';rr(g,cx-w/2,cy-h/2,w,h,45);g.fill();g.restore();g.fillStyle='#ffe680';g.textBaseline='middle';g.fillText(t,cx,cy);g.textBaseline='alphabetic';}
+async function renderCard(kind,lv){
+  const story=kind==='story';const W=story?1080:1200,H=story?1920:675;
+  const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  try{await Promise.all([document.fonts.load('900 80px Nunito'),document.fonts.load('800 40px Nunito')]);}catch(e){}
+  const st=getComputedStyle($('#app'));const bg1=st.getPropertyValue('--bg1').trim()||'#3aa373',bg2=st.getPropertyValue('--bg2').trim()||'#1b6b4a',bg3=st.getPropertyValue('--bg3').trim()||'#0c3a2a';
+  const grad=g.createRadialGradient(W/2,-H*.1,0,W/2,H*.4,H);grad.addColorStop(0,bg1);grad.addColorStop(.45,bg2);grad.addColorStop(1,bg3);g.fillStyle=grad;g.fillRect(0,0,W,H);
+  g.globalAlpha=.08;g.fillStyle='#fff';for(let i=0;i<14;i++){g.beginPath();g.arc(rnd(0,W),rnd(0,H),rnd(40,160),0,7);g.fill();}g.globalAlpha=1;
+  const frog=await bake(lv,story?820:520);
+  const F='Nunito, "Segoe UI", system-ui, sans-serif';
+  g.textAlign='center';g.fillStyle='#fff';g.shadowColor='rgba(0,0,0,.45)';g.shadowBlur=18;g.shadowOffsetY=6;
+  if(story){
+    g.font='800 44px '+F;g.fillStyle='rgba(255,255,255,.85)';g.fillText(myName.toUpperCase()+' · SWAMP',W/2,190);
+    g.font='900 92px '+F;g.fillStyle='#fff';g.fillText('Новая лягушка!',W/2,300);
+    g.shadowBlur=40;g.shadowOffsetY=20;g.drawImage(frog,W/2-410,380,820,820);g.shadowBlur=18;g.shadowOffsetY=6;
+    g.fillStyle='#ffd23f';fitText(g,frogName(lv),W/2,1330,W-120,110,F);
+    pill(g,W/2,1420,`Уровень ${lv} из ${LEVELS.length}  ·  редкость ${rarTxt(lv)}`,'800 44px '+F);
+    g.font='800 40px '+F;g.fillStyle='rgba(255,255,255,.8)';g.fillText('Kissed Frog Holders',W/2,1640);
+    g.font='800 34px '+F;g.fillStyle='rgba(255,255,255,.6)';g.fillText('Играть: '+CFG.appLink.replace('https://',''),W/2,1700);
+  }else{
+    g.shadowBlur=40;g.shadowOffsetY=20;g.drawImage(frog,60,80,520,520);g.shadowBlur=18;g.shadowOffsetY=6;
+    g.textAlign='left';const X=620;
+    g.font='800 34px '+F;g.fillStyle='rgba(255,255,255,.85)';g.fillText(myName+' вырастил',X,190);
+    g.fillStyle='#ffd23f';fitText(g,frogName(lv),X,290,W-X-60,84,F);
+    g.font='800 36px '+F;g.fillStyle='#fff';g.fillText(`Уровень ${lv} из ${LEVELS.length}`,X,370);
+    g.fillText('Редкость '+rarTxt(lv),X,425);
+    g.font='800 30px '+F;g.fillStyle='rgba(255,255,255,.7)';g.fillText('SWAMP · Kissed Frog Holders',X,560);
+  }
+  return c.toDataURL('image/png');
+}
+async function share(kind,lv){
+  toast('Рисую карточку…',1200);
+  let png;try{png=await renderCard(kind,lv);}catch(e){console.error(e);toast('Не удалось нарисовать карточку');return;}
+  if(inTG&&CFG.api){
+    try{
+      const r=await api('card',{kind,lv,png:png.split(',')[1]});
+      if(!r.ok)throw new Error(r.error||'card');
+      if(kind==='story'&&tgv('7.8')){TG.shareToStory(r.url,{text:`Вырастил ${frogName(lv)} в SWAMP`,widget_link:{url:CFG.appLink,name:'Играть'}});return;}
+      if(kind==='chat'&&tgv('8.0')&&r.prepared_id){TG.shareMessage(r.prepared_id,ok=>{if(ok)toast('Отправлено в чат');});return;}
+      showCard(png,kind,r.url);return;
+    }catch(e){toast('Сервер недоступен, показываю карточку');}
+  }
+  showCard(png,kind,null);
+}
+function showCard(png,kind,url){
+  $('#cardImg').src=png;$('#cardTitle').textContent=kind==='story'?'Карточка для сторис':'Карточка для чата';
+  $('#cardNote').textContent=inTG?'Сохрани картинку и отправь вручную':'В Telegram карточка уйдёт в чат или сторис одной кнопкой. Здесь только предпросмотр.';
+  const bt=$('#cardBtns');bt.innerHTML='';
+  if(url&&TG&&tgv('8.0')){const b=document.createElement('button');b.className='btn sm';b.textContent='Скачать';b.onclick=()=>TG.downloadFile({url,file_name:'frog-merge.png'});bt.appendChild(b);}
+  $('#cardPrev').classList.remove('hidden');
+}
+$('#cardClose').onclick=()=>$('#cardPrev').classList.add('hidden');
+
+/* ---------- SHOP ---------- */
+const BD_PRICE=59;
+const SHOP=[
+  {id:'auto1d',name:'Мушка на сутки',desc:'Лягушка сама тапает раз в секунду, пока игра открыта',price:50,icon:'icons/bolt.png'},
+  {id:'autoForever',name:'Мушка навсегда',desc:'Автотап без ограничений по времени',price:490,icon:'icons/bolt.png',once:'autoForever'},
+  {id:'boost1h',name:'Ускорение ×2 на час',desc:'Двойные монеты с каждого тапа',price:25,icon:'icons/fire.png'},
+  {id:'boost1d',name:'Ускорение ×2 на сутки',desc:'Двойные монеты весь день',price:99,icon:'icons/fire.png'},
+  {id:'bigBoard',name:'Большой пруд 6×6',desc:'Ещё 11 клеток навсегда. Поле почти не забивается',price:299,icon:'icons/jelly.png',once:'bigBoard'},
+  {id:'wild3',name:'Дикая лягушка ×3',desc:'Сливается с любыми двумя одинаковыми. Спасает из тупика',price:39,icon:'wild'},
+  {id:'sub',name:'Абонемент пруда · 30 дней',desc:'Мушка включена, значок в лидерборде, ранний доступ к фонам',price:199,icon:'icons/lv.png',sub:true},
+  {id:'donate',name:'Покормить пруд',desc:'Донат в общую цель чата. Имя попадёт в дневной отчёт',prices:[10,50,100],icon:'icons/heart.png',donate:true},
+];
+function grantLocal(id,amount){
+  const inv=state.inv,t=now();
+  switch(id){
+    case 'auto1d':inv.autoUntil=Math.max(inv.autoUntil||0,t)+DAY;break;
+    case 'autoForever':inv.autoForever=true;break;
+    case 'boost1h':inv.boostUntil=Math.max(inv.boostUntil||0,t)+3600e3;break;
+    case 'boost1d':inv.boostUntil=Math.max(inv.boostUntil||0,t)+DAY;break;
+    case 'bigBoard':inv.bigBoard=true;break;
+    case 'wild3':state.wild+=3;break;
+    case 'sub':inv.subUntil=Math.max(inv.subUntil||0,t)+30*DAY;break;
+    case 'donate':inv.donated=(inv.donated||0)+(amount||0);break;
+    default:if(id.startsWith('bd:')){inv.themes=inv.themes||[];const th=id.slice(3);if(!inv.themes.includes(th))inv.themes.push(th);state.theme=th;}
+  }
+  applyInv();
+}
+function applyInv(){
+  if(state.inv.bigBoard&&N!==6){
+    const old=state.cells;state.n=6;N=6;CELLS=36;const nc=Array(36).fill(0);for(let r=0;r<5;r++)for(let c=0;c<5;c++)nc[r*6+c]=old[r*5+c]||0;state.cells=nc;
+    if(cellEls.length)buildBoard();toast('Пруд стал больше: 6 на 6');
+  }
+  applyTheme();updateHud();
+}
+function bdColors(name){
+  const b=(typeof BACKDROPS!=='undefined')&&BACKDROPS[name];
+  if(!b)return null;
+  return {c:b.c,e:b.e,t:b.t};
+}
+function mix(hex,to,k){
+  const h=x=>parseInt(hex.slice(1+x*2,3+x*2),16),g=x=>parseInt(to.slice(1+x*2,3+x*2),16);
+  const v=x=>Math.round(h(x)+(g(x)-h(x))*k).toString(16).padStart(2,'0');
+  return '#'+v(0)+v(1)+v(2);
+}
+function applyTheme(){
+  const app=$('#app'),st=app.style;
+  ['--bg1','--bg2','--bg3','--card1','--card2'].forEach(v=>st.removeProperty(v));
+  const name=state.theme;
+  if(!name||!(state.inv.themes||[]).includes(name))return;
+  const c=bdColors(name);if(!c)return;
+  st.setProperty('--bg1',c.c);
+  st.setProperty('--bg2',mix(c.c,c.e,.65));
+  st.setProperty('--bg3',mix(c.e,'#000000',.45));
+  st.setProperty('--card1',mix(c.c,c.e,.4));
+  st.setProperty('--card2',mix(c.e,'#000000',.25));
+}
+const timeLeft=ms=>{const s=Math.max(0,ms)/1000;if(s>=86400)return Math.ceil(s/86400)+' д';if(s>=3600)return Math.ceil(s/3600)+' ч';return Math.max(1,Math.ceil(s/60))+' мин';};
+function renderShop(){
+  const l=$('#shopList');l.innerHTML='';const inv=state.inv,t=now();
+  $('#shopNote').textContent=inTG?(net.online?'Оплата в Telegram Stars':'Сервер не отвечает, покупки недоступны'):'Демо-режим: покупки бесплатны для теста. В Telegram оплата в Stars.';
+  const owned=(net.holder&&net.holder.frogs)||[];
+  const bdItems=[...new Map(owned.filter(f=>f.backdrop).map(f=>[f.backdrop,f])).values()].map(f=>({
+    id:'bd:'+f.backdrop,name:'Фон «'+f.backdrop+'»',
+    desc:'Бэкдроп твоей '+f.model+(f.number?' #'+f.number:''),
+    price:BD_PRICE,icon:'icons/ticket-blue.png',backdrop:f.backdrop}));
+  [...SHOP,...bdItems].forEach(it=>{
+    const d=document.createElement('div');d.className='item'+(it.donate?' donate':'');
+    const icon=it.icon==='wild'?(thumbs.get(WILD)||''):it.icon;
+    const bc=it.backdrop&&bdColors(it.backdrop);
+    let btn='';
+    if(it.donate)btn='';
+    else if(it.once&&inv[it.once])btn='<button class="buy owned">Куплено</button>';
+    else if(it.backdrop&&(inv.themes||[]).includes(it.backdrop))btn=`<button class="buy ${state.theme===it.backdrop?'owned':''}" data-theme="${esc(it.backdrop)}">${state.theme===it.backdrop?'Включён':'Включить'}</button>`;
+    else if(it.id==='sub'&&(inv.subUntil||0)>t)btn=`<button class="buy time">Ещё ${timeLeft(inv.subUntil-t)}</button>`;
+    else btn=`<button class="buy" data-buy="${it.id}">${it.price} <img class="ic" src="icons/tgstar.png" alt=""></button>`;
+    let status='';
+    if(it.id==='auto1d'&&autoOn()&&!inv.autoForever)status=` · активна ещё ${timeLeft(Math.max(inv.autoUntil||0,inv.subUntil||0)-t)}`;
+    if(it.id.startsWith('boost')&&boostMult()>1)status=` · активно ещё ${timeLeft(inv.boostUntil-t)}`;
+    if(it.id==='wild3'&&state.wild>0)status=` · есть ×${state.wild}`;
+    d.innerHTML=`${bc?`<i class="bdview" style="background:radial-gradient(circle at 40% 32%, ${bc.c}, ${bc.e})"></i>`:`<img src="${icon}" alt="">`}<div><b>${it.name}</b><span>${it.desc}${status}</span>${it.donate?`<div class="row">${it.prices.map(p=>`<button class="buy" data-buy="donate" data-amount="${p}">${p} <img class="ic" src="icons/tgstar.png" alt=""></button>`).join('')}</div>`:''}</div>${btn}`;
+    l.appendChild(d);
+  });
+  if(!bdItems.length){
+    const d=document.createElement('div');d.className='item';
+    d.innerHTML=`<i class="bdview" style="background:radial-gradient(circle at 40% 32%, #2f6b4f, #14301f)"></i>`+
+      `<div><b>Фон твоей лягушки</b><span>${net.online?'Бот не нашёл у тебя Kissed Frog. Появится лягушка — её фон появится здесь.':'Фоны своих лягушек видны, когда игра запущена в Telegram.'}</span></div>`+
+      `<button class="buy" data-chat="1">Где взять</button>`;
+    l.appendChild(d);
+  }
+  l.querySelectorAll('[data-chat]').forEach(b=>b.onclick=()=>{S.ui();openTg(CFG.chat);});
+  l.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>buy(b.dataset.buy,Number(b.dataset.amount||0)));
+  l.querySelectorAll('[data-theme]').forEach(b=>b.onclick=()=>{state.theme=b.dataset.theme;applyTheme();save();renderShop();S.ui();});
+}
+async function buy(id,amount){
+  const it=SHOP.find(i=>i.id===id)||(id.startsWith('bd:')?{id,price:BD_PRICE}:null);if(!it)return;
+  S.ui();
+  if(inTG&&CFG.api){
+    if(!net.online){await sync(true);if(!net.online){toast('Сервер не отвечает');return;}}
+    try{
+      const r=await api('invoice',{item:id,amount});
+      if(!r.link){toast(r.error||'Не удалось создать счёт');return;}
+      TG.openInvoice(r.link,async status=>{
+        if(status==='paid'){S.buy();haptic.success();toast('Оплачено');await wait(800);await sync(true);renderShop();}
+        else if(status==='failed')toast('Оплата не прошла');
+      });
+    }catch(e){toast('Ошибка сервера');}
+    return;
+  }
+  grantLocal(id,amount);save();S.buy();haptic.success();toast(id==='donate'?`Спасибо! Пруд накормлен на ${amount} звёзд (демо)`:'Куплено (демо-режим)');renderShop();
+}
+function openShop(hl){renderShop();$('#shop').classList.remove('hidden');if(hl){const b=$('#shopList').querySelector(`[data-buy="${hl}"]`);b&&b.closest('.item').scrollIntoView({block:'center'});}}
+$('#btnShop').onclick=()=>{S.ui();openShop();};
+$('#shopClose').onclick=()=>{$('#shop').classList.add('hidden');S.ui();};
+
+/* ---------- LEADERBOARD ---------- */
+const DEMO_TOP=[['Puddles',37,18420],['Frogmaid',31,12950],['Tesla Frog',28,9800],['Ms. Toad',22,6100],['Cupid',19,4400],['Melon',13,1900],['Peach',8,740]];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function openTop(){
+  $('#top').classList.remove('hidden');S.ui();
+  const list=$('#topList');list.innerHTML='<div class="demo">Загрузка…</div>';
+  await sync(true);
+  let rows,note='';
+  if(net.online){rows=net.top;note=net.me?`Твоё место: ${net.me.rank} · очки пруда ${fmt(net.me.score)}`:'';}
+  else{
+    rows=DEMO_TOP.map((d,i)=>({rank:i+1,name:d[0]+' (пример)',maxLv:LEVELS.findIndex(l=>l.n===d[0])+1,score:d[2],holder:i<3?d[0]:null}));
+    rows.push({rank:0,name:myName,maxLv:state.maxLv,score:state.score,me:true});
+    rows.sort((a,b)=>b.score-a.score).forEach((r,i)=>r.rank=i+1);
+    note='Пример таблицы. Настоящий лидерборд появится, когда игра запущена в Telegram с сервером.';
+  }
+  const pond=net.pond;const pct=Math.min(100,pond.count/pond.goal*100);
+  $('#pondTxt').textContent=`${fmt(pond.count)} / ${fmt(pond.goal)} слияний`;$('#pondBar').style.width=pct+'%';
+  list.innerHTML='';
+  const meId=net.me?net.me.id:null;
+  rows.forEach(r=>{
+    const d=document.createElement('div');d.className='lb'+((r.me||(meId&&r.id===meId))?' me':'');
+    const medal=r.rank<=3?ic('medal','m'+r.rank):r.rank;
+    const lv=Math.max(1,Math.min(r.maxLv||1,LEVELS.length));
+    d.innerHTML=`<div class="rk ${r.rank<=3?'top':''}">${medal}</div><img alt=""><div class="nm">${esc(r.name||'Игрок')}${r.holder?'<span class="badge">'+ic('crown')+' хозяин</span>':''}${r.sub?'<span class="badge" style="background:#ffd23f;color:#5a3b00">абонент</span>':''}<small>${frogName(lv)} · ур. ${lv}</small></div><div class="sc">${fmt(r.score||0)}</div>`;
+    thumb(lv).then(u=>d.querySelector('img').src=u);
+    list.appendChild(d);
+  });
+  $('#topNote').textContent=note;
+}
+$('#btnTop').onclick=openTop;
+$('#topClose').onclick=()=>{$('#top').classList.add('hidden');S.ui();};
+$('#topShare').onclick=()=>share('chat',state.maxLv);
+$('#btnChat').onclick=()=>{S.ui();openTg(CFG.chat);};
+
+/* ---------- COLLECTION ---------- */
+const isHolder=()=>!!((net.holder&&net.holder.frogs||[]).length);
+function openCollection(){
+  $('#btnHolders').hidden=!isHolder();
+  const g=$('#colGrid');g.innerHTML='';
+  $('#colCount').textContent=state.disc.length+'/'+LEVELS.length;
+  const mine=lv=>ownsLevel(lv);
+  LEVELS.forEach((L,i)=>{const lv=i+1,d=state.disc.includes(lv);const s=document.createElement('div');s.className='slot'+(d?'':' locked')+(lv===state.maxLv?' cur':'')+(mine(lv)?' mine':'');s.innerHTML=`<span class="n">${lv}</span><img alt=""><span>${d?L.n:'???'}</span>`;if(d||lv<=state.maxLv+1){thumb(lv).then(u=>s.querySelector('img').src=u);}else s.querySelector('img').remove();g.appendChild(s);});
+  $('#collection').classList.remove('hidden');S.ui();
+}
+$('#btnCol').onclick=openCollection;
+$('#colClose').onclick=()=>{$('#collection').classList.add('hidden');S.ui();};
+// нативные confirm/TG.showConfirm недоступны в части клиентов, поэтому спрашиваем сами
+let askCb=null;
+function ask(title,text,yes,onYes){
+  $('#askTitle').textContent=title;$('#askText').textContent=text;$('#askYes').textContent=yes;
+  askCb=onYes;$('#ask').classList.remove('hidden');S.ui();
+}
+$('#askNo').onclick=()=>{$('#ask').classList.add('hidden');askCb=null;S.ui();};
+$('#askYes').onclick=()=>{const cb=askCb;askCb=null;$('#ask').classList.add('hidden');S.ui();if(cb)cb();};
+function doReset(){
+  resetting=true;clearTimeout(saveT);
+  try{localStorage.removeItem(SAVE_KEY);localStorage.removeItem('frogmerge.v1');}catch(e){}
+  const done=()=>location.reload();
+  if(cloudOk()){try{TG.CloudStorage.removeItem(SAVE_KEY,done);setTimeout(done,1500);return;}catch(e){}}
+  done();
+}
+$('#btnHolders').onclick=()=>{S.ui();openTg(CFG.holders);};
+$('#btnReset').onclick=()=>ask('Сбросить прогресс?','Уровни, монеты и коллекция обнулятся. Покупки за звёзды останутся.','Сбросить',doReset);
+$('#btnSound').onclick=()=>{state.sound=!state.sound;save();updateHud();S.ui();};
+
+/* ---------- INIT ---------- */
+async function init(){
+  await load();
+  const need=new Set([WILD,1,...state.cells.filter(v=>v>0),state.maxLv,state.maxLv+1]);
+  for(let l=baseSpawnLv();l<=state.maxLv+1;l++)need.add(l);
+  const list=[...need].filter(l=>l===WILD||l<=LEVELS.length);let done=0;
+  await Promise.all(list.map(l=>thumb(l).then(()=>{done++;$('#loadBar').style.width=(done/list.length*100)+'%';})));
+  $('#spawnIcon').src=thumbs.get(WILD);
+  buildBoard();applyTheme();
+  await setClickerSkin(state.maxLv);
+  updateHud();
+  $('#loading').classList.add('hidden');
+  resolve(-1);
+  if(TG&&TG.initDataUnsafe&&TG.initDataUnsafe.start_param==='shop')openShop();
+  sync(true).then(r=>{
+    const frogs=(r&&r.holder&&r.holder.frogs)||[];
+    // тихое уведомление без модалки и без намёка на то, что ждёт в конце игры —
+    // человек только открыл приложение, спойлерить финал ему рано
+    if(frogs.length&&!state.inv.holderShown){
+      state.inv.holderShown=true;save();
+      toast(frogs.length>1?'Нашли твои лягушки в подарках — открыт чат холдеров':'Нашли твою лягушку в подарках — открыт чат холдеров',3200);
+    }
+  });
+  setInterval(()=>sync(false),30000);
+}
+window.addEventListener('resize',layout);
+if(TG){try{TG.onEvent('viewportChanged',layout);TG.onEvent('safeAreaChanged',layout);TG.onEvent('contentSafeAreaChanged',layout);TG.onEvent('fullscreenChanged',layout);}catch(e){}}
+document.addEventListener('gesturestart',e=>e.preventDefault());
+document.addEventListener('visibilitychange',()=>{if(document.hidden){save();sync(true);}});
+window.__frog={state,spawn,resolve,thumbs,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,LEVELS,BASE,renderShop,ask};
+init().catch(e=>{console.error(e);$('#loading h2').textContent='Ошибка загрузки: '+e.message;});
+})();
+</script>
+</body>
+</html>

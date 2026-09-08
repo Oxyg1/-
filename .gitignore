@@ -1,0 +1,4 @@
+server/.env
+server/data.json
+server/cards/
+dist/
