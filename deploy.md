@@ -1,75 +1,86 @@
-# Как обновлять игру на сервере
+# Как обновлять игру на сервере (через GitHub)
 
-## Разовая настройка (один раз)
+## Разовая настройка
 
-**1. Сервис вместо ручного `node server.js`.** Так сервер не умрёт при закрытии SSH
-и сам перезапустится при падении.
+**1. Создай пустой репозиторий на GitHub** (в браузере, это может сделать только твой аккаунт):
+New repository → имя, например `swamp` → **без** README/gitignore/лицензии (они уже есть
+локально) → Create.
 
-На сервере:
+**2. Подключи и запушь локальный репозиторий** (уже создан и закоммичен, лежит в `game/`).
+На своей машине, в Git Bash из папки `game`:
 ```bash
-cp /opt/frog/frog/game/server/swamp.service /etc/systemd/system/swamp.service
-systemctl daemon-reload
-systemctl enable --now swamp
-systemctl status swamp
+git remote add origin git@github.com:Oxyg1/swamp.git
+git branch -M main
+git push -u origin main
 ```
-Если сейчас `node server.js` где-то ещё запущен в терминале вручную — останови его
-(`Ctrl+C` в той сессии), иначе два процесса будут спорить за порт 8787.
+SSH-ключ `swampis-deploy` для этого уже добавлен в твой GitHub, push пройдёт без пароля.
+(Если имя репозитория будет не `swamp` — подставь своё в URL.)
 
-**2. Проверка:**
+**3. Заведи серверу свой ключ для чтения репозитория** (отдельный от личного — на сервере
+достаточно read-only доступа).
 ```bash
+ssh-keygen -t ed25519 -C "swamp-server" -f ~/.ssh/id_ed25519_deploy -N ""
+cat ~/.ssh/id_ed25519_deploy.pub
+```
+Скопируй вывод. На GitHub: репозиторий `swamp` → Settings → Deploy keys → Add deploy key →
+вставь ключ → галку **Allow write access не ставь** (серверу нужно только читать, не пушить).
+
+Пропиши на сервере, чтобы git использовал именно этот ключ для GitHub:
+```bash
+cat >> ~/.ssh/config <<'EOF'
+Host github.com
+  IdentityFile ~/.ssh/id_ed25519_deploy
+  IdentitiesOnly yes
+EOF
+ssh -T git@github.com   # должен ответить "Hi Oxyg1/swamp! You've successfully authenticated"
+```
+
+**4. Превращаем то, что уже развёрнуто, в git-репозиторий на месте** — не переносим папку,
+подключаем её к GitHub прямо там, где она лежит сейчас (`/opt/frog/frog/game`), чтобы
+`server/.env`, `server/data.json` и systemd-сервис остались как есть.
+```bash
+cd /opt/frog/frog/game
+mv server/.env /tmp/swamp.env.bak   # временно уберём с дороги, чтобы git его не тронул
+git init
+git remote add origin git@github.com:Oxyg1/swamp.git
+git fetch origin
+git reset --hard origin/main   # текущие файлы заменятся версией из GitHub — это то же самое, что уже на диске
+mv /tmp/swamp.env.bak server/.env   # возвращаем .env на место
+```
+`.gitignore` уже исключает `server/.env`, `server/data.json`, `server/cards/`, `dist/` —
+дальнейшие `git pull` их не тронут, поэтому `.env` можно было и не убирать, но на первом
+разе так безопаснее: `reset --hard` иначе может пожаловаться на незакоммиченный файл.
+
+**5. Проверка:**
+```bash
+systemctl restart swamp
 curl -sI http://localhost:8787/
-journalctl -u swamp -n 30 --no-pager
+journalctl -u swamp -n 20 --no-pager
 ```
-В логе должна быть строка вида `SWAMP server on :8787 ... bot=on`.
 
 ## Каждое обновление
 
-Файлы, которые нельзя перетирать при обновлении: `server/.env` (боевые токены),
-`server/data.json` (все игроки и покупки), `server/cards/` (шаренные карточки).
-Ниже это учтено через `rsync --exclude`.
+Вся возня с zip/rsync/scp больше не нужна — только git.
 
-**С Windows (Git Bash / WSL), из папки `game`:**
+**На своей машине**, после правок в `game/`:
 ```bash
-rsync -avz --delete \
-  --exclude 'server/.env' \
-  --exclude 'server/data.json' \
-  --exclude 'server/cards/' \
-  --exclude 'dist/' \
-  ./ root@104.128.142.55:/opt/frog/frog/game/
+git add -A
+git commit -m "что поменял"
+git push
 ```
-Спросит пароль root (или отработает по ключу, если он у тебя настроен).
 
-**Если rsync недоступен** (обычный Git Bash без WSL иногда без него) — через `scp`
-папкой целиком, чуть грубее, но рабочий вариант:
+**На сервере:**
 ```bash
-scp -r index.html levels.js backdrops.js build.py icons frogs \
-  root@104.128.142.55:/opt/frog/frog/game/
-scp server/server.js root@104.128.142.55:/opt/frog/frog/game/server/server.js
-```
-Так `.env`, `data.json` и `cards/` вообще не участвуют в копировании — их не тронет.
-
-**После заливки — перезапуск на сервере:**
-```bash
+cd /opt/frog/frog/game
+git pull
 systemctl restart swamp
 journalctl -u swamp -n 20 --no-pager
 ```
 
-## Короткая версия одной командой
-
-Сохрани на своей машине `deploy.sh` рядом с игрой и просто запускай его при каждом обновлении:
+## Ещё короче — одной командой с сервера
 
 ```bash
-#!/bin/bash
-set -e
-HOST=root@104.128.142.55
-cd "$(dirname "$0")"
-rsync -avz --delete \
-  --exclude 'server/.env' --exclude 'server/data.json' --exclude 'server/cards/' --exclude 'dist/' \
-  ./ "$HOST":/opt/frog/frog/game/
-ssh "$HOST" 'systemctl restart swamp && sleep 1 && systemctl status swamp --no-pager -l | head -10'
+echo "alias swamp-update='cd /opt/frog/frog/game && git pull && systemctl restart swamp'" >> ~/.bashrc
+source ~/.bashrc
 ```
-```bash
-chmod +x deploy.sh
-./deploy.sh
-```
-Дальше при каждой правке — просто `./deploy.sh`.
+Дальше после `git push` с локальной машины заходишь по SSH и пишешь `swamp-update`.
