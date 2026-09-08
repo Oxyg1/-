@@ -59,7 +59,9 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .board-wrap{display:flex;justify-content:center}
 #board{position:relative;width:min(100%,calc(100dvh - 370px));min-width:240px;aspect-ratio:1;border-radius:22px;background:rgba(0,0,0,.25);box-shadow:inset 0 4px 14px rgba(0,0,0,.35),0 2px 0 rgba(255,255,255,.06);touch-action:none}
 .cell{position:absolute;border-radius:14px;background:rgba(255,255,255,.09);box-shadow:inset 0 2px 0 rgba(255,255,255,.06);transition:background .15s,box-shadow .15s}
-.cell.hl{background:rgba(255,210,63,.35);box-shadow:inset 0 0 0 3px var(--acc)}
+.cell.hl{background:rgba(255,255,255,.12);box-shadow:inset 0 0 0 2px rgba(255,255,255,.4)}
+.cell.match{background:rgba(255,210,63,.35);box-shadow:inset 0 0 0 3px var(--acc);animation:matchPulse .7s ease-in-out infinite}
+@keyframes matchPulse{0%,100%{box-shadow:inset 0 0 0 3px var(--acc)}50%{box-shadow:inset 0 0 0 5px var(--acc)}}
 /* тень висит на статичном контейнере, а не на картинке, которая крутится в idle-анимации —
    иначе телефон каждый кадр пересчитывает drop-shadow разом для четверти доски, и всё тормозит */
 .frog{position:absolute;left:0;top:0;width:var(--cs);height:var(--cs);transform:translate(var(--x),var(--y));transition:transform .2s cubic-bezier(.2,.8,.2,1.15);will-change:transform;display:flex;align-items:center;justify-content:center;pointer-events:none;filter:drop-shadow(0 4px 3px rgba(0,0,0,.35))}
@@ -205,7 +207,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 #loading .card{align-items:center}
 #loading .bar{width:100%;height:12px;border-radius:8px;background:rgba(0,0,0,.35);overflow:hidden}
 #loading .bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
-@media (prefers-reduced-motion:reduce){.frog.idle img,#fly{animation:none}}
+@media (prefers-reduced-motion:reduce){.frog.idle img,#fly,.cell.match{animation:none}}
 </style>
 </head>
 <body>
@@ -654,14 +656,28 @@ function cellAt(clientX,clientY){const r=board.getBoundingClientRect();const x=c
 
 /* line finding: any window of 3 in a row/col where non-wild frogs match */
 // последний уровень не сливается дальше: 51-й лягушки не существует, слияние сломало бы сохранение
-function windowLevel(idx){const c=state.cells;let lv=null;for(const i of idx){const v=c[i];if(!v)return null;if(v===WILD)continue;if(lv===null)lv=v;else if(lv!==v)return null;}return lv>=LEVELS.length?null:lv;}
-function findLine(focus){
+function windowLevel(cells,idx){let lv=null;for(const i of idx){const v=cells[i];if(!v)return null;if(v===WILD)continue;if(lv===null)lv=v;else if(lv!==v)return null;}return lv>=LEVELS.length?null:lv;}
+function allWins(cells){
   const wins=[];
-  for(let r=0;r<N;r++)for(let x=0;x<=N-3;x++){const idx=[r*N+x,r*N+x+1,r*N+x+2];const lv=windowLevel(idx);if(lv)wins.push({idx,lv});}
-  for(let col=0;col<N;col++)for(let y=0;y<=N-3;y++){const idx=[y*N+col,(y+1)*N+col,(y+2)*N+col];const lv=windowLevel(idx);if(lv)wins.push({idx,lv});}
+  for(let r=0;r<N;r++)for(let x=0;x<=N-3;x++){const idx=[r*N+x,r*N+x+1,r*N+x+2];const lv=windowLevel(cells,idx);if(lv)wins.push({idx,lv});}
+  for(let col=0;col<N;col++)for(let y=0;y<=N-3;y++){const idx=[y*N+col,(y+1)*N+col,(y+2)*N+col];const lv=windowLevel(cells,idx);if(lv)wins.push({idx,lv});}
+  return wins;
+}
+function findLine(focus){
+  const wins=allWins(state.cells);
   if(!wins.length)return null;
   const w=wins.find(w=>w.idx.includes(focus))||wins[0];
   return {win:w.idx,lv:w.lv,target:w.idx.includes(focus)?focus:w.idx[1]};
+}
+// подсказка при перетаскивании: что слилось бы, если отпустить сейчас — без этого приходится
+// прикидывать в уме, попадёт ли лягушка в тройку
+function previewMerge(from,to){
+  if(from===to||to<0)return [];
+  const c=state.cells.slice();
+  const t=c[to];c[to]=c[from];c[from]=t;
+  const set=new Set();
+  allWins(c).forEach(w=>w.idx.forEach(i=>set.add(i)));
+  return [...set];
 }
 let busy=false;
 async function mergeCells(win,lv,target,combo){
@@ -687,7 +703,7 @@ async function resolve(focus){
 /* drag & drop */
 let drag=null,selected=-1;
 function setSelected(i){if(selected>=0&&els[selected])els[selected].classList.remove('selected');selected=i;if(i>=0&&els[i])els[i].classList.add('selected');renderActions();}
-function clearHl(){cellEls.forEach(c=>c.classList.remove('hl'));$('#clicker').classList.remove('feed');}
+function clearHl(){cellEls.forEach(c=>c.classList.remove('hl','match'));$('#clicker').classList.remove('feed');}
 board.addEventListener('pointerdown',e=>{
   if(busy)return;audio();
   const i=cellAt(e.clientX,e.clientY);if(i<0)return;
@@ -699,11 +715,18 @@ board.addEventListener('pointermove',e=>{
   const dx=e.clientX-drag.x0,dy=e.clientY-drag.y0;
   if(!drag.moving){if(Math.hypot(dx,dy)<6)return;drag.moving=true;setSelected(-1);els[drag.from].classList.add('dragging');S.ui();}
   const el=els[drag.from];const [x,y]=cellXY(drag.from);
-  el.style.setProperty('--x',(x+dx)+'px');el.style.setProperty('--y',(y+dy)+'px');
+  // фигура приподнята над пальцем — иначе большой палец на телефоне закрывает и её, и клетку под ней
+  const lift=cs*1.05;
+  el.style.setProperty('--x',(x+dx)+'px');el.style.setProperty('--y',(y+dy-lift)+'px');
   const over=cellAt(e.clientX,e.clientY);
   const clk=$('#clicker').getBoundingClientRect();
   const feed=e.clientY>clk.top&&e.clientY<clk.bottom&&e.clientX>clk.left&&e.clientX<clk.right;
-  if(over!==drag.over||feed!==drag.feed){clearHl();if(over>=0)cellEls[over].classList.add('hl');if(feed)$('#clicker').classList.add('feed');drag.over=over;drag.feed=feed;}
+  if(over!==drag.over||feed!==drag.feed){
+    clearHl();
+    if(feed)$('#clicker').classList.add('feed');
+    else if(over>=0){cellEls[over].classList.add('hl');previewMerge(drag.from,over).forEach(i=>cellEls[i].classList.add('match'));}
+    drag.over=over;drag.feed=feed;
+  }
 });
 function endDrag(e){
   if(!drag)return;const d=drag;drag=null;clearHl();
