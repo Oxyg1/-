@@ -949,7 +949,7 @@ function tapBounce(){
   if(t<animLock)return;      // идёт слияние — не перебиваем
   if(t-lastBounce<45)return; // два пальца в один момент: одного рывка достаточно
   lastBounce=t;
-  const end=Math.max(6,Math.round(clipFrames*0.2));
+  const end=Math.min(10,Math.max(6,Math.round(clipFrames*0.2)));
   clearTimeout(bounceT);
   clickerAnim.playSegments([0,end],true);
   bounceT=setTimeout(()=>{if(clickerAnim)clickerAnim.goToAndStop(0,true);},(end/clipFps)*1000+20);
