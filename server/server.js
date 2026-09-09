@@ -33,16 +33,24 @@ const CFG = {
   adminId: E.ADMIN_ID || '',
   dev: E.DEV === '1' || !E.BOT_TOKEN,
   pondGoal: +(E.POND_GOAL || 50000),
-  giftName: E.GIFT_NAME || 'Kissed Frog',
   adminKey: E.ADMIN_KEY || '',
 };
 CFG.appLink = CFG.botUsername ? (CFG.appName ? `https://t.me/${CFG.botUsername}/${CFG.appName}?startapp=chat` : `https://t.me/${CFG.botUsername}`) : CFG.chatLink;
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
-/* ---------- LEVELS (из game/levels.js) ---------- */
-const LEVELS = [];
-for (const m of fs.readFileSync(path.join(ROOT, 'levels.js'), 'utf8').matchAll(/\{n:"([^"]+)",f:"[^"]+",r:([\d.]+)\}/g)) LEVELS.push({ n: m[1], r: +m[2] });
-const levelByName = name => LEVELS.findIndex(l => l.n.toLowerCase() === String(name).toLowerCase()) + 1;
+/* ---------- LEVELS (из game/levels.js и game/cats.js) ---------- */
+function readLadder(file) {
+  const out = [];
+  for (const m of fs.readFileSync(path.join(ROOT, file), 'utf8').matchAll(/\{n:"([^"]+)",f:"[^"]+",r:([\d.]+)\}/g)) out.push({ n: m[1], r: +m[2] });
+  return out;
+}
+// у каждого вида своя лестница и свой подарок в Telegram
+const LADDER = { frog: readLadder('levels.js'), cat: readLadder('cats.js') };
+const GIFT = { frog: E.GIFT_NAME || 'Kissed Frog', cat: E.GIFT_NAME_CAT || 'Scared Cat' };
+const spOf = u => (u && u.species === 'cat') ? 'cat' : 'frog';
+const ladderOf = u => LADDER[spOf(u)];
+const LEVELS = LADDER.frog;   // совместимость: где вид не важен, остаётся лягушачья
+const levelByName = (name, sp) => LADDER[sp || 'frog'].findIndex(l => l.n.toLowerCase() === String(name).toLowerCase()) + 1;
 
 /* ---------- SHOP ---------- */
 const SHOP = {
@@ -73,6 +81,25 @@ const EMO_FB = { frog: '\u{1F438}', trophy: '\u{1F3C6}', gold: '\u{1F947}', silv
   crown: '\u{1F451}', sparkle: '\u2728', wave: '\u{1F30A}', heart: '\u2764\uFE0F', star: '\u2B50' };
 const em = k => EMO_ID[k] ? `<tg-emoji emoji-id="${EMO_ID[k]}">${EMO_FB[k]}</tg-emoji>` : EMO_FB[k];
 const EMO_BTN = E.EMOJI_BUTTON === '0' ? '' : EMO_FB.frog + ' ';
+
+// у товаров, завязанных на живность, подпись зависит от вида — её видно в окне оплаты Telegram
+const SHOP_SP = {
+  frog: { wild3: 'Дикая лягушка ×3', auto1d: 'Мушка на сутки', autoForever: 'Мушка навсегда',
+    bigBoard: 'Большой пруд 6×6', sub: 'Абонемент пруда', donate: 'Покормить пруд',
+    starterDesc: 'Мушка и ускорение ×2 на сутки + 3 диких лягушки', subDesc: 'Мушка, значок и ранний доступ к фонам на 30 дней' },
+  cat: { wild3: 'Дикий кот ×3', auto1d: 'Мышка на сутки', autoForever: 'Мышка навсегда',
+    bigBoard: 'Большая крыша 6×6', sub: 'Абонемент клуба', donate: 'Поддержать общую цель',
+    starterDesc: 'Мышка и ускорение ×2 на сутки + 3 диких кота', subDesc: 'Мышка, значок и ранний доступ к фонам на 30 дней' },
+};
+function shopItem(id, sp) {
+  const base = SHOP[id]; if (!base) return null;
+  const o = SHOP_SP[sp] || SHOP_SP.frog;
+  const it = Object.assign({}, base);
+  if (o[id]) it.title = o[id];
+  if (id === 'starter') it.desc = o.starterDesc;
+  if (id === 'sub') it.desc = o.subDesc;
+  return it;
+}
 
 const BD_PRICE = 59;
 const DAY = 86400e3;
@@ -140,18 +167,20 @@ function getUser(a) {
 /* ---------- HOLDER CHECK (getUserGifts) ---------- */
 async function checkHolder(u, real) {
   if (!CFG.token || !real) return;
-  if (u.holderCheckedAt && Date.now() - u.holderCheckedAt < DAY) return;
-  u.holderCheckedAt = Date.now();
+  const sp = spOf(u);
+  // кэш сбрасываем, если игрок сменил вид: искать надо уже другой подарок
+  if (u.holderCheckedAt && u.holderSpecies === sp && Date.now() - u.holderCheckedAt < DAY) return;
+  u.holderCheckedAt = Date.now(); u.holderSpecies = sp;
   try {
     let offset = '', frogs = [];
     for (let i = 0; i < 5; i++) {
       const r = await tg('getUserGifts', { user_id: +u.id, exclude_unlimited: true, exclude_limited_non_upgradable: true, offset, limit: 100 });
       for (const g of r.gifts || []) {
-        if (g.type === 'unique' && g.gift && g.gift.base_name === CFG.giftName) {
+        if (g.type === 'unique' && g.gift && g.gift.base_name === GIFT[sp]) {
           const model = g.gift.model && g.gift.model.name;
           // игрок может владеть несколькими лягушками — забираем все, вместе с бэкдропами
           frogs.push({
-            model, level: levelByName(model), name: g.gift.name, number: g.gift.number,
+            model, level: levelByName(model, sp), name: g.gift.name, number: g.gift.number,
             rarity: g.gift.model && g.gift.model.rarity_per_mille / 10,
             backdrop: g.gift.backdrop && g.gift.backdrop.name || null,
           });
@@ -164,7 +193,7 @@ async function checkHolder(u, real) {
     const top = frogs[0] || null;
     u.holder = top ? { model: top.model, level: top.level, backdrop: top.backdrop, frogs } : null;
     // в чат холдеров зовём один раз и только того, у кого лягушка действительно есть
-    if (top && !u.holdersInvited) {
+    if (top && !u.holdersInvited && sp === 'frog') {   // чата холдеров котов пока нет
       u.holdersInvited = Date.now();
       const names = frogs.map(f => f.model).join(', ');
       try {
@@ -187,7 +216,7 @@ function leaderboard() {
   return Object.values(db.users).filter(u => isRealPlayer(u) && (u.score > 0 || u.maxLv > 1)).sort((a, b) => b.score - a.score || b.maxLv - a.maxLv);
 }
 function topRows(n = 20) {
-  return leaderboard().slice(0, n).map((u, i) => ({ rank: i + 1, id: u.id, name: u.name, maxLv: u.maxLv, score: u.score, holder: u.holder ? u.holder.model : null, sub: (u.inv && u.inv.subUntil || 0) > Date.now() }));
+  return leaderboard().slice(0, n).map((u, i) => ({ rank: i + 1, id: u.id, name: u.name, sp: spOf(u), maxLv: u.maxLv, score: u.score, holder: u.holder ? u.holder.model : null, sub: (u.inv && u.inv.subUntil || 0) > Date.now() }));
 }
 function rankOf(id) { const i = leaderboard().findIndex(u => u.id === id); return i < 0 ? null : i + 1; }
 
@@ -220,6 +249,8 @@ const api = {
   async sync(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     const u = getUser(a); pondCheck();
+    if (body.species === 'cat' || body.species === 'frog') u.species = body.species;
+    const L = ladderOf(u);
     // мерджи — монотонный счётчик. Раньше при рывке дельту только помечали флагом,
     // но сам мердж всё равно принимался целиком — можно было одним запросом заявить
     // maxLv=50 без единого реального слияния. Теперь лишнее не флагом отмечается, а обрезается.
@@ -236,9 +267,9 @@ const api = {
     // maxLv и score не берутся с потолка: механика слияний сама задаёт им верхнюю границу —
     // каждый мердж поднимает лягушку ровно на 1 уровень и добавляет в очки её новый уровень,
     // так что без merges такого maxLv/score попросту не бывает
-    const maxLv = Math.max(1, Math.min(+body.maxLv || 1, LEVELS.length, u.merges + 1));
-    if (maxLv > u.maxLv) { u.maxLv = maxLv; const r = LEVELS[maxLv - 1].r; if (r <= 1) db.events.push({ t: Date.now(), id: u.id, name: u.name, lv: maxLv, frog: LEVELS[maxLv - 1].n, r }); }
-    const scoreCap = u.merges * LEVELS.length;
+    const maxLv = Math.max(1, Math.min(+body.maxLv || 1, L.length, u.merges + 1));
+    if (maxLv > u.maxLv) { u.maxLv = maxLv; const r = L[maxLv - 1].r; if (r <= 1) db.events.push({ t: Date.now(), id: u.id, name: u.name, lv: maxLv, frog: L[maxLv - 1].n, r, sp: spOf(u) }); }
+    const scoreCap = u.merges * L.length;
     u.score = Math.max(u.score || 0, Math.min(+body.score || 0, 1e9, scoreCap));
     u.taps = Math.max(u.taps || 0, Math.min(+body.taps || 0, 1e9));
     u.coins = Math.max(0, Math.min(+body.coins || 0, 1e15)) || 0; // без потолка Infinity бьёт JSON.stringify в null
@@ -251,7 +282,7 @@ const api = {
     u.wild = Math.max(0, (u.wild || 0) - wildUsed);
     u.syncAt = Date.now();
     await checkHolder(u, a.real);
-    if (u.holder && u.holder.level && u.holder.level <= u.maxLv && !u.holderDone) { u.holderDone = Date.now(); db.events.push({ t: Date.now(), id: u.id, name: u.name, lv: u.holder.level, frog: u.holder.model, r: LEVELS[u.holder.level - 1]?.r, own: true }); }
+    if (u.holder && u.holder.level && u.holder.level <= u.maxLv && !u.holderDone) { u.holderDone = Date.now(); db.events.push({ t: Date.now(), id: u.id, name: u.name, lv: u.holder.level, frog: u.holder.model, r: L[u.holder.level - 1]?.r, own: true, sp: spOf(u) }); }
     save();
     return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
   },
@@ -259,14 +290,14 @@ const api = {
   async invoice(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     const u = getUser(a);
-    let it = SHOP[body.item];
+    let it = shopItem(body.item, spOf(u));
     // фон продаётся только тот, который реально стоит на лягушке игрока
     if (!it && String(body.item).startsWith('bd:')) {
       const bd = String(body.item).slice(3);
       await checkHolder(u, a.real);
       const owns = ((u.holder && u.holder.frogs) || []).some(f => f.backdrop === bd);
-      if (!owns) return { ok: false, error: 'Этот фон не с твоей лягушки' };
-      it = { title: `Фон «${bd}»`, desc: 'Бэкдроп твоей лягушки Kissed Frog', price: BD_PRICE, backdrop: bd };
+      if (!owns) return { ok: false, error: 'Этот фон не с твоего подарка' };
+      it = { title: `Фон «${bd}»`, desc: `Бэкдроп твоего подарка ${GIFT[spOf(u)]}`, price: BD_PRICE, backdrop: bd };
     }
     if (!it) return { ok: false, error: 'Нет такого товара' };
     if (it.once && u.inv && u.inv[it.once]) return { ok: false, error: 'Уже куплено' };
@@ -467,7 +498,8 @@ const playKb = (priv) => ({ inline_keyboard: [[priv
 function topText(n = 10) {
   const rows = topRows(n);
   if (!rows.length) return 'Пока никто не играл. Будь первым ' + em('frog');
-  return rows.map(r => `${r.rank <= 3 ? em(['gold', 'silver', 'bronze'][r.rank - 1]) : r.rank + '.'} ${esc(r.name)}${r.holder ? ' ' + em('crown') : ''} — ${LEVELS[r.maxLv - 1].n} (ур. ${r.maxLv}) · ${fmt(r.score)}`).join('\n');
+  return rows.map(r => { const L = LADDER[r.sp] || LADDER.frog; const lv = Math.max(1, Math.min(r.maxLv || 1, L.length));
+    return `${r.rank <= 3 ? em(['gold', 'silver', 'bronze'][r.rank - 1]) : r.rank + '.'} ${esc(r.name)}${r.holder ? ' ' + em('crown') : ''} — ${L[lv - 1].n} (ур. ${lv}) · ${fmt(r.score)}`; }).join('\n');
 }
 const esc = s => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n);
@@ -480,10 +512,10 @@ async function onMessage(m) {
     const rows = [[{ text: EMO_BTN + 'Играть', web_app: { url: CFG.appUrl + (param ? '?startapp=' + encodeURIComponent(param) : '') } }], [{ text: 'Игровой чат', url: CFG.chatLink }]];
     // ссылку на чат холдеров показываем только тем, у кого бот увидел лягушку
     if (u0 && u0.holder && (u0.holder.frogs || []).length) rows.push([{ text: 'Чат холдеров', url: CFG.holdersLink }]);
-    await tg('sendMessage', { chat_id: chat.id, text: `${em('frog')} <b>SWAMP</b>\nТапай лягушку, призывай новых и соединяй три в ряд.\n\nИгровой чат: ${CFG.chatLink}`, parse_mode: 'HTML',
+    await tg('sendMessage', { chat_id: chat.id, text: `${em('frog')} <b>SWAMP</b>\nЛягушки или коты — выбираешь при первом запуске.\nТапай, призывай новых и соединяй три в ряд.\n\nИгровой чат: ${CFG.chatLink}`, parse_mode: 'HTML',
       reply_markup: { inline_keyboard: rows } });
   } else if (cmd === '/play' || (cmd === '/start' && !priv)) {
-    await tg('sendMessage', { chat_id: chat.id, text: `${em('frog')} <b>SWAMP</b> — кликер + три в ряд с нашими лягушками. Жми и играй прямо здесь.`, parse_mode: 'HTML', reply_markup: playKb(priv) });
+    await tg('sendMessage', { chat_id: chat.id, text: `${em('frog')} <b>SWAMP</b> — кликер + три в ряд с лягушками или котами. Жми и играй прямо здесь.`, parse_mode: 'HTML', reply_markup: playKb(priv) });
   } else if (cmd === '/top') {
     pondCheck();
     await tg('sendMessage', { chat_id: chat.id, text: `${em('trophy')} <b>Топ пруда</b>\n${topText(10)}\n\n${em('wave')} Общий пруд: ${fmt(db.pond.count)} / ${fmt(CFG.pondGoal)}`, parse_mode: 'HTML', reply_markup: playKb(priv) });
@@ -508,7 +540,7 @@ async function onPayment(m) {
   db.payments.push({ t: Date.now(), id: u.id, item, stars, charge: sp.telegram_payment_charge_id, sub: !!sp.subscription_expiration_date, recurring: !!sp.is_recurring });
   save();
   log('payment', u.id, item, stars);
-  const it = SHOP[item];
+  const it = shopItem(item, spOf(u));
   try { await tg('sendMessage', { chat_id: m.chat.id, text: `${em('star')} Спасибо! ${esc(it ? it.title : item)} активировано. Открой игру — всё уже там.`, parse_mode: 'HTML', reply_markup: playKb(true) }); } catch (e) {}
 }
 async function sendDigest(force) {
@@ -525,7 +557,7 @@ async function sendDigest(force) {
   const pct = Math.min(100, Math.round(db.pond.count / CFG.pondGoal * 100));
   const bar = '█'.repeat(Math.round(pct / 10)) + '░'.repeat(10 - Math.round(pct / 10));
   const text = [`${em('frog')} <b>Пруд за сегодня</b>`, '', `${em('trophy')} <b>Топ-10</b>`, topText(10), '',
-    rare.length ? `${em('sparkle')} <b>Редкие лягушки</b>\n${rare.join('\n')}\n` : '',
+    rare.length ? `${em('sparkle')} <b>Редкие находки</b>\n${rare.join('\n')}\n` : '',
     own.length ? `${em('crown')} <b>Личные финалы</b>\n${own.join('\n')}\n` : '',
     `${em('wave')} <b>Общий пруд недели</b>\n<code>${bar}</code> ${pct}%\n${fmt(db.pond.count)} из ${fmt(CFG.pondGoal)} слияний${pct >= 100 ? ' — цель взята, всем бустер на сутки!' : ''}`,
     donors.length ? `\n${em('heart')} Кормили пруд: ${donors.join(', ')}` : ''].filter(s => s !== '').join('\n');
