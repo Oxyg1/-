@@ -171,6 +171,17 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 /* SHOP */
 .item{display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:center;background:rgba(0,0,0,.25);border-radius:16px;padding:10px;margin-bottom:8px}
 .item img{width:52px;height:52px;object-fit:contain}
+.item.expandable{cursor:pointer}
+.item .chev{display:block;font-style:normal;font-size:12px;font-weight:800;color:var(--acc);margin-top:3px}
+.bundle{grid-column:1/-1;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12);display:flex;flex-direction:column;gap:7px}
+.bundle-row{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.bundle-row img{width:24px;height:24px;object-fit:contain;flex:none}
+.bundle-row span{flex:1;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bundle-row b{font-weight:800;white-space:nowrap;opacity:.75;flex:none}
+.bundle-row b img{width:14px;height:14px;vertical-align:-2px}
+.bundle-total{font-size:13px;font-weight:800;color:#ffe680;padding-top:2px}
+.bundle-total s{opacity:.6;font-weight:700}
+.bundle-total img{width:14px;height:14px;vertical-align:-2px}
 .bdview{width:52px;height:52px;border-radius:14px;display:block;box-shadow:inset 0 2px 0 rgba(255,255,255,.25),0 2px 6px rgba(0,0,0,.35)}
 .item b{display:block;font-size:15px}
 .item span{font-size:12.5px;opacity:.85;font-weight:700;line-height:1.25;display:block}
@@ -1088,7 +1099,8 @@ const BD_PRICE=59;
 // Витрина: короткая выгода вместо описаний, группы вместо простыни,
 // цифры считаются от реального заработка игрока — это честный аргумент, а не давилка
 const SHOP=[
-  {id:'starter',g:'start',name:'Стартовый набор',desc:'Мушка и ×2 на сутки + 3 диких',price:99,was:188,icon:'icons/jelly.png',once:'starter',badge:'−47%'},
+  {id:'starter',g:'start',name:'Стартовый набор',desc:'Мушка и ×2 на сутки + 3 диких',price:99,was:188,icon:'icons/jelly.png',once:'starter',badge:'−47%',
+    bundle:[['icons/bolt.png','Мушка на сутки',50],['icons/fire.png','Ускорение ×2 на сутки',99],['wild','Дикая лягушка ×3',39]]},
 
   {id:'autoForever',g:'earn',name:'Мушка навсегда',desc:'Тапает за тебя, всегда',price:490,icon:'icons/bolt.png',once:'autoForever',badge:'навсегда'},
   {id:'auto1d',g:'earn',name:'Мушка на сутки',desc:'Тапает за тебя 24 часа',price:50,icon:'icons/bolt.png',badge:'хит'},
@@ -1179,12 +1191,32 @@ function itemCard(it,inv,t,extra){
   if(it.id==='wild3'&&state.wild>0)status=`в запасе ×${state.wild}`;
   const badge=it.badge?`<i class="badge2">${it.badge}</i>`:'';
   const was=it.was?`<s>${it.was}</s> `:'';
+  const chev=it.bundle?`<i class="chev">Из чего набор ▾</i>`:'';
   d.innerHTML=
     (bc?`<i class="bdview" style="background:radial-gradient(circle at 40% 32%, ${bc.c}, ${bc.e})"></i>`:`<img src="${icon}" alt="">`)+
-    `<div><b>${it.name}${badge}</b><span>${extra||it.desc}</span>${status?`<span class="live">${status}</span>`:''}`+
+    `<div><b>${it.name}${badge}</b><span>${extra||it.desc}</span>${status?`<span class="live">${status}</span>`:''}${chev}`+
     (it.donate?`<div class="row">${it.prices.map(p=>`<button class="buy" data-buy="donate" data-amount="${p}">${p} <img class="ic" src="icons/tgstar.png" alt=""></button>`).join('')}</div>`:'')+
     `</div>`+
     (was&&!inv[it.once]?`<div class="pricebox">${was}${btn}</div>`:btn);
+  // разворачиваемая расшифровка — по тапу на карточку показываем, из чего набор
+  // и сколько это стоило бы отдельными покупками, чтобы скидка была осязаемой, а не просто цифрой
+  if(it.bundle){
+    d.classList.add('expandable');
+    const total=it.bundle.reduce((s,x)=>s+x[2],0);
+    const detail=document.createElement('div');detail.className='bundle';detail.hidden=true;
+    detail.innerHTML=it.bundle.map(([ic,label,price])=>{
+      const img=ic==='wild'?(thumbs.get(WILD)||''):ic;
+      return `<div class="bundle-row"><img src="${img}" alt=""><span>${label}</span><b>${price}<img class="ic" src="icons/tgstar.png" alt=""></b></div>`;
+    }).join('')+`<div class="bundle-total">По отдельности вышло бы <s>${total}</s> — в наборе ${it.price} <img class="ic" src="icons/tgstar.png" alt=""></div>`;
+    d.appendChild(detail);
+    const chevEl=d.querySelector('.chev');
+    d.addEventListener('click',e=>{
+      if(e.target.closest('button'))return;
+      const open=detail.hidden;detail.hidden=!open;d.classList.toggle('open',open);
+      chevEl.textContent=open?'Из чего набор ▴':'Из чего набор ▾';
+      S.ui();
+    });
+  }
   return d;
 }
 function renderShop(){
