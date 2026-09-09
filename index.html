@@ -363,7 +363,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
     <div class="fn-stats" id="fnStats" hidden></div>
     <div class="fn-modes" id="fnModes" hidden>
       <button class="btn" id="fnNormal">Пройти заново<small>привычный порядок редкостей</small></button>
-      <button class="btn ghost" id="fnRandom">Случайный порядок<small>редкости перемешаны: хоть с Happy Pepe до бронзы</small></button>
+      <button class="btn ghost" id="fnRandom">Случайный порядок<small>редкости перемешаны: от 0,5% до 4% в любом порядке</small></button>
     </div>
     <button class="btn" id="fnNext"></button>
     <button class="btn ghost sm" id="fnLater" hidden>Позже</button>
@@ -495,6 +495,15 @@ function applyOrder(order){
   return true;
 }
 const ownsLevel=lv=>{const L=LEVELS[lv-1];return !!(L&&(state.own||[]).some(m=>slugOf(m)===L.f));};
+// строка лидерборда — это чужая лестница, не моя: свою LEVELS для неё брать нельзя
+// (после перестановки/случайного режима номер уровня у меня и у него — разные лягушки).
+// BASE — фиксированный порядок без чьей-либо персонализации, безопасный дефолт;
+// а на вершине (r.holder) у игрока стоит именно его собственная лягушка
+function rowFrogSlug(lv,holderModel){
+  if(lv===BASE.length&&holderModel){const s=slugOf(holderModel);if(s)return s;}
+  return (BASE[lv-1]||BASE[BASE.length-1]).f;
+}
+const rowFrogName=(lv,holderModel)=>{const f=rowFrogSlug(lv,holderModel);const L=BASE.find(l=>l.f===f);return L?L.n:'';};
 let N=5,CELLS=25;
 function applySave(s){
   if(!s||!Array.isArray(s.cells))return;
@@ -555,11 +564,15 @@ const rarTxt=lv=>{const r=rarity(lv);return r==null?'':String(r).replace('.',','
 /* ---------- ASSETS ---------- */
 const frogFile=lv=>typeof lv==='string'?lv:(lv===0||lv===WILD)?'original':LEVELS[lv-1].f;
 const frogName=lv=>lv===WILD?'Дикая лягушка':lv===0?'Original':LEVELS[lv-1].n;
+// кэш по слагу лягушки, не по номеру уровня: после перестановки лестницы
+// (случайный режим, персональный финал) один и тот же номер указывает на
+// другую лягушку — кэш по номеру отдавал бы старую картинку под новым именем
 const dataCache=new Map();
 function loadFrogData(lv){
-  if(!dataCache.has(lv)){
-    dataCache.set(lv,(async()=>{
-      let bytes;const f=frogFile(lv);
+  const f=frogFile(lv);
+  if(!dataCache.has(f)){
+    dataCache.set(f,(async()=>{
+      let bytes;
       if(window.EMBED&&window.EMBED[f]){const b=atob(EMBED[f]);bytes=new Uint8Array(b.length);for(let i=0;i<b.length;i++)bytes[i]=b.charCodeAt(i);}
       else{const r=await fetch('frogs/'+f+'.tgs');if(!r.ok)throw new Error('load '+f);bytes=new Uint8Array(await r.arrayBuffer());}
       let text;
@@ -568,7 +581,7 @@ function loadFrogData(lv){
       return JSON.parse(text);
     })());
   }
-  return dataCache.get(lv);
+  return dataCache.get(f);
 }
 async function bake(lv,size){
   const data=structuredClone(await loadFrogData(lv));
@@ -578,11 +591,14 @@ async function bake(lv,size){
   anim.goToAndStop(THUMB_FRAME,true);
   anim.destroy();return c;
 }
+// тот же принцип: ключ — слаг лягушки, а не номер уровня
 const thumbs=new Map(),thumbPromises=new Map();
+function thumbKey(lv){return frogFile(lv);}
 function thumb(lv){
-  if(thumbPromises.has(lv))return thumbPromises.get(lv);
-  const p=bake(lv,256).then(c=>{const u=c.toDataURL('image/png');thumbs.set(lv,u);return u;});
-  thumbPromises.set(lv,p);return p;
+  const f=frogFile(lv);
+  if(thumbPromises.has(f))return thumbPromises.get(f);
+  const p=bake(lv,256).then(c=>{const u=c.toDataURL('image/png');thumbs.set(f,u);return u;});
+  thumbPromises.set(f,p);return p;
 }
 
 /* ---------- ЗВУК ----------
@@ -794,9 +810,9 @@ function renderActions(){
     const b=document.createElement('button');b.className='chip red';b.innerHTML=`<img src="icons/meat.png" alt="">Скормить слабых (${junk.length}) <b>+${fmt(total)}</b>`;b.onclick=feedJunk;a.appendChild(b);
   }
   if(state.wild>0){
-    const w=document.createElement('button');w.className='chip gold';w.innerHTML=`<img src="${thumbs.get(WILD)||''}" alt="">Дикая лягушка ×${state.wild}`;w.onclick=placeWild;a.appendChild(w);
+    const w=document.createElement('button');w.className='chip gold';w.innerHTML=`<img src="${thumbs.get(thumbKey(WILD))||''}" alt="">Дикая лягушка ×${state.wild}`;w.onclick=placeWild;a.appendChild(w);
   }else if(full&&!canMergeAny()){
-    const w=document.createElement('button');w.className='chip gold';w.innerHTML=`<img src="${thumbs.get(WILD)||''}" alt="">Дикая лягушка · 39${ic('star')}`;w.onclick=()=>openShop('wild3');a.appendChild(w);
+    const w=document.createElement('button');w.className='chip gold';w.innerHTML=`<img src="${thumbs.get(thumbKey(WILD))||''}" alt="">Дикая лягушка · 39${ic('star')}`;w.onclick=()=>openShop('wild3');a.appendChild(w);
   }
 }
 
@@ -820,7 +836,7 @@ function position(el,i){const [x,y]=cellXY(i);el.style.setProperty('--x',x+'px')
 function makeFrogEl(i,lv,pop=true){
   const el=document.createElement('div');el.className='frog'+(pop?' pop':'')+(lv===WILD?' wild':'')+(isJunk(lv)?' junk':'');
   el.innerHTML=`<img alt=""><span class="lvl">${lv===WILD?ic('sparkle'):lv}</span>`;
-  const img=el.firstChild;if(thumbs.has(lv))img.src=thumbs.get(lv);else thumb(lv).then(u=>img.src=u);
+  const img=el.firstChild;if(thumbs.has(thumbKey(lv)))img.src=thumbs.get(thumbKey(lv));else thumb(lv).then(u=>img.src=u);
   el.style.transition='none';position(el,i);board.appendChild(el);void el.offsetWidth;el.style.transition='';
   els[i]=el;setTimeout(()=>{el.classList.remove('pop');el.classList.add('idle');el.querySelector('img').style.animationDelay=(-Math.random()*2.6)+'s';},520);
   return el;
@@ -1059,7 +1075,7 @@ async function levelUp(lv){
     luAnim=lottie.loadAnimation({container:$('#luLottie'),renderer:'svg',loop:true,autoplay:true,animationData:structuredClone(d)});
   }catch(e){
     console.error('luAnim',e);
-    const img=thumbs.get(lv);
+    const img=thumbs.get(thumbKey(lv));
     if(img)$('#luLottie').innerHTML=`<img src="${img}" alt="" style="width:100%;height:100%;object-fit:contain">`;
   }
   ov.classList.remove('hidden');S.level();haptic.success();
@@ -1110,7 +1126,7 @@ async function showFinale(lv){
   try{
     const d=await loadFrogData(lv);
     fnAnim=lottie.loadAnimation({container:$('#fnLottie'),renderer:'svg',loop:true,autoplay:true,animationData:structuredClone(d)});
-  }catch(e){const img=thumbs.get(lv);if(img)$('#fnLottie').innerHTML=`<img src="${img}" alt="" style="width:100%;height:100%;object-fit:contain">`;}
+  }catch(e){const img=thumbs.get(thumbKey(lv));if(img)$('#fnLottie').innerHTML=`<img src="${img}" alt="" style="width:100%;height:100%;object-fit:contain">`;}
   // финал слишком часто проскакивали рефлекторным тапом — держим кнопку закрытой, пока читают
   const next=$('#fnNext');next.hidden=false;next.disabled=true;
   let left=3;next.textContent='Дальше · '+left;
@@ -1284,7 +1300,7 @@ function contextOffer(){
 }
 function itemCard(it,inv,t,extra){
   const d=document.createElement('div');d.className='item'+(it.donate?' donate':'');
-  const icon=it.icon==='wild'?(thumbs.get(WILD)||''):it.icon;
+  const icon=it.icon==='wild'?(thumbs.get(thumbKey(WILD))||''):it.icon;
   const bc=it.backdrop&&bdColors(it.backdrop);
   let btn='',status='';
   if(it.donate)btn='';
@@ -1311,7 +1327,7 @@ function itemCard(it,inv,t,extra){
     const total=it.bundle.reduce((s,x)=>s+x[2],0);
     const detail=document.createElement('div');detail.className='bundle';detail.hidden=true;
     detail.innerHTML=it.bundle.map(([ic,label,price])=>{
-      const img=ic==='wild'?(thumbs.get(WILD)||''):ic;
+      const img=ic==='wild'?(thumbs.get(thumbKey(WILD))||''):ic;
       return `<div class="bundle-row"><img src="${img}" alt=""><span>${label}</span><b>${price}<img class="ic" src="icons/tgstar.png" alt=""></b></div>`;
     }).join('')+`<div class="bundle-total">По отдельности вышло бы <s>${total}</s> — в наборе ${it.price} <img class="ic" src="icons/tgstar.png" alt=""></div>`;
     d.appendChild(detail);
@@ -1410,8 +1426,11 @@ async function openTop(){
     const d=document.createElement('div');d.className='lb'+((r.me||(meId&&r.id===meId))?' me':'');
     const medal=r.rank<=3?ic('medal','m'+r.rank):r.rank;
     const lv=Math.max(1,Math.min(r.maxLv||1,LEVELS.length));
-    d.innerHTML=`<div class="rk ${r.rank<=3?'top':''}">${medal}</div><img alt=""><div class="nm">${esc(r.name||'Игрок')}${r.holder?'<span class="badge">'+ic('crown')+' хозяин</span>':''}${r.sub?'<span class="badge" style="background:#ffd23f;color:#5a3b00">абонент</span>':''}<small>${frogName(lv)} · ур. ${lv}</small></div><div class="sc">${fmt(r.score||0)}</div>`;
-    thumb(lv).then(u=>d.querySelector('img').src=u);
+    // у каждого игрока своя лестница: viewer'ская LEVELS для чужой строки врёт с именем,
+    // особенно на вершине — там у каждого владельца стоит его личная лягушка
+    const rowName=rowFrogName(lv,r.holder);
+    d.innerHTML=`<div class="rk ${r.rank<=3?'top':''}">${medal}</div><img alt=""><div class="nm">${esc(r.name||'Игрок')}${r.holder?'<span class="badge">'+ic('crown')+' холдер</span>':''}${r.sub?'<span class="badge" style="background:#ffd23f;color:#5a3b00">абонент</span>':''}<small>${rowName} · ур. ${lv}</small></div><div class="sc">${fmt(r.score||0)}</div>`;
+    thumb(rowFrogSlug(lv,r.holder)).then(u=>d.querySelector('img').src=u);
     list.appendChild(d);
   });
   $('#topNote').textContent=note;
@@ -1466,7 +1485,7 @@ async function init(){
   for(let l=baseSpawnLv();l<=state.maxLv+1;l++)need.add(l);
   const list=[...need].filter(l=>l===WILD||l<=LEVELS.length);let done=0;
   await Promise.all(list.map(l=>thumb(l).then(()=>{done++;$('#loadBar').style.width=(done/list.length*100)+'%';})));
-  $('#spawnIcon').src=thumbs.get(WILD);
+  $('#spawnIcon').src=thumbs.get(thumbKey(WILD));
   buildBoard();applyTheme();
   await setClickerSkin(state.maxLv);
   updateHud();
@@ -1488,7 +1507,7 @@ window.addEventListener('resize',layout);
 if(TG){try{TG.onEvent('viewportChanged',layout);TG.onEvent('safeAreaChanged',layout);TG.onEvent('contentSafeAreaChanged',layout);TG.onEvent('fullscreenChanged',layout);}catch(e){}}
 document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('visibilitychange',()=>{if(document.hidden){save();sync(true);}});
-window.__frog={state,spawn,resolve,thumbs,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,LEVELS,BASE,renderShop,ask,buildBoard};
+window.__frog={state,spawn,resolve,thumbs,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName};
 init().catch(e=>{console.error(e);$('#loading h2').textContent='Ошибка загрузки: '+e.message;});
 })();
 </script>
