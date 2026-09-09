@@ -608,7 +608,7 @@ const S={
     const duck=tapRate>5?.65:1;                            // спам — тише на 35%
     const pitch=1+(Math.random()*.24-.12);                 // ±12%
     voice(523.25*pitch,.06,.05*duck,0,{glide:.55});
-    if(crit){voice(784*pitch,.09,.05,.02,{reward:true});voice(1046*pitch,.12,.03,.05,{reward:true});}
+    if(crit){voice(784*pitch,.09,.05,.02);voice(1046*pitch,.12,.03,.05);}
   },
   spawn:()=>voice(659*(1+(Math.random()*.2-.1)),.07,.035,0,{glide:1.3}),
   // слияние: чем выше уровень лягушки, тем ниже и толще; каскад ведёт вверх по гамме
