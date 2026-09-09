@@ -126,8 +126,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .float.big{color:#9dffb0;font-size:26px}
 .float.small{font-size:15px;opacity:.8}
 @keyframes floatUp{to{transform:translate(-50%,-160%) scale(1.1);opacity:0}}
-.coinp{position:absolute;width:26px;height:26px;transform:translate(-50%,-50%);animation:coinp .7s cubic-bezier(.2,.7,.3,1) forwards}
-.coinp img{width:100%;height:100%}
+.coinp{position:absolute;width:26px;height:26px;transform:translate(-50%,-50%);animation:coinp .7s cubic-bezier(.2,.7,.3,1) forwards;background:url("icons/coin.png") center/contain no-repeat}
 @keyframes coinp{0%{transform:translate(-50%,-50%) scale(.4)}30%{opacity:1}100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(.9) rotate(var(--r));opacity:0}}
 .spark{position:absolute;width:10px;height:10px;border-radius:50%;background:var(--c,#fff);transform:translate(-50%,-50%);animation:spark .6s ease-out forwards}
 @keyframes spark{to{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(0);opacity:0}}
@@ -522,26 +521,106 @@ function thumb(lv){
   thumbPromises.set(lv,p);return p;
 }
 
-/* ---------- SOUND ---------- */
-let ac=null;
-function audio(){if(!ac){try{ac=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}if(ac&&ac.state==='suspended')ac.resume();return ac;}
-function tone(f0,f1,dur,type='sine',vol=.18,t0=0){const a=audio();if(!a||!state.sound)return;const t=a.currentTime+t0;const o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+dur);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g).connect(a.destination);o.start(t);o.stop(t+dur+.02);}
+/* ---------- ЗВУК ----------
+   Задача — не «пикать», а расслаблять: мягкие синусы вместо пил и квадратов,
+   общий фильтр срезает резкость, короткое эхо даёт объём, а все ноты берутся
+   из пентатоники — в ней любое сочетание звучит консонансно, поэтому даже
+   быстрый долбёж по лягушке не превращается в какофонию. */
+let ac=null,bus=null,wet=null;
+function audio(){
+  if(!ac){
+    try{ac=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return null;}
+    // общая шина: мягкий лимит по громкости + срез резких верхов
+    bus=ac.createGain();bus.gain.value=.9;
+    const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=5200;lp.Q.value=.6;
+    // ненавязчивое эхо вместо реверба: дёшево и добавляет «воздух»
+    const dl=ac.createDelay(1);dl.delayTime.value=.16;
+    const fb=ac.createGain();fb.gain.value=.22;
+    wet=ac.createGain();wet.gain.value=.3;
+    bus.connect(lp);lp.connect(ac.destination);
+    lp.connect(dl);dl.connect(fb);fb.connect(dl);dl.connect(wet);wet.connect(ac.destination);
+  }
+  if(ac.state==='suspended')ac.resume();
+  return ac;
+}
+// до-мажорная пентатоника на несколько октав: фальшивых сочетаний не бывает
+const SCALE=[0,2,4,7,9];
+const note=(deg,oct=0)=>261.63*Math.pow(2,oct+Math.floor(deg/5))*Math.pow(2,SCALE[((deg%5)+5)%5]/12);
+// один мягкий голос: синус + короткая «древесная» призвука сверху
+function voice(f,dur,vol,t0=0,glide=0){
+  const a=audio();if(!a||!state.sound)return;
+  const t=a.currentTime+t0;
+  if(!isFinite(f)||!isFinite(t))return;
+  const o=a.createOscillator(),g=a.createGain();
+  o.type='sine';
+  o.frequency.setValueAtTime(f,t);
+  if(glide)o.frequency.exponentialRampToValueAtTime(Math.max(40,f*glide),t+dur);
+  // плавная атака и длинный хвост — резкий старт как раз и звучит «дёшево»
+  g.gain.setValueAtTime(.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol,t+.012);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(g).connect(bus);
+  o.start(t);o.stop(t+dur+.03);
+  // тихая октава сверху даёт «стеклянный» призвук, без неё звук глуховат
+  if(vol>.05){
+    const o2=a.createOscillator(),g2=a.createGain();
+    o2.type='sine';o2.frequency.setValueAtTime(f*2,t);
+    g2.gain.setValueAtTime(.0001,t);
+    g2.gain.exponentialRampToValueAtTime(vol*.22,t+.01);
+    g2.gain.exponentialRampToValueAtTime(.0001,t+dur*.6);
+    o2.connect(g2).connect(bus);
+    o2.start(t);o2.stop(t+dur+.03);
+  }
+}
+// мягкий низкий «пух» — телесность без щелчка
+function thud(vol,t0=0,f=140){
+  const a=audio();if(!a||!state.sound)return;
+  const t=a.currentTime+t0;
+  const o=a.createOscillator(),g=a.createGain();
+  o.type='sine';o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*.45,t+.16);
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.01);
+  g.gain.exponentialRampToValueAtTime(.0001,t+.2);
+  o.connect(g).connect(bus);o.start(t);o.stop(t+.24);
+}
+let tapDeg=0,tapAt=0;
 const S={
-  pop:c=>c?(tone(700,1400,.15,'square',.12),tone(1000,2000,.2,'sine',.15,.03)):tone(520+Math.random()*80,260,.09,'sine',.16),
-  spawn:()=>{tone(300,700,.12,'triangle',.14);tone(600,900,.1,'sine',.1,.06);},
-  merge:c=>{const b=1+Math.min(c-1,4)*.15;[0,.07,.14].forEach((d,i)=>tone([523,659,784][i]*b,[523,659,784][i]*b*1.01,.22,'triangle',.16,d));},
-  level:()=>{[523,659,784,1046,1318].forEach((f,i)=>tone(f,f,.35,'triangle',.16,i*.09));tone(1046,2093,.6,'sine',.08,.45);},
-  eat:()=>{tone(400,120,.18,'sawtooth',.1);tone(200,90,.2,'square',.06,.05);},
-  err:()=>tone(200,140,.16,'square',.09),
-  ui:()=>tone(800,1200,.06,'sine',.08),
-  buy:()=>{[784,1046,1318].forEach((f,i)=>tone(f,f,.25,'triangle',.14,i*.08));},
+  // тап: капля воды. При частых тапах нота ползёт вверх по пентатонике —
+  // получается мелодия, а не долбёжка, и мозг получает «прогресс» на слух
+  pop:crit=>{
+    const t=now();
+    if(t-tapAt>900)tapDeg=0; else tapDeg=(tapDeg+1)%10;
+    tapAt=t;
+    voice(note(tapDeg+5),.5,.07,0,.9);
+    if(crit){voice(note(tapDeg+8),.7,.06,.04);voice(note(tapDeg+12),.9,.035,.09);}
+  },
+  spawn:()=>{thud(.05,0,190);voice(note(3),.35,.045,.02,1.1);},
+  // слияние: восходящее трезвучие, с комбо поднимается на октаву выше
+  merge:c=>{
+    const base=2+Math.min(Math.max(c-1,0),3)*2;
+    [0,2,4].forEach((d,k)=>voice(note(base+d),.75,.075,k*.07));
+    thud(.05,0,150);
+  },
+  // новый уровень: разбег по пентатонике вверх и мягкий «хвост»
+  level:()=>{
+    [0,1,2,3,4,5,6].forEach((d,k)=>voice(note(d+3),.7,.075,k*.075));
+    voice(note(10),1.4,.05,.6);
+    thud(.07,0,120);
+  },
+  eat:()=>{thud(.07,0,170);voice(note(1),.3,.04,.02,.6);},
+  err:()=>{voice(note(0)*.75,.4,.05,0,.85);},
+  ui:()=>voice(note(6),.16,.03),
+  buy:()=>{[0,2,4,6].forEach((d,k)=>voice(note(d+4),.6,.06,k*.06));},
 };
 
 /* ---------- FX ---------- */
 const fx=$('#fx');
 function floatText(x,y,txt,cls='',html=false){const el=document.createElement('div');el.className='float '+cls;if(html)el.innerHTML=txt;else el.textContent=txt;el.style.left=x+'px';el.style.top=y+'px';fx.appendChild(el);setTimeout(()=>el.remove(),1200);}
-function coinBurst(x,y,n){for(let i=0;i<n;i++){const el=document.createElement('div');el.className='coinp';el.innerHTML='<img src="icons/coin.png" alt="">';const a=rnd(-Math.PI,0)+rnd(-.5,.5),d=rnd(40,110);el.style.setProperty('--dx',Math.cos(a)*d+'px');el.style.setProperty('--dy',(Math.sin(a)*d-30)+'px');el.style.setProperty('--r',rnd(-180,180)+'deg');el.style.left=x+'px';el.style.top=y+'px';fx.appendChild(el);setTimeout(()=>el.remove(),800);}}
-function sparks(x,y,n,colors){for(let i=0;i<n;i++){const el=document.createElement('div');el.className='spark';const a=rnd(0,Math.PI*2),d=rnd(30,90);el.style.setProperty('--dx',Math.cos(a)*d+'px');el.style.setProperty('--dy',Math.sin(a)*d+'px');el.style.setProperty('--c',pick(colors));el.style.left=x+'px';el.style.top=y+'px';fx.appendChild(el);setTimeout(()=>el.remove(),700);}}
+function coinBurst(x,y,n){
+  if(fx.childElementCount>90)return;   // страховка от лавины частиц при бешеном тапе
+  for(let i=0;i<n;i++){const el=document.createElement('div');el.className='coinp';const a=rnd(-Math.PI,0)+rnd(-.5,.5),d=rnd(40,110);el.style.setProperty('--dx',Math.cos(a)*d+'px');el.style.setProperty('--dy',(Math.sin(a)*d-30)+'px');el.style.setProperty('--r',rnd(-180,180)+'deg');el.style.left=x+'px';el.style.top=y+'px';fx.appendChild(el);setTimeout(()=>el.remove(),800);}}
+function sparks(x,y,n,colors){
+  if(fx.childElementCount>90)return;
+  for(let i=0;i<n;i++){const el=document.createElement('div');el.className='spark';const a=rnd(0,Math.PI*2),d=rnd(30,90);el.style.setProperty('--dx',Math.cos(a)*d+'px');el.style.setProperty('--dy',Math.sin(a)*d+'px');el.style.setProperty('--c',pick(colors));el.style.left=x+'px';el.style.top=y+'px';fx.appendChild(el);setTimeout(()=>el.remove(),700);}}
 let toastT=null;function toast(t,ms=1800){const el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('on'),ms);}
 
 /* ---------- NETWORK ---------- */
@@ -579,18 +658,35 @@ async function sync(force){
 }
 
 /* ---------- HUD ---------- */
-function updateHud(){
+// дешёвая часть: только цифры. Вызывается на каждый тап, DOM не пересобирает
+function updateCounters(){
+  const cost=spawnCost();
   $('#coins').textContent=fmt(state.coins);
+  $('#cost').textContent=fmt(cost);
+  $('#btnSpawn').classList.toggle('poor',state.coins<cost);
+}
+// тяжёлая часть: значки, подсказка, чипы. Только когда что-то реально поменялось
+let hudSig='';
+function updateHud(){
+  updateCounters();
   $('#lv').textContent=state.maxLv;
-  $('#cost').textContent=fmt(spawnCost());
-  $('#btnSpawn').classList.toggle('poor',state.coins<spawnCost());
-  $('#btnSound').innerHTML=ic(state.sound?'sound-on':'sound-off');
-  $('#fly').classList.toggle('on',autoOn());
-  const nm=$('#frogName');const b=nm.querySelector('.boost');if(b)b.remove();
-  if(boostMult()>1){const s=document.createElement('span');s.className='boost';s.innerHTML='<img src="icons/fire.png" alt="" style="width:14px;height:14px;vertical-align:-.2em"> ×2';nm.appendChild(s);}
+  const boost=boostMult()>1,auto=autoOn();
+  const sig=[state.sound,boost,auto,state.maxLv].join('|');
+  if(sig!==hudSig){
+    hudSig=sig;
+    $('#btnSound').innerHTML=ic(state.sound?'sound-on':'sound-off');
+    $('#fly').classList.toggle('on',auto);
+    const nm=$('#frogName');const b=nm.querySelector('.boost');if(b)b.remove();
+    if(boost){const s=document.createElement('span');s.className='boost';s.innerHTML='<img src="icons/fire.png" alt="" style="width:14px;height:14px;vertical-align:-.2em"> ×2';nm.appendChild(s);}
+  }
   updateHint();renderActions();
 }
-function addCoins(v){state.coins+=v;const p=$('#coinPill');p.classList.remove('bump');void p.offsetWidth;p.classList.add('bump');updateHud();}
+function addCoins(v){
+  state.coins+=v;
+  const p=$('#coinPill');p.classList.remove('bump');void p.offsetWidth;p.classList.add('bump');
+  updateCounters();
+  updateHint();       // подсказка зависит от монет, но трогает DOM только при смене текста
+}
 function canMergeAny(){const c=levelCounts();const w=state.cells.filter(v=>v===WILD).length;const lv=Object.keys(c).map(Number);if(lv.some(l=>c[l]>=3))return true;if(w>=1&&lv.some(l=>c[l]>=2))return true;if(w>=2&&lv.length)return true;return false;}
 function updateHint(){
   const h=$('#hint');let t='';
@@ -601,10 +697,19 @@ function updateHint(){
   else if(count>=3&&state.merges===0)t='Собери 3 одинаковых в ряд — перетащи лягушку';
   else if(full&&!canMergeAny())t='Тупик! Скорми слабых кликеру или используй дикую лягушку';
   else if(full){const l=Object.keys(c).map(Number).filter(l=>c[l]>=3).sort((a,b)=>b-a)[0];t=l?`Поле заполнено. Собери три лягушки ур. ${l} в ряд`:'Поле заполнено. Поставь дикую лягушку к двум одинаковым';}
-  h.innerHTML=t;h.classList.toggle('hide',!t);
+  if(h.dataset.t!==t){h.dataset.t=t;h.innerHTML=t;}
+  h.classList.toggle('hide',!t);
 }
+let actSig='';
 function renderActions(){
-  const a=$('#actions');a.innerHTML='';
+  const a=$('#actions');
+  // подпись состояния: пока она та же — DOM не трогаем
+  const junkN=state.cells.filter(isJunk).length;
+  const sig=[selected,selected>=0?state.cells[selected]:0,junkN,state.wild,
+             state.cells.filter(Boolean).length===CELLS,canMergeAny()].join('|');
+  if(sig===actSig)return;
+  actSig=sig;
+  a.innerHTML='';
   const junk=state.cells.map((v,i)=>isJunk(v)?i:-1).filter(i=>i>=0);
   const full=state.cells.filter(Boolean).length===CELLS;
   if(selected>=0&&state.cells[selected]){
@@ -790,14 +895,13 @@ let clickerAnim=null,bounceT=null;
 // слияние — событие крупное, тут лягушка отыгрывает свою анимацию целиком
 // animLock защищает длинную анимацию слияния от того, чтобы её сбил обычный тап —
 // без него достаточно ткнуть вторым пальцем, и слияние доигрывается как короткий тап
-let animLock=0;
+let animLock=0,clipFrames=60,clipFps=60;
 function fullPlay(){
   if(!clickerAnim)return;
-  const tf=clickerAnim.totalFrames||60,fr=clickerAnim.frameRate||60;
-  const ms=(tf/fr)*1000;
+  const ms=(clipFrames/clipFps)*1000;
   clearTimeout(bounceT);
   animLock=now()+ms;
-  clickerAnim.playSegments([0,tf],true);
+  clickerAnim.playSegments([0,clipFrames],true);
   bounceT=setTimeout(()=>{animLock=0;if(clickerAnim)clickerAnim.goToAndStop(0,true);},ms+40);
 }
 let lastBounce=0;
@@ -807,15 +911,16 @@ function tapBounce(){
   if(t<animLock)return;      // идёт слияние — не перебиваем
   if(t-lastBounce<45)return; // два пальца в один момент: одного рывка достаточно
   lastBounce=t;
-  const tf=clickerAnim.totalFrames||60,fr=clickerAnim.frameRate||60;
-  const end=Math.max(6,Math.min(tf,Math.round(tf*0.2)));
+  const end=Math.max(6,Math.round(clipFrames*0.2));
   clearTimeout(bounceT);
   clickerAnim.playSegments([0,end],true);
-  bounceT=setTimeout(()=>{if(clickerAnim)clickerAnim.goToAndStop(0,true);},(end/fr)*1000+20);
+  bounceT=setTimeout(()=>{if(clickerAnim)clickerAnim.goToAndStop(0,true);},(end/clipFps)*1000+20);
 }
 async function setClickerSkin(lv){
   const data=structuredClone(await loadFrogData(lv));
   clearTimeout(bounceT);animLock=0;
+  clipFrames=Math.max(2,Math.round((data.op||60)-(data.ip||0)));
+  clipFps=data.fr||60;
   if(clickerAnim){clickerAnim.destroy();clickerAnim=null;}
   $('#clickerLottie').innerHTML='';
   clickerAnim=lottie.loadAnimation({container:$('#clickerLottie'),renderer:'svg',loop:false,autoplay:false,animationData:data,rendererSettings:{preserveAspectRatio:'xMidYMid meet',progressiveLoad:false}});
@@ -824,7 +929,7 @@ async function setClickerSkin(lv){
   updateHud();
 }
 function squash(){const el=$('#clickerLottie');el.classList.add('squash');setTimeout(()=>el.classList.remove('squash'),90);}
-let lastTap=0,streak=0,comboT=null;
+let lastTap=0,streak=0,comboT=null,lastBuzz=0;
 function tap(e){
   audio();
   const t=performance.now();streak=(t-lastTap<650)?streak+1:1;lastTap=t;
@@ -835,7 +940,9 @@ function tap(e){
   const x=e.clientX,y=e.clientY;
   floatText(x+rnd(-20,20),y-20,(crit?'КРИТ! ':'')+'+'+fmt(v),crit?'crit':'');
   coinBurst(x,y,crit?7:2);if(crit)sparks(x,y,10,['#ffd23f','#fff']);
-  squash();S.pop(crit);crit?haptic.medium():haptic.light();
+  squash();S.pop(crit);
+  // при быстром тапе постоянная вибрация превращается в дребезг — прореживаем
+  if(crit)haptic.medium(); else if(t-lastBuzz>90){lastBuzz=t;haptic.light();}
   tapBounce();
   const cb=$('#combo');if(mult>1){$('#comboTxt').textContent='x'+mult+' · '+streak;cb.classList.add('on');}
   clearTimeout(comboT);comboT=setTimeout(()=>{cb.classList.remove('on');streak=0;},700);
