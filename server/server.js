@@ -48,6 +48,16 @@ function readLadder(file) {
 const LADDER = { frog: readLadder('levels.js'), cat: readLadder('cats.js') };
 const GIFT = { frog: E.GIFT_NAME || 'Kissed Frog', cat: E.GIFT_NAME_CAT || 'Scared Cat' };
 const spOf = u => (u && u.species === 'cat') ? 'cat' : 'frog';
+// Уровень и слияния считаются на КАЖДЫЙ вид отдельно: иначе после переключения
+// кот унаследовал бы уровень лягушки, а потолок «maxLv <= merges+1» пустил бы
+// новичка-кота сразу на 50-й за счёт лягушачьих слияний.
+// Очки и общий счётчик слияний остаются сквозными — они про игрока, а не про вид.
+function spRec(u) {
+  if (!u.bySp) u.bySp = { frog: { maxLv: u.maxLv || 1, merges: u.merges || 0, score: u.score || 0 } };
+  const k = spOf(u);
+  return u.bySp[k] || (u.bySp[k] = { maxLv: 1, merges: 0, score: 0 });
+}
+const sumScore = u => Object.values(u.bySp || {}).reduce((s, r) => s + (r.score || 0), 0);
 const ladderOf = u => LADDER[spOf(u)];
 const LEVELS = LADDER.frog;   // совместимость: где вид не важен, остаётся лягушачья
 const levelByName = (name, sp) => LADDER[sp || 'frog'].findIndex(l => l.n.toLowerCase() === String(name).toLowerCase()) + 1;
@@ -257,20 +267,25 @@ const api = {
     // Точка отсчёта — не только последний sync, но и момент создания аккаунта: иначе самый
     // первый вызов (u.syncAt ещё не установлен) вообще ничем не ограничен, а отличить его
     // от подделанного первого вызова читера снаружи нечем
+    const rec = spRec(u);
     const reportedMerges = Math.max(0, Math.min(+body.merges || 0, 1e7));
     const dt = Math.max(1, (Date.now() - (u.syncAt || u.created || Date.now())) / 1000);
     const maxDelta = Math.ceil(dt * 3 + 30);
-    let delta = Math.max(0, reportedMerges - (u.merges || 0));
+    // дельту считаем от слияний ЭТОГО вида: клиент шлёт прогресс своего сейва
+    let delta = Math.max(0, reportedMerges - (rec.merges || 0));
     if (delta > maxDelta) { u.flags = (u.flags || 0) + 1; delta = maxDelta; }
+    rec.merges = (rec.merges || 0) + delta;
     u.merges = (u.merges || 0) + delta;
     db.pond.count += delta;
     // maxLv и score не берутся с потолка: механика слияний сама задаёт им верхнюю границу —
     // каждый мердж поднимает лягушку ровно на 1 уровень и добавляет в очки её новый уровень,
     // так что без merges такого maxLv/score попросту не бывает
-    const maxLv = Math.max(1, Math.min(+body.maxLv || 1, L.length, u.merges + 1));
-    if (maxLv > u.maxLv) { u.maxLv = maxLv; const r = L[maxLv - 1].r; if (r <= 1) db.events.push({ t: Date.now(), id: u.id, name: u.name, lv: maxLv, frog: L[maxLv - 1].n, r, sp: spOf(u) }); }
-    const scoreCap = u.merges * L.length;
-    u.score = Math.max(u.score || 0, Math.min(+body.score || 0, 1e9, scoreCap));
+    const maxLv = Math.max(1, Math.min(+body.maxLv || 1, L.length, rec.merges + 1));
+    if (maxLv > (rec.maxLv || 1)) { rec.maxLv = maxLv; const r = L[maxLv - 1].r; if (r <= 1) db.events.push({ t: Date.now(), id: u.id, name: u.name, lv: maxLv, frog: L[maxLv - 1].n, r, sp: spOf(u) }); }
+    u.maxLv = rec.maxLv || 1;   // в витрине показываем уровень того вида, за который играют сейчас
+    const scoreCap = rec.merges * L.length;
+    rec.score = Math.max(rec.score || 0, Math.min(+body.score || 0, 1e9, scoreCap));
+    u.score = sumScore(u);      // в топе — сумма по всем видам, переключение не обнуляет позицию
     u.taps = Math.max(u.taps || 0, Math.min(+body.taps || 0, 1e9));
     u.coins = Math.max(0, Math.min(+body.coins || 0, 1e15)) || 0; // без потолка Infinity бьёт JSON.stringify в null
     u.theme = body.theme || '';
@@ -282,7 +297,8 @@ const api = {
     u.wild = Math.max(0, (u.wild || 0) - wildUsed);
     u.syncAt = Date.now();
     await checkHolder(u, a.real);
-    if (u.holder && u.holder.level && u.holder.level <= u.maxLv && !u.holderDone) { u.holderDone = Date.now(); db.events.push({ t: Date.now(), id: u.id, name: u.name, lv: u.holder.level, frog: u.holder.model, r: L[u.holder.level - 1]?.r, own: true, sp: spOf(u) }); }
+    const doneKey = 'holderDone_' + spOf(u);
+    if (u.holder && u.holder.level && u.holder.level <= u.maxLv && !u[doneKey]) { u[doneKey] = Date.now(); db.events.push({ t: Date.now(), id: u.id, name: u.name, lv: u.holder.level, frog: u.holder.model, r: L[u.holder.level - 1]?.r, own: true, sp: spOf(u) }); }
     save();
     return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
   },
@@ -419,7 +435,7 @@ const api = {
     }
     if (act === 'wipe') {
       if (!u) return { ok: false, error: 'Игрок не найден' };
-      Object.assign(u, { maxLv: 1, score: 0, merges: 0, taps: 0, coins: 0, wild: 0 });
+      Object.assign(u, { maxLv: 1, score: 0, merges: 0, taps: 0, coins: 0, wild: 0, bySp: {} });
       save();
       return { ok: true, msg: 'Прогресс обнулён (покупки не тронуты)' };
     }

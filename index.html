@@ -236,7 +236,14 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 /* CARD PREVIEW */
 #cardImg{max-width:100%;max-height:60dvh;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
 
-#pickSpecies{z-index:150}
+#pickSpecies,#newsCats{z-index:150}
+#newsArt{width:140px;height:140px;margin:2px 0}
+#newsArt img,#newsArt svg{width:100%;height:100%;object-fit:contain}
+.segbar{display:flex;gap:6px;width:100%;background:rgba(0,0,0,.28);border-radius:14px;padding:4px}
+.segbar button{flex:1;border:0;border-radius:11px;padding:8px 6px;background:transparent;color:#fff;
+  font:900 14px Nunito,system-ui;display:flex;align-items:center;justify-content:center;gap:6px;opacity:.6}
+.segbar button img{width:22px;height:22px;object-fit:contain}
+.segbar button.on{background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00;opacity:1;box-shadow:0 2px 0 var(--acc-dark)}
 .picks{display:flex;gap:10px;width:100%;margin-top:6px}
 .pick{flex:1;min-width:0;border:0;border-radius:20px;padding:14px 10px 12px;background:rgba(0,0,0,.3);
   box-shadow:inset 0 2px 0 rgba(255,255,255,.1),0 5px 0 rgba(0,0,0,.35);color:#fff;font:inherit;
@@ -391,6 +398,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 <div id="collection" class="overlay hidden">
   <div class="card" style="height:92dvh">
     <div class="head"><h2>Коллекция <span id="colCount"></span></h2><div class="row" style="width:auto"><button class="iconbtn" id="btnSound" title="Звук"></button><button class="iconbtn" id="colClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div></div>
+    <div class="segbar" id="spSwitch"></div>
     <div class="scroll"><div id="colGrid"></div></div>
     <div class="row"><button class="btn ghost" id="btnHolders" hidden>Чат холдеров</button><button class="btn ghost" id="btnNewRun" hidden>Новый круг</button><button class="btn ghost" id="btnReset">Сбросить прогресс</button></div>
   </div>
@@ -428,6 +436,16 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
     <h2 id="askTitle">Вопрос</h2>
     <div class="sub" id="askText"></div>
     <div class="row"><button class="btn ghost" id="askNo">Отмена</button><button class="btn" id="askYes">Да</button></div>
+  </div>
+</div>
+
+<div id="newsCats" class="overlay hidden">
+  <div class="card">
+    <h2>В болоте прибавление</h2>
+    <div class="sub">Теперь можно играть не только за лягушек — в SWAMP завезли котов. Прогресс лягушек никуда не денется, переключаться можно в любой момент.</div>
+    <div id="newsArt"></div>
+    <button class="btn" id="newsGo">Показать котов</button>
+    <button class="btn ghost sm" id="newsLater">Остаться с лягушками</button>
   </div>
 </div>
 
@@ -526,6 +544,7 @@ const SPECIES={
   },
 };
 let SP=SPECIES.frog, SAVE_KEY=SP.save, T=SP.t;
+const NEWS_KEY='swamp.newsCats';
 // лестница живёт в LEVELS (её перетасовывает applyOrder) и в BASE (эталон вида).
 // Обе меняем на месте: на них завязаны все ссылки по коду
 function setSpecies(key){
@@ -569,6 +588,14 @@ const state={species:'frog',coins:0,maxLv:1,n:5,cells:Array(25).fill(0),disc:[1]
 // базовый порядок уровней — как в списке редкости. Лягушки, которыми игрок владеет,
 // поднимаются в самый верх лестницы, поэтому у каждого владельца свой финал.
 const BASE=LEVELS.slice();   // заполняется под выбранный вид в setSpecies()
+// эталон пустого состояния: при переключении вида надо начать с чистого листа,
+// а state — общий объект, на который завязан весь код, пересоздать его нельзя
+const STATE_DEFAULTS=JSON.parse(JSON.stringify(state));
+function resetState(){
+  Object.keys(state).forEach(k=>delete state[k]);
+  Object.assign(state,JSON.parse(JSON.stringify(STATE_DEFAULTS)));
+  state.species=SP.key;
+}
 const slugOf=name=>{const L=BASE.find(l=>l.n.toLowerCase()===String(name||'').toLowerCase());return L?L.f:null;};
 function buildOrder(models){
   const own=[...new Set((models||[]).map(slugOf).filter(Boolean))];
@@ -1586,6 +1613,7 @@ function openCollection(){
   $('#colCount').textContent=state.disc.length+'/'+LEVELS.length;
   const mine=lv=>ownsLevel(lv);
   LEVELS.forEach((L,i)=>{const lv=i+1,d=state.disc.includes(lv);const s=document.createElement('div');s.className='slot'+(d?'':' locked')+(lv===state.maxLv?' cur':'')+(mine(lv)?' mine':'');s.innerHTML=`<span class="n">${lv}</span><img alt=""><span>${d?L.n:'???'}</span>`;if(d||lv<=state.maxLv+1){thumb(lv).then(u=>s.querySelector('img').src=u);}else s.querySelector('img').remove();g.appendChild(s);});
+  renderSwitch();
   // круг пройден — отсюда можно начать следующий, если финал закрыли на «Позже»
   $('#btnNewRun').hidden=state.maxLv<LEVELS.length;
   $('#collection').classList.remove('hidden');S.ui();
@@ -1656,6 +1684,8 @@ async function resolveSpecies(){
   setSpecies(sp);
   rememberSpecies(SP.key);
   applySpeciesUI();
+  if(!known)try{localStorage.setItem(NEWS_KEY,'1');}catch(e){}   // выбор уже сделан осознанно
+  return !known;   // true — если игрок только что выбрал вид сам
 }
 function applySpeciesUI(){
   $('#loadTitle').textContent=T.loading;
@@ -1664,13 +1694,18 @@ function applySpeciesUI(){
 }
 
 /* ---------- INIT ---------- */
-async function init(){
-  await resolveSpecies();
-  // стикер на загрузочном экране — уже своего вида
+function loaderSticker(){
+  $('#loadFrog').innerHTML='';
   loadFrogData('loader').then(d=>{
     if($('#loading').classList.contains('hidden'))return;
     lottie.loadAnimation({container:$('#loadFrog'),renderer:'svg',loop:true,autoplay:true,animationData:d});
   }).catch(()=>{});
+}
+// поднимает игру под уже выбранный вид: сейв, ассеты, поле, кликер.
+// вызывается и на старте, и при переключении вида на лету
+async function startGame(){
+  applySpeciesUI();
+  resetState();
   await load();
   const need=new Set([WILD,1,...state.cells.filter(v=>v>0),state.maxLv,state.maxLv+1]);
   for(let l=baseSpawnLv();l<=state.maxLv+1;l++)need.add(l);
@@ -1682,6 +1717,61 @@ async function init(){
   updateHud();
   $('#loading').classList.add('hidden');
   resolve(-1);
+}
+// смена вида по ходу игры: текущий прогресс дописываем на диск, дальше вид
+// живёт в своём сейве и ничего чужого не трогает
+let switching=false;
+async function switchSpecies(key){
+  if(switching||busy||key===SP.key||!SPECIES[key])return;
+  switching=true;
+  try{
+    save();
+    document.querySelectorAll('.overlay').forEach(o=>o.classList.add('hidden'));
+    $('#loadBar').style.width='0';
+    $('#loading').classList.remove('hidden');
+    setSpecies(key);rememberSpecies(key);
+    loaderSticker();
+    await startGame();
+    sync(true);
+    toast(SP.key==='cat'?'Теперь коты. Лягушки ждут на месте':'Снова лягушки. Коты никуда не делись');
+  }catch(e){console.error('switch',e);toast('Не вышло переключиться');}
+  finally{switching=false;}
+}
+function renderSwitch(){
+  const bar=$('#spSwitch');bar.innerHTML='';
+  ['frog','cat'].forEach(k=>{
+    const sp=SPECIES[k];
+    const b=document.createElement('button');
+    b.className=k===SP.key?'on':'';
+    b.innerHTML=`<img src="${thumbs.get(sp.dir+'/'+sp.ladder[0].f)||''}" alt="">${sp.pickTitle}`;
+    // превью соседнего вида может быть ещё не испечено — подставим, как будет
+    thumb(sp.dir+'/'+sp.ladder[0].f).then(u=>{const i=b.querySelector('img');if(i)i.src=u;}).catch(()=>{});
+    b.onclick=()=>{if(k===SP.key){S.ui();return;}S.ui();haptic.medium();switchSpecies(k);};
+    bar.appendChild(b);
+  });
+}
+// у кого уже был прогресс — тому один раз показываем, что появились коты
+async function showCatsNews(){
+  let seen=null;
+  try{seen=localStorage.getItem(NEWS_KEY);}catch(e){}
+  if(!seen)seen=await cloudGet(NEWS_KEY);
+  if(seen)return;
+  // новость про котов имеет смысл только тому, кто сейчас за лягушек;
+  // кто уже играет котами — про них и так знает, просто гасим флаг
+  if(SP.key!=='frog'){try{localStorage.setItem(NEWS_KEY,'1');}catch(e){}return;}
+  const mark=()=>{try{localStorage.setItem(NEWS_KEY,'1');}catch(e){}
+    if(cloudOk()){try{TG.CloudStorage.setItem(NEWS_KEY,'1',()=>{});}catch(e){}}};
+  const ov=$('#newsCats');
+  thumb('cats/nyan-cat').then(u=>{$('#newsArt').innerHTML=`<img src="${u}" alt="">`;}).catch(()=>{});
+  ov.classList.remove('hidden');S.ui();
+  $('#newsGo').onclick=()=>{mark();ov.classList.add('hidden');switchSpecies('cat');};
+  $('#newsLater').onclick=()=>{mark();ov.classList.add('hidden');S.ui();};
+}
+
+async function init(){
+  const fresh=await resolveSpecies();
+  loaderSticker();
+  await startGame();
   if(TG&&TG.initDataUnsafe&&TG.initDataUnsafe.start_param==='shop')openShop();
   sync(true).then(r=>{
     const frogs=(r&&r.holder&&r.holder.frogs)||[];
@@ -1692,6 +1782,8 @@ async function init(){
       toast(T.found(frogs.length),3200);
     }
   });
+  // новичок вид уже выбрал сам — ему анонс показывать незачем
+  if(!fresh)showCatsNews();
   setInterval(()=>sync(false),30000);
 }
 window.addEventListener('resize',layout);
