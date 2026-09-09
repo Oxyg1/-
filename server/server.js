@@ -432,6 +432,10 @@ async function onMessage(m) {
     await tg('sendMessage', { chat_id: chat.id, text: `${em('trophy')} <b>Топ пруда</b>\n${topText(10)}\n\n${em('wave')} Общий пруд: ${fmt(db.pond.count)} / ${fmt(CFG.pondGoal)}`, parse_mode: 'HTML', reply_markup: playKb(priv) });
   } else if (cmd === '/digest' && String(m.from.id) === CFG.adminId) {
     await sendDigest(true);
+  } else if (cmd === '/admin' && priv && String(m.from.id) === CFG.adminId) {
+    // web_app-кнопка, а не обычная ссылка: тогда страница откроется как Mini App
+    // и получит initData — по нему /admin узнает тебя и пустит без ключа
+    await tg('sendMessage', { chat_id: chat.id, text: 'Панель управления SWAMP:', reply_markup: { inline_keyboard: [[{ text: 'Открыть админку', web_app: { url: CFG.appUrl + '/admin' } }]] } });
   } else if (cmd === '/paysupport' && priv) {
     await tg('sendMessage', { chat_id: chat.id, text: 'По вопросам оплаты напиши админу проекта. Возвраты Stars делаем в течение суток.' });
   }
