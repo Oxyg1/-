@@ -18,6 +18,8 @@
   --bg1:#3aa373; --bg2:#1b6b4a; --bg3:#0c3a2a; --card1:#2a8a5e; --card2:#155a3d;
 }
 /* фон подарка: цвета приходят из бэкдропа лягушки, которой владеет игрок */
+/* любой display в наших правилах перебивает атрибут hidden — гасим это раз и навсегда */
+[hidden]{display:none!important}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;background:#0c3a2a;color:var(--txt);touch-action:manipulation}
@@ -146,7 +148,18 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .head{display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px}
 .head h2{font-size:22px}
 .scroll{width:100%;overflow:auto;flex:1;min-height:0;padding:2px}
-#luLottie{width:200px;height:200px}
+#luLottie,#fnLottie{width:200px;height:200px}
+/* на втором экране лягушку уже показали — ужимаем, чтобы текст и кнопки влезли */
+#finale .card.fn2 #fnLottie{width:96px;height:96px}
+.fn-stats{display:flex;gap:18px;justify-content:center;width:100%;margin:2px 0 4px}
+.fn-stats div{text-align:center}
+.fn-stats b{display:block;font-size:22px;font-weight:900;color:var(--acc)}
+.fn-stats span{font-size:12px;opacity:.7}
+.fn-modes{display:flex;flex-direction:column;gap:8px;width:100%}
+.fn-modes .btn{flex-direction:column;gap:2px;width:100%;padding:11px 16px}
+.fn-modes .btn small{font-size:12px;font-weight:700;opacity:.75;text-align:center;line-height:1.25}
+.fn-modes .btn:not(.ghost) small{color:#6b4a00}
+#fnNext[disabled]{opacity:.5}
 #luName{font-size:24px;color:#ffd23f;font-weight:900;text-shadow:0 2px 0 rgba(0,0,0,.4)}
 #luLv{display:flex;align-items:center;gap:6px;font-size:17px}
 #luLv img{width:24px;height:24px}
@@ -174,7 +187,6 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .item.expandable{cursor:pointer}
 .item .chev{display:block;font-style:normal;font-size:12px;font-weight:800;color:var(--acc);margin-top:3px}
 .bundle{grid-column:1/-1;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12);display:flex;flex-direction:column;gap:7px}
-.bundle[hidden]{display:none}
 .bundle-row{display:flex;align-items:center;gap:8px;font-size:13.5px}
 .bundle-row img{width:24px;height:24px;object-fit:contain;flex:none}
 .bundle-row span{flex:1;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -343,11 +355,26 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
   </div>
 </div>
 
+<div id="finale" class="overlay hidden">
+  <div class="card">
+    <h2 id="fnTitle"></h2>
+    <div class="sub" id="fnText"></div>
+    <div id="fnLottie"></div>
+    <div class="fn-stats" id="fnStats" hidden></div>
+    <div class="fn-modes" id="fnModes" hidden>
+      <button class="btn" id="fnNormal">Пройти заново<small>привычный порядок редкостей</small></button>
+      <button class="btn ghost" id="fnRandom">Случайный порядок<small>редкости перемешаны: хоть с Happy Pepe до бронзы</small></button>
+    </div>
+    <button class="btn" id="fnNext"></button>
+    <button class="btn ghost sm" id="fnLater" hidden>Позже</button>
+  </div>
+</div>
+
 <div id="collection" class="overlay hidden">
   <div class="card" style="height:92dvh">
     <div class="head"><h2>Коллекция <span id="colCount"></span></h2><div class="row" style="width:auto"><button class="iconbtn" id="btnSound" title="Звук"></button><button class="iconbtn" id="colClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div></div>
     <div class="scroll"><div id="colGrid"></div></div>
-    <div class="row"><button class="btn ghost" id="btnHolders" hidden>Чат холдеров</button><button class="btn ghost" id="btnReset">Сбросить прогресс</button></div>
+    <div class="row"><button class="btn ghost" id="btnHolders" hidden>Чат холдеров</button><button class="btn ghost" id="btnNewRun" hidden>Новый круг</button><button class="btn ghost" id="btnReset">Сбросить прогресс</button></div>
   </div>
 </div>
 
@@ -431,7 +458,7 @@ const tgUser=(TG&&TG.initDataUnsafe&&TG.initDataUnsafe.user)||null;
 const myName=tgUser?(tgUser.first_name||tgUser.username||'Игрок'):'Ты';
 
 /* ---------- STATE ---------- */
-const state={coins:0,maxLv:1,n:5,cells:Array(25).fill(0),disc:[1],sound:true,merges:0,score:0,taps:0,wild:0,theme:'',inv:{},order:null,own:[],t:0};
+const state={coins:0,maxLv:1,n:5,cells:Array(25).fill(0),disc:[1],sound:true,merges:0,score:0,taps:0,wild:0,theme:'',inv:{},order:null,own:[],mode:'normal',runs:0,t:0};
 // базовый порядок уровней — как в списке редкости. Лягушки, которыми игрок владеет,
 // поднимаются в самый верх лестницы, поэтому у каждого владельца свой финал.
 const BASE=LEVELS.slice();
@@ -443,6 +470,13 @@ function buildOrder(models){
   // среди своих сохраняем ту же логику: самая редкая — самой последней
   mine.sort((a,b)=>BASE.indexOf(a)-BASE.indexOf(b));
   return [...BASE.filter(l=>!own.includes(l.f)),...mine].map(l=>l.f);
+}
+// случайный режим: та же лестница, но редкости перетасованы — можно начать с Happy Pepe
+// и закончить бронзой. Каждый круг раскладка своя
+function shuffledOrder(){
+  const a=BASE.map(l=>l.f);
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}
+  return a;
 }
 // перестановка лестницы с переносом уже добытых лягушек: на поле остаются те же виды
 function applyOrder(order){
@@ -472,7 +506,7 @@ function applySave(s){
   state.cells=state.cells.map(v=>v===WILD?v:Math.min(v|0,LEVELS.length));
   state.disc=(Array.isArray(state.disc)?state.disc:[1]).filter(l=>l>=1&&l<=LEVELS.length);
   // сейв без лестницы, но со списком своих лягушек — восстанавливаем её однозначно
-  if(!Array.isArray(state.order)&&(state.own||[]).length)state.order=buildOrder(state.own);
+  if(!Array.isArray(state.order)&&(state.own||[]).length&&state.mode!=='random')state.order=buildOrder(state.own);
   if(Array.isArray(state.order)&&state.order.length===BASE.length){const o=state.order;state.order=null;applyOrder(o);}
   N=state.n||5;CELLS=N*N;
   if(state.cells.length!==CELLS){const old=state.cells,on=Math.round(Math.sqrt(old.length));const nc=Array(CELLS).fill(0);for(let r=0;r<Math.min(on,N);r++)for(let c=0;c<Math.min(on,N);c++)nc[r*N+c]=old[r*on+c]||0;state.cells=nc;}
@@ -671,6 +705,7 @@ function applyOwnership(){
   const frogs=(net.holder&&net.holder.frogs)||[];
   const models=frogs.map(f=>f.model).filter(Boolean);
   state.own=models;
+  if(state.mode==='random')return;   // в случайном режиме порядок задан кругом, а не владением
   const want=buildOrder(models);
   if(applyOrder(want)){
     // лестница поменялась — перерисовываем поле и кликер под новый порядок
@@ -1007,6 +1042,7 @@ async function levelUp(lv){
   state.maxLv=lv;luLv=lv;if(!state.disc.includes(lv))state.disc.push(lv);
   save();updateHud();refreshJunk();
   try{await setClickerSkin(lv);}catch(e){console.error('skin',e);}
+  if(lv===LEVELS.length){await showFinale(lv);return;}   // вершина — отдельный экран, а не рядовое окно
   const ov=$('#levelup');
   $('#luName').textContent=frogName(lv);$('#luLvN').textContent=lv;$('#luRar').textContent='редкость '+rarTxt(lv);
   const mine=ownsLevel(lv),last=lv===LEVELS.length;
@@ -1039,6 +1075,70 @@ async function levelUp(lv){
     };
   });
 }
+/* ---------- ФИНАЛ И НОВЫЙ КРУГ ---------- */
+let fnAnim=null,fnClose=null;
+function fnStage2(){
+  const mine=ownsLevel(LEVELS.length),card=$('#finale .card');
+  // скрытие сфокусированной кнопки прокручивает карточку — снимаем фокус и сбрасываем прокрутку
+  $('#fnNext').blur();card.classList.add('fn2');
+  $('#fnTitle').textContent='Что дальше';
+  $('#fnText').textContent='Монеты дальше ничего не решают — они остаются в этом круге. В топ ведут мерджи: счёт и слияния копятся между кругами и никуда не денутся.';
+  $('#fnStats').innerHTML=`<div><b>${fmt(state.score)}</b><span>счёт</span></div><div><b>${fmt(state.merges)}</b><span>мерджей</span></div><div><b>${(state.runs|0)+1}</b><span>круг</span></div>`;
+  $('#fnStats').hidden=false;$('#fnModes').hidden=false;
+  $('#fnNext').hidden=true;$('#fnLater').hidden=false;
+  card.scrollTop=0;
+  if(mine)$('#fnText').textContent+=' Твоя лягушка останется на вершине.';
+  S.ui();
+}
+function closeFinale(){
+  $('#finale').classList.add('hidden');
+  if(fnAnim){fnAnim.destroy();fnAnim=null;}
+  const r=fnClose;fnClose=null;if(r)r();
+}
+async function showFinale(lv){
+  const ov=$('#finale'),mine=ownsLevel(lv);
+  $('#fnTitle').textContent=mine?'Самая лучшая лягушка — твоя':'Ты прошёл болото';
+  $('#fnText').textContent=mine
+    ?'Пятьдесят уровней позади, и на вершине стоит твоя собственная лягушка. Цени её.'
+    :'Пятьдесят уровней позади. Выше в этом болоте никого нет.';
+  $('#fnStats').hidden=true;$('#fnModes').hidden=true;$('#fnLater').hidden=true;
+  ov.querySelector('.card').classList.remove('fn2');ov.querySelector('.card').scrollTop=0;
+  const card=ov.querySelector('.card');card.querySelectorAll('.conf').forEach(c=>c.remove());
+  for(let i=0;i<32;i++){const c=document.createElement('i');c.className='conf';c.style.left=rnd(0,100)+'%';c.style.setProperty('--c',pick(['#ffd23f','#9dffb0','#7fe3ff','#ff8fa3','#fff']));c.style.animationDelay=rnd(-2,0)+'s';c.style.animationDuration=rnd(1.8,3)+'s';card.appendChild(c);}
+  if(fnAnim){fnAnim.destroy();fnAnim=null;}
+  $('#fnLottie').innerHTML='';
+  try{
+    const d=await loadFrogData(lv);
+    fnAnim=lottie.loadAnimation({container:$('#fnLottie'),renderer:'svg',loop:true,autoplay:true,animationData:structuredClone(d)});
+  }catch(e){const img=thumbs.get(lv);if(img)$('#fnLottie').innerHTML=`<img src="${img}" alt="" style="width:100%;height:100%;object-fit:contain">`;}
+  // финал слишком часто проскакивали рефлекторным тапом — держим кнопку закрытой, пока читают
+  const next=$('#fnNext');next.hidden=false;next.disabled=true;
+  let left=3;next.textContent='Дальше · '+left;
+  clearInterval(showFinale.t);
+  showFinale.t=setInterval(()=>{
+    if(--left>0){next.textContent='Дальше · '+left;return;}
+    clearInterval(showFinale.t);next.disabled=false;next.textContent='Дальше';
+  },1000);
+  ov.classList.remove('hidden');S.level();haptic.success();sync(true);
+  await new Promise(r=>{fnClose=r;});
+}
+async function restart(mode){
+  closeFinale();
+  state.mode=mode;state.runs=(state.runs|0)+1;
+  state.coins=0;state.maxLv=1;state.disc=[1];state.wild=0;
+  state.cells=Array(CELLS).fill(0);
+  // поле уже пустое, поэтому перестановка лестницы ничего на нём не испортит
+  applyOrder(mode==='random'?shuffledOrder():buildOrder(state.own));
+  buildBoard();
+  try{await setClickerSkin(1);}catch(e){console.error('skin',e);}
+  save();updateHud();refreshJunk();sync(true);
+  toast(mode==='random'?'Новый круг: редкости перемешаны':'Новый круг: привычный порядок');
+}
+$('#fnNext').onclick=()=>{if(!$('#fnNext').disabled){S.ui();fnStage2();}};
+$('#fnNormal').onclick=()=>restart('normal');
+$('#fnRandom').onclick=()=>restart('random');
+$('#fnLater').onclick=()=>{closeFinale();toast('Новый круг — в коллекции');};
+$('#btnNewRun').onclick=()=>{$('#collection').classList.add('hidden');$('#finale').classList.remove('hidden');fnStage2();};
 $('#luChat').onclick=()=>share('chat',luLv);
 $('#luStory').onclick=()=>share('story',luLv);
 
@@ -1329,6 +1429,8 @@ function openCollection(){
   $('#colCount').textContent=state.disc.length+'/'+LEVELS.length;
   const mine=lv=>ownsLevel(lv);
   LEVELS.forEach((L,i)=>{const lv=i+1,d=state.disc.includes(lv);const s=document.createElement('div');s.className='slot'+(d?'':' locked')+(lv===state.maxLv?' cur':'')+(mine(lv)?' mine':'');s.innerHTML=`<span class="n">${lv}</span><img alt=""><span>${d?L.n:'???'}</span>`;if(d||lv<=state.maxLv+1){thumb(lv).then(u=>s.querySelector('img').src=u);}else s.querySelector('img').remove();g.appendChild(s);});
+  // круг пройден — отсюда можно начать следующий, если финал закрыли на «Позже»
+  $('#btnNewRun').hidden=state.maxLv<LEVELS.length;
   $('#collection').classList.remove('hidden');S.ui();
 }
 $('#btnCol').onclick=openCollection;
@@ -1386,7 +1488,7 @@ window.addEventListener('resize',layout);
 if(TG){try{TG.onEvent('viewportChanged',layout);TG.onEvent('safeAreaChanged',layout);TG.onEvent('contentSafeAreaChanged',layout);TG.onEvent('fullscreenChanged',layout);}catch(e){}}
 document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('visibilitychange',()=>{if(document.hidden){save();sync(true);}});
-window.__frog={state,spawn,resolve,thumbs,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,LEVELS,BASE,renderShop,ask,buildBoard};
+window.__frog={state,spawn,resolve,thumbs,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,LEVELS,BASE,renderShop,ask,buildBoard};
 init().catch(e=>{console.error(e);$('#loading h2').textContent='Ошибка загрузки: '+e.message;});
 })();
 </script>
