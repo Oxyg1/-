@@ -447,7 +447,9 @@ function buildOrder(models){
 // перестановка лестницы с переносом уже добытых лягушек: на поле остаются те же виды
 function applyOrder(order){
   if(!order||order.length!==BASE.length)return false;
-  if(order.join()===LEVELS.map(l=>l.f).join())return false;
+  // порядок уже стоит — перестраивать нечего, но запомнить его обязательно:
+  // иначе вызывающий код оставит state.order=null и сейв уедет без лестницы
+  if(order.join()===LEVELS.map(l=>l.f).join()){state.order=order;return false;}
   const old=LEVELS.slice();
   const next=order.map(f=>BASE.find(l=>l.f===f)).filter(Boolean);
   if(next.length!==BASE.length)return false;
@@ -469,6 +471,8 @@ function applySave(s){
   state.maxLv=Math.max(1,Math.min(state.maxLv|0||1,LEVELS.length));
   state.cells=state.cells.map(v=>v===WILD?v:Math.min(v|0,LEVELS.length));
   state.disc=(Array.isArray(state.disc)?state.disc:[1]).filter(l=>l>=1&&l<=LEVELS.length);
+  // сейв без лестницы, но со списком своих лягушек — восстанавливаем её однозначно
+  if(!Array.isArray(state.order)&&(state.own||[]).length)state.order=buildOrder(state.own);
   if(Array.isArray(state.order)&&state.order.length===BASE.length){const o=state.order;state.order=null;applyOrder(o);}
   N=state.n||5;CELLS=N*N;
   if(state.cells.length!==CELLS){const old=state.cells,on=Math.round(Math.sqrt(old.length));const nc=Array(CELLS).fill(0);for(let r=0;r<Math.min(on,N);r++)for(let c=0;c<Math.min(on,N);c++)nc[r*N+c]=old[r*on+c]||0;state.cells=nc;}
@@ -507,7 +511,8 @@ function rollSpawnLevel(){
   return cands[cands.length-1];
 }
 const mergeReward=(newLv,combo)=>nice(spawnCost()*0.4*Math.pow(1.5,newLv-baseSpawnLv()-1)*combo);
-const feedReward=lv=>lv===WILD?nice(spawnCost()*0.3):nice(spawnCost()*0.35*Math.pow(2.6,lv-baseSpawnLv()));
+// показатель степени в норме 0..2; потолок держит выплату конечной, если уровень клетки вдруг завышен
+const feedReward=lv=>lv===WILD?nice(spawnCost()*0.3):nice(spawnCost()*0.35*Math.pow(2.6,Math.min(4,lv-baseSpawnLv())));
 const isJunk=lv=>isFrog(lv)&&lv<baseSpawnLv();
 function fmt(n){if(n<1000)return String(Math.round(n));const u=['K','M','B','T','q','Q'];let i=-1;while(n>=1000&&i<u.length-1){n/=1000;i++;}return (n<100?n.toFixed(1):Math.round(n))+u[i];}
 const rarity=lv=>lv>=1&&lv<=LEVELS.length?LEVELS[lv-1].r:null;
@@ -1090,7 +1095,7 @@ function showCard(png,kind,url){
   $('#cardImg').src=png;$('#cardTitle').textContent=kind==='story'?'Карточка для сторис':'Карточка для чата';
   $('#cardNote').textContent=inTG?'Сохрани картинку и отправь вручную':'В Telegram карточка уйдёт в чат или сторис одной кнопкой. Здесь только предпросмотр.';
   const bt=$('#cardBtns');bt.innerHTML='';
-  if(url&&TG&&tgv('8.0')){const b=document.createElement('button');b.className='btn sm';b.textContent='Скачать';b.onclick=()=>TG.downloadFile({url,file_name:'frog-merge.png'});bt.appendChild(b);}
+  if(url&&TG&&tgv('8.0')){const b=document.createElement('button');b.className='btn sm';b.textContent='Скачать';b.onclick=()=>TG.downloadFile({url,file_name:'swamp.jpg'});bt.appendChild(b);}
   $('#cardPrev').classList.remove('hidden');
 }
 $('#cardClose').onclick=()=>$('#cardPrev').classList.add('hidden');
