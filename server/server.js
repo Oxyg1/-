@@ -237,8 +237,11 @@ const api = {
   async card(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     const png = String(body.png || ''); if (png.length < 100 || png.length > 6e6) return { ok: false, error: 'bad image' };
-    const buf = Buffer.from(png, 'base64'); if (buf.slice(1, 4).toString() !== 'PNG') return { ok: false, error: 'not png' };
-    const id = `${a.id}-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}.png`;
+    const buf = Buffer.from(png, 'base64');
+    const isPng = buf.slice(1, 4).toString() === 'PNG';
+    const isJpg = buf[0] === 0xFF && buf[1] === 0xD8;
+    if (!isPng && !isJpg) return { ok: false, error: 'not an image' };
+    const id = `${a.id}-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}.${isPng ? 'png' : 'jpg'}`;
     fs.writeFileSync(path.join(CARDS, id), buf);
     const url = `${CFG.appUrl}/cards/${id}`;
     const lv = Math.max(1, Math.min(+body.lv || 1, LEVELS.length)); const L = LEVELS[lv - 1];
@@ -374,7 +377,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname.startsWith('/cards/')) {
       const f = path.join(CARDS, path.basename(url.pathname)); if (!fs.existsSync(f)) return send(404, 'not found', 'text/plain');
-      return send(200, fs.readFileSync(f), 'image/png');
+      return send(200, fs.readFileSync(f), f.endsWith('.jpg') ? 'image/jpeg' : 'image/png');
     }
     let p = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
     const f = path.normalize(path.join(ROOT, p)); if (!f.startsWith(ROOT) || f.includes(path.sep + 'server' + path.sep)) return send(403, 'forbidden', 'text/plain');

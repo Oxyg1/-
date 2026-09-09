@@ -60,7 +60,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 #board{position:relative;width:min(100%,calc(100dvh - 370px));min-width:240px;aspect-ratio:1;border-radius:22px;background:rgba(0,0,0,.25);box-shadow:inset 0 4px 14px rgba(0,0,0,.35),0 2px 0 rgba(255,255,255,.06);touch-action:none}
 .cell{position:absolute;border-radius:14px;background:rgba(255,255,255,.09);box-shadow:inset 0 2px 0 rgba(255,255,255,.06);transition:background .15s,box-shadow .15s}
 .cell.hl{background:rgba(255,255,255,.12);box-shadow:inset 0 0 0 2px rgba(255,255,255,.4)}
-.cell.match{background:rgba(255,210,63,.35);box-shadow:inset 0 0 0 3px var(--acc);animation:matchPulse .7s ease-in-out infinite}
+.cell.match{background:rgba(255,210,63,.28);box-shadow:inset 0 0 0 3px var(--acc);animation:matchPulse .9s ease-in-out infinite}
 @keyframes matchPulse{0%,100%{box-shadow:inset 0 0 0 3px var(--acc)}50%{box-shadow:inset 0 0 0 5px var(--acc)}}
 /* тень висит на статичном контейнере, а не на картинке, которая крутится в idle-анимации —
    иначе телефон каждый кадр пересчитывает drop-shadow разом для четверти доски, и всё тормозит */
@@ -72,13 +72,6 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .frog.junk::after{content:"";position:absolute;left:2px;top:1px;width:14px;height:14px;background:url("icons/meat.png") center/contain no-repeat;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
 .frog.selected img{animation:wiggle .45s ease-in-out infinite}
 @keyframes wiggle{0%,100%{transform:rotate(-6deg) scale(1.06)}50%{transform:rotate(6deg) scale(1.06)}}
-.frog.dragging{transition:none;z-index:20}
-/* контейнер едет ровно за пальцем без задержки, а подъём и увеличение живут на самой картинке —
-   поэтому лягушка плавно всплывает из-под пальца, а не телепортируется вверх рывком.
-   animation:none обязателен: без него idle-анимация перебивает transform по правилам каскада */
-.frog.dragging img{animation:none;transform:translateY(var(--lift,0px)) scale(1.12);transition:transform .16s cubic-bezier(.2,.9,.3,1.35);filter:drop-shadow(0 12px 10px rgba(0,0,0,.45))}
-/* короткая фаза приземления: idle-анимация ещё выключена, чтобы лягушка успела плавно осесть */
-.frog.dropping img{animation:none;transform:translateY(0) scale(1);transition:transform .18s cubic-bezier(.2,.9,.3,1.2)}
 .frog.pop img{animation:pop .5s cubic-bezier(.2,.9,.3,1.5)}
 @keyframes pop{0%{transform:scale(0)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
 .frog.merging{transition:transform .22s cubic-bezier(.5,0,.8,.4);z-index:5}
@@ -103,7 +96,6 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 #combo .cb{display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.35);border-radius:999px;padding:3px 12px 3px 6px;font-size:16px;font-weight:900;color:#ffd23f}
 #combo img{width:24px;height:24px}
 #clicker{flex:1;min-height:110px;width:100%;display:flex;align-items:center;justify-content:center;touch-action:none;position:relative;border-radius:24px;transition:background .15s}
-#clicker.feed{background:rgba(255,210,63,.18);box-shadow:inset 0 0 0 3px rgba(255,210,63,.6)}
 #clicker::before{content:"";position:absolute;left:50%;bottom:6%;width:46%;height:8%;transform:translateX(-50%);background:rgba(0,0,0,.28);border-radius:50%;filter:blur(4px)}
 #clickerLottie{height:100%;aspect-ratio:1;max-height:230px;transition:transform .09s cubic-bezier(.2,.8,.2,1);position:relative;transform-origin:50% 92%}
 #clickerLottie svg{display:block}
@@ -604,7 +596,7 @@ function updateHint(){
   const full=count===CELLS;
   if(count===0&&state.coins<spawnCost())t=ic('down')+' Тапай по лягушке — копи монеты';
   else if(count<3&&state.coins>=spawnCost())t='Жми «Призвать» — лягушки появятся на поле';
-  else if(count>=3&&state.merges===0)t='Собери 3 одинаковых в ряд — перетащи лягушку';
+  else if(count>=3&&state.merges===0)t='Собери 3 одинаковых в ряд: тапни лягушку, потом клетку';
   else if(full&&!canMergeAny())t='Тупик! Скорми слабых кликеру или используй дикую лягушку';
   else if(full){const l=Object.keys(c).map(Number).filter(l=>c[l]>=3).sort((a,b)=>b-a)[0];t=l?`Поле заполнено. Собери три лягушки ур. ${l} в ряд`:'Поле заполнено. Поставь дикую лягушку к двум одинаковым';}
   h.innerHTML=t;h.classList.toggle('hide',!t);
@@ -705,51 +697,36 @@ async function resolve(focus){
   busy=false;refreshJunk();save();updateHud();
 }
 
-/* drag & drop */
-let drag=null,selected=-1;
-function setSelected(i){if(selected>=0&&els[selected])els[selected].classList.remove('selected');selected=i;if(i>=0&&els[i])els[i].classList.add('selected');renderActions();}
-function clearHl(){cellEls.forEach(c=>c.classList.remove('hl','match'));$('#clicker').classList.remove('feed');}
+/* выбор и перестановка тапами — без перетаскивания: игра тапальная, драг ей чужд */
+let selected=-1;
+function clearHl(){cellEls.forEach(c=>c.classList.remove('hl','match'));}
+// пока лягушка выбрана, поле само показывает клетки, куда её стоит поставить ради тройки
+function hintSpots(from){
+  clearHl();
+  if(from<0||!state.cells[from])return;
+  cellEls[from].classList.add('hl');
+  for(let to=0;to<CELLS;to++){
+    if(to===from)continue;
+    if(previewMerge(from,to).length)cellEls[to].classList.add('match');
+  }
+}
+function setSelected(i){
+  if(selected>=0&&els[selected])els[selected].classList.remove('selected');
+  selected=i;
+  if(i>=0&&els[i])els[i].classList.add('selected');
+  hintSpots(i);
+  renderActions();
+}
 board.addEventListener('pointerdown',e=>{
   if(busy)return;audio();
   const i=cellAt(e.clientX,e.clientY);if(i<0)return;
-  if(state.cells[i]){drag={from:i,x0:e.clientX,y0:e.clientY,moving:false,over:i};try{board.setPointerCapture(e.pointerId);}catch(err){}}
-  else if(selected>=0){moveFrog(selected,i);setSelected(-1);}
-});
-board.addEventListener('pointermove',e=>{
-  if(!drag)return;
-  const dx=e.clientX-drag.x0,dy=e.clientY-drag.y0;
-  if(!drag.moving){
-    if(Math.hypot(dx,dy)<6)return;
-    drag.moving=true;setSelected(-1);
-    const d=els[drag.from];
-    d.style.setProperty('--lift',(-cs*1.05)+'px');   // css сама плавно поднимет картинку
-    d.classList.remove('dropping');d.classList.add('dragging');
-    S.ui();
+  if(selected<0){                       // первый тап — берём лягушку
+    if(state.cells[i]){setSelected(i);S.ui();}
+    return;
   }
-  const el=els[drag.from];const [x,y]=cellXY(drag.from);
-  el.style.setProperty('--x',(x+dx)+'px');el.style.setProperty('--y',(y+dy)+'px');
-  // цель считаем по тому месту, где нарисована лягушка, а не где палец: кладётся туда, что видишь
-  const lift=cs*1.05, ay=e.clientY-lift;
-  const over=cellAt(e.clientX,ay);
-  const clk=$('#clicker').getBoundingClientRect();
-  const feed=ay>clk.top&&ay<clk.bottom&&e.clientX>clk.left&&e.clientX<clk.right;
-  if(over!==drag.over||feed!==drag.feed){
-    clearHl();
-    if(feed)$('#clicker').classList.add('feed');
-    else if(over>=0){cellEls[over].classList.add('hl');previewMerge(drag.from,over).forEach(i=>cellEls[i].classList.add('match'));}
-    drag.over=over;drag.feed=feed;
-  }
+  if(i===selected){setSelected(-1);S.ui();return;}   // тап по ней же — снять выбор
+  const from=selected;setSelected(-1);moveFrog(from,i);
 });
-function endDrag(e){
-  if(!drag)return;const d=drag;drag=null;clearHl();
-  const el=els[d.from];if(!el)return;
-  el.classList.remove('dragging');
-  if(d.moving){el.classList.add('dropping');setTimeout(()=>el.classList.remove('dropping'),200);}
-  if(!d.moving){if(selected===d.from)setSelected(-1);else if(selected>=0){moveFrog(selected,d.from);setSelected(-1);}else{setSelected(d.from);S.ui();}return;}
-  if(d.feed){feedFrog(d.from);return;}
-  if(d.over>=0&&d.over!==d.from)moveFrog(d.from,d.over);else position(el,d.from);
-}
-board.addEventListener('pointerup',endDrag);board.addEventListener('pointercancel',endDrag);
 function moveFrog(a,b){
   if(a===b||busy)return;
   const c=state.cells;const la=c[a],lb=c[b];
@@ -939,7 +916,7 @@ async function renderCard(kind,lv){
     g.fillText('Редкость '+rarTxt(lv),X,425);
     g.font='800 30px '+F;g.fillStyle='rgba(255,255,255,.7)';g.fillText('SWAMP · Kissed Frog Holders',X,560);
   }
-  return c.toDataURL('image/png');
+  return c.toDataURL('image/jpeg',0.92);
 }
 async function share(kind,lv){
   toast('Рисую карточку…',1200);
@@ -951,7 +928,7 @@ async function share(kind,lv){
       if(kind==='story'&&tgv('7.8')){TG.shareToStory(r.url,{text:`Вырастил ${frogName(lv)} в SWAMP`,widget_link:{url:CFG.appLink,name:'Играть'}});return;}
       if(kind==='chat'&&tgv('8.0')&&r.prepared_id){TG.shareMessage(r.prepared_id,ok=>{if(ok)toast('Отправлено в чат');});return;}
       showCard(png,kind,r.url);return;
-    }catch(e){toast('Сервер недоступен, показываю карточку');}
+    }catch(e){console.error('card',e);toast(/413|too large/i.test(e.message)?'Картинка не пролезла на сервер — нужен client_max_body_size в nginx':'Сервер не принял карточку: '+e.message,3500);}
   }
   showCard(png,kind,null);
 }
