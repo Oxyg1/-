@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SWAMP — админка</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c1a14; --panel:#122a20; --panel2:#0f2119; --line:#1e4234;
+  --txt:#e8f3ec; --mute:#8fae9d; --acc:#ffd23f; --good:#5fc98f; --bad:#ff6b81; --blue:#6fb7e8;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:400 15px/1.5 Nunito,system-ui,sans-serif}
+a{color:var(--blue)}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 60px}
+h1{font:900 26px/1.2 Nunito,sans-serif;margin:0 0 4px}
+.sub{color:var(--mute);font-size:14px;margin-bottom:20px}
+
+.gate{max-width:380px;margin:14vh auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px}
+.gate h1{font-size:22px;margin-bottom:12px}
+input,select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:11px 13px;color:var(--txt);font:700 15px Nunito,sans-serif}
+input:focus,select:focus{outline:2px solid var(--acc);outline-offset:-1px}
+button{border:0;border-radius:12px;padding:10px 16px;font:800 14px Nunito,sans-serif;background:var(--acc);color:#3d2c00;cursor:pointer}
+button:hover{filter:brightness(1.08)}
+button.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+button.bad{background:var(--bad);color:#3a0009}
+button.sm{padding:6px 10px;font-size:12.5px;border-radius:9px}
+.err{color:var(--bad);font-size:14px;margin-top:10px;min-height:20px}
+
+.tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.tabs button{background:var(--panel2);color:var(--mute);border:1px solid var(--line)}
+.tabs button.on{background:var(--acc);color:#3d2c00;border-color:var(--acc)}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:22px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px 15px}
+.card b{display:block;font:900 24px/1.1 Nunito,sans-serif;font-variant-numeric:tabular-nums}
+.card span{color:var(--mute);font-size:12.5px}
+
+.bar{height:9px;border-radius:6px;background:var(--panel2);overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--good),var(--acc))}
+
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.tools input{width:auto;flex:1;min-width:180px}
+
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:760px}
+th{text-align:left;font:800 11.5px Nunito,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);padding:11px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel2)}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tr:hover td{background:rgba(255,255,255,.03)}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.tag{display:inline-block;font:800 10.5px Nunito,sans-serif;padding:2px 7px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);color:var(--mute);margin-left:4px}
+.tag.test{color:var(--bad);border-color:var(--bad)}
+.tag.hid{color:var(--mute)}
+.tag.hold{color:var(--acc);border-color:var(--acc)}
+.tag.sub{color:var(--good);border-color:var(--good)}
+.row-act{display:flex;gap:5px;flex-wrap:wrap}
+.muted{color:var(--mute)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 18px;font-weight:800;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(-6px)}
+.danger{margin-top:24px;border:1px solid var(--bad);border-radius:14px;padding:14px 16px;background:rgba(255,107,129,.06)}
+.danger h3{margin:0 0 6px;font:900 15px Nunito,sans-serif;color:var(--bad)}
+.danger p{margin:0 0 10px;color:var(--mute);font-size:13.5px}
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate">
+  <h1>SWAMP — админка</h1>
+  <p class="sub">Введи ключ из <code>ADMIN_KEY</code> в server/.env</p>
+  <input id="key" type="password" placeholder="Ключ доступа" autocomplete="current-password">
+  <div class="err" id="gateErr"></div>
+  <button id="enter" style="width:100%">Войти</button>
+</div>
+
+<div id="app" class="wrap" hidden>
+  <h1>SWAMP</h1>
+  <div class="sub" id="hdr"></div>
+
+  <div class="tabs">
+    <button data-tab="stats" class="on">Сводка</button>
+    <button data-tab="players">Игроки</button>
+    <button data-tab="payments">Платежи</button>
+  </div>
+
+  <div id="tab-stats">
+    <div class="cards" id="statCards"></div>
+    <div class="card">
+      <span>Общий пруд недели</span>
+      <b id="pondTxt">—</b>
+      <div class="bar"><i id="pondBar" style="width:0"></i></div>
+    </div>
+    <div class="danger">
+      <h3>Опасная зона</h3>
+      <p>Действия применяются сразу и не отменяются.</p>
+      <div class="row-act">
+        <button class="ghost sm" onclick="act({act:'digest'})">Отправить отчёт в чат</button>
+        <button class="ghost sm" onclick="confirmAct('Обнулить общий пруд недели?',{act:'pondReset'})">Обнулить пруд</button>
+        <button class="bad sm" onclick="confirmAct('Удалить все тестовые (dev-*) аккаунты?',{act:'cleanTest'})">Удалить тестовые аккаунты</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-players" hidden>
+    <div class="tools">
+      <input id="q" placeholder="Поиск по имени, юзернейму или id">
+      <select id="filter">
+        <option value="all">Все</option>
+        <option value="real">Только реальные</option>
+        <option value="test">Только тестовые</option>
+        <option value="holders">Только холдеры</option>
+        <option value="payers">Только платившие</option>
+      </select>
+      <button class="ghost" onclick="load('players')">Обновить</button>
+    </div>
+    <div class="tbl"><table id="players"></table></div>
+  </div>
+
+  <div id="tab-payments" hidden>
+    <div class="tbl"><table id="payments"></table></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+let KEY=sessionStorage.getItem('swampAdminKey')||'';
+let PLAYERS=[];
+
+async function api(body){
+  const r=await fetch('/api/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:KEY,...body})});
+  return r.json();
+}
+let toastT;
+function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('on'),2200);}
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>(n||0).toLocaleString('ru-RU');
+const ago=t=>{if(!t)return '—';const d=(Date.now()-t)/1000;
+  if(d<60)return 'только что';if(d<3600)return Math.floor(d/60)+' мин назад';
+  if(d<86400)return Math.floor(d/3600)+' ч назад';return Math.floor(d/86400)+' дн назад';};
+
+/* ---------- вход ---------- */
+async function tryKey(k){
+  KEY=k;
+  const r=await api({act:'stats'});
+  if(!r.ok){$('#gateErr').textContent=r.error||'Не вышло';return false;}
+  sessionStorage.setItem('swampAdminKey',k);
+  $('#gate').hidden=true;$('#app').hidden=false;
+  renderStats(r.stats);
+  return true;
+}
+$('#enter').onclick=()=>tryKey($('#key').value.trim());
+$('#key').onkeydown=e=>{if(e.key==='Enter')$('#enter').click();};
+if(KEY)tryKey(KEY);
+
+/* ---------- вкладки ---------- */
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  ['stats','players','payments'].forEach(t=>$('#tab-'+t).hidden=(t!==b.dataset.tab));
+  load(b.dataset.tab);
+});
+
+async function load(tab){
+  if(tab==='stats'){const r=await api({act:'stats'});if(r.ok)renderStats(r.stats);}
+  if(tab==='players'){const r=await api({act:'players'});if(r.ok){PLAYERS=r.players;renderPlayers();}}
+  if(tab==='payments'){const r=await api({act:'payments'});if(r.ok)renderPayments(r.payments);}
+}
+
+/* ---------- сводка ---------- */
+function renderStats(s){
+  $('#hdr').textContent=`Бот ${s.botOn?'работает':'выключен'} · чат ${s.chatId||'не задан'} · последний отчёт ${s.digestDay}`;
+  const c=[
+    ['Игроков',fmt(s.players),'реальные, без тестовых'],
+    ['Заходили за сутки',fmt(s.today),''],
+    ['Холдеров',fmt(s.holders),'с подарком Kissed Frog'],
+    ['Слияний всего',fmt(s.merges),''],
+    ['Звёзд получено',fmt(s.stars),`платежей: ${fmt(s.payments)}`],
+    ['Тестовых аккаунтов',fmt(s.test),'не попадают в лидерборд'],
+  ];
+  $('#statCards').innerHTML=c.map(([t,v,sub])=>`<div class="card"><span>${t}</span><b>${v}</b><span>${sub}</span></div>`).join('');
+  const p=s.pond,pct=Math.min(100,Math.round(p.count/p.goal*100));
+  $('#pondTxt').textContent=`${fmt(p.count)} / ${fmt(p.goal)} — ${pct}%`;
+  $('#pondBar').style.width=pct+'%';
+}
+
+/* ---------- игроки ---------- */
+$('#q').oninput=renderPlayers;
+$('#filter').onchange=renderPlayers;
+function renderPlayers(){
+  const q=$('#q').value.trim().toLowerCase(),f=$('#filter').value;
+  const rows=PLAYERS.filter(p=>{
+    if(f==='real'&&(p.test||p.hidden))return false;
+    if(f==='test'&&!p.test)return false;
+    if(f==='holders'&&!p.holder)return false;
+    if(f==='payers'&&!p.spent)return false;
+    if(!q)return true;
+    return (p.name+' '+p.username+' '+p.id).toLowerCase().includes(q);
+  });
+  $('#players').innerHTML=`
+    <tr><th>Игрок</th><th>Ур.</th><th>Очки</th><th>Слияний</th><th>Звёзд</th><th>Был</th><th>Действия</th></tr>`+
+    rows.map(p=>`<tr>
+      <td>${esc(p.name)||'<span class="muted">без имени</span>'}
+        ${p.username?`<span class="muted">@${esc(p.username)}</span>`:''}
+        ${p.test?'<span class="tag test">тест</span>':''}
+        ${p.hidden?'<span class="tag hid">скрыт</span>':''}
+        ${p.holder?`<span class="tag hold">${esc(p.holder)}</span>`:''}
+        ${p.sub?'<span class="tag sub">абонент</span>':''}
+        <div class="muted" style="font-size:11.5px">${esc(p.id)}</div></td>
+      <td class="num">${p.maxLv}</td>
+      <td class="num">${fmt(p.score)}</td>
+      <td class="num">${fmt(p.merges)}</td>
+      <td class="num">${p.spent?fmt(p.spent):'—'}</td>
+      <td class="num muted">${ago(p.lastSeen)}</td>
+      <td><div class="row-act">
+        <button class="ghost sm" onclick="act({act:'${p.hidden?'show':'hide'}',id:'${p.id}'})">${p.hidden?'Вернуть':'Скрыть'}</button>
+        <button class="ghost sm" onclick="grantTo('${p.id}')">Выдать</button>
+        <button class="ghost sm" onclick="confirmAct('Обнулить прогресс ${esc(p.name)||p.id}?',{act:'wipe',id:'${p.id}'})">Обнулить</button>
+        <button class="bad sm" onclick="confirmAct('Удалить игрока ${esc(p.name)||p.id} насовсем?',{act:'delete',id:'${p.id}'})">Удалить</button>
+      </div></td>
+    </tr>`).join('')||'<tr><td class="muted">Никого не нашлось</td></tr>';
+}
+
+/* ---------- платежи ---------- */
+function renderPayments(ps){
+  $('#payments').innerHTML=`
+    <tr><th>Когда</th><th>Игрок</th><th>Товар</th><th>Звёзд</th><th>charge_id (для возврата)</th></tr>`+
+    (ps.map(p=>`<tr>
+      <td class="num muted">${new Date(p.t).toLocaleString('ru-RU')}</td>
+      <td>${esc(p.name)}<div class="muted" style="font-size:11.5px">${esc(p.id)}</div></td>
+      <td>${esc(p.item)}${p.sub?'<span class="tag sub">подписка</span>':''}</td>
+      <td class="num">${p.stars}</td>
+      <td class="num muted" style="font-size:11.5px">${esc(p.charge||'')}</td>
+    </tr>`).join('')||'<tr><td class="muted">Платежей пока нет</td></tr>');
+}
+
+/* ---------- действия ---------- */
+async function act(body){
+  const r=await api(body);
+  toast(r.ok?(r.msg||'Готово'):(r.error||'Ошибка'));
+  if(r.ok){await load('stats');if(!$('#tab-players').hidden)await load('players');}
+}
+function confirmAct(q,body){if(confirm(q))act(body);}
+function grantTo(id){
+  const item=prompt('Что выдать? auto1d, autoForever, boost1h, boost1d, bigBoard, wild3, sub');
+  if(item)act({act:'grant',id,item:item.trim()});
+}
+</script>
+</body>
+</html>

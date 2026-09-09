@@ -34,6 +34,7 @@ const CFG = {
   dev: E.DEV === '1' || !E.BOT_TOKEN,
   pondGoal: +(E.POND_GOAL || 50000),
   giftName: E.GIFT_NAME || 'Kissed Frog',
+  adminKey: E.ADMIN_KEY || '',
 };
 CFG.appLink = CFG.botUsername ? (CFG.appName ? `https://t.me/${CFG.botUsername}/${CFG.appName}?startapp=chat` : `https://t.me/${CFG.botUsername}`) : CFG.chatLink;
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -174,8 +175,11 @@ async function checkHolder(u, real) {
 }
 
 /* ---------- LEADERBOARD ---------- */
+// dev-* — это локальные тестовые входы без подписи Telegram, в общий зачёт они не идут;
+// hidden ставится вручную из админки
+const isRealPlayer = u => !u.hidden && !String(u.id).startsWith('dev-');
 function leaderboard() {
-  return Object.values(db.users).filter(u => u.score > 0 || u.maxLv > 1).sort((a, b) => b.score - a.score || b.maxLv - a.maxLv);
+  return Object.values(db.users).filter(u => isRealPlayer(u) && (u.score > 0 || u.maxLv > 1)).sort((a, b) => b.score - a.score || b.maxLv - a.maxLv);
 }
 function topRows(n = 20) {
   return leaderboard().slice(0, n).map((u, i) => ({ rank: i + 1, id: u.id, name: u.name, maxLv: u.maxLv, score: u.score, holder: u.holder ? u.holder.model : null, sub: (u.inv && u.inv.subUntil || 0) > Date.now() }));
@@ -256,6 +260,95 @@ const api = {
     try { for (const f of fs.readdirSync(CARDS)) { const p = path.join(CARDS, f); if (Date.now() - fs.statSync(p).mtimeMs > 2 * DAY) fs.unlinkSync(p); } } catch (e) {}
     return res;
   },
+
+  /* ---------- АДМИНКА ---------- */
+  async admin(body) {
+    if (!CFG.adminKey || body.key !== CFG.adminKey) return { ok: false, error: 'Неверный ключ' };
+    pondCheck();
+    const t = Date.now();
+    const all = Object.values(db.users);
+    const act = body.act || 'stats';
+
+    if (act === 'stats') {
+      const paid = db.payments.reduce((s, p) => s + (p.stars || 0), 0);
+      return {
+        ok: true,
+        stats: {
+          players: all.filter(isRealPlayer).length,
+          test: all.length - all.filter(isRealPlayer).length,
+          today: all.filter(u => t - (u.lastSeen || 0) < DAY).length,
+          holders: all.filter(u => u.holder && (u.holder.frogs || []).length).length,
+          merges: all.reduce((s, u) => s + (u.merges || 0), 0),
+          stars: paid,
+          payments: db.payments.length,
+          pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars, week: db.pond.week },
+          digestDay: db.digest.day || '—',
+          chatId: CFG.chatId || '', botOn: !!CFG.token,
+        },
+      };
+    }
+
+    if (act === 'players') {
+      const rows = all
+        .sort((a, b) => (b.score || 0) - (a.score || 0))
+        .map(u => ({
+          id: u.id, name: u.name || '', username: u.username || '',
+          maxLv: u.maxLv || 1, score: u.score || 0, coins: u.coins || 0,
+          merges: u.merges || 0, taps: u.taps || 0, wild: u.wild || 0,
+          holder: u.holder ? (u.holder.frogs || []).map(f => f.model).join(', ') : '',
+          sub: (u.inv && u.inv.subUntil || 0) > t,
+          spent: db.payments.filter(p => p.id === u.id).reduce((s, p) => s + (p.stars || 0), 0),
+          lastSeen: u.lastSeen || 0, created: u.created || 0,
+          hidden: !!u.hidden, test: String(u.id).startsWith('dev-'), flags: u.flags || 0,
+        }));
+      return { ok: true, players: rows };
+    }
+
+    if (act === 'payments') {
+      return { ok: true, payments: db.payments.slice(-200).reverse().map(p => ({ ...p, name: (db.users[p.id] || {}).name || p.id })) };
+    }
+
+    // --- действия, меняющие данные ---
+    const u = body.id ? db.users[body.id] : null;
+    if (act === 'hide' || act === 'show') {
+      if (!u) return { ok: false, error: 'Игрок не найден' };
+      u.hidden = act === 'hide'; save();
+      return { ok: true, msg: u.hidden ? 'Скрыт из лидерборда' : 'Возвращён в лидерборд' };
+    }
+    if (act === 'wipe') {
+      if (!u) return { ok: false, error: 'Игрок не найден' };
+      Object.assign(u, { maxLv: 1, score: 0, merges: 0, taps: 0, coins: 0, wild: 0 });
+      save();
+      return { ok: true, msg: 'Прогресс обнулён (покупки не тронуты)' };
+    }
+    if (act === 'delete') {
+      if (!u) return { ok: false, error: 'Игрок не найден' };
+      delete db.users[body.id]; save();
+      return { ok: true, msg: 'Игрок удалён' };
+    }
+    if (act === 'grant') {
+      if (!u) return { ok: false, error: 'Игрок не найден' };
+      const item = String(body.item || '');
+      if (!SHOP[item] && !item.startsWith('bd:')) return { ok: false, error: 'Нет такого товара' };
+      grant(u, item, +body.amount || 0); save();
+      return { ok: true, msg: 'Выдано: ' + ((SHOP[item] || {}).title || item) };
+    }
+    if (act === 'cleanTest') {
+      let n = 0;
+      for (const id of Object.keys(db.users)) if (String(id).startsWith('dev-')) { delete db.users[id]; n++; }
+      save();
+      return { ok: true, msg: 'Удалено тестовых аккаунтов: ' + n };
+    }
+    if (act === 'pondReset') {
+      db.pond = { week: weekKey(), count: 0, stars: 0, donors: {} }; save();
+      return { ok: true, msg: 'Общий пруд обнулён' };
+    }
+    if (act === 'digest') {
+      try { await sendDigest(true); return { ok: true, msg: 'Отчёт отправлен в чат' }; }
+      catch (e) { return { ok: false, error: e.message }; }
+    }
+    return { ok: false, error: 'Неизвестное действие' };
+  },
 };
 
 /* ---------- HTTP ---------- */
@@ -273,6 +366,11 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'POST') { const chunks = []; let size = 0; for await (const c of req) { size += c.length; if (size > 8e6) return send(413, '{"ok":false}'); chunks.push(c); } try { body = JSON.parse(Buffer.concat(chunks).toString() || '{}'); } catch (e) { return send(400, '{"ok":false,"error":"json"}'); } }
       const out = await api[name](body, req);
       return send(200, JSON.stringify(out));
+    }
+    if (url.pathname === '/admin') {
+      const f = path.join(__dirname, 'admin.html');
+      if (!fs.existsSync(f)) return send(404, 'admin.html not found', 'text/plain');
+      return send(200, fs.readFileSync(f, 'utf8'), MIME['.html']);
     }
     if (url.pathname.startsWith('/cards/')) {
       const f = path.join(CARDS, path.basename(url.pathname)); if (!fs.existsSync(f)) return send(404, 'not found', 'text/plain');
