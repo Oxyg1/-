@@ -1045,16 +1045,18 @@ async function renderCard(kind,lv){
     g.shadowBlur=40;g.shadowOffsetY=20;g.drawImage(frog,W/2-410,380,820,820);g.shadowBlur=18;g.shadowOffsetY=6;
     g.fillStyle='#ffd23f';fitText(g,frogName(lv),W/2,1330,W-120,110,F);
     pill(g,W/2,1420,`Уровень ${lv} из ${LEVELS.length}  ·  редкость ${rarTxt(lv)}`,'800 44px '+F);
-    g.font='800 40px '+F;g.fillStyle='rgba(255,255,255,.8)';g.fillText('Kissed Frog Holders',W/2,1640);
-    g.font='800 34px '+F;g.fillStyle='rgba(255,255,255,.6)';g.fillText('Играть: '+CFG.appLink.replace('https://',''),W/2,1700);
+    g.font='800 40px '+F;g.fillStyle='rgba(255,255,255,.8)';g.fillText('Kissed Frog Holders',W/2,1630);
+    g.font='900 42px '+F;g.fillStyle='#ffd23f';g.fillText('Попробуй тоже →',W/2,1690);
+    g.font='800 32px '+F;g.fillStyle='rgba(255,255,255,.65)';g.fillText(CFG.appLink.replace('https://',''),W/2,1740);
   }else{
     g.shadowBlur=40;g.shadowOffsetY=20;g.drawImage(frog,60,80,520,520);g.shadowBlur=18;g.shadowOffsetY=6;
     g.textAlign='left';const X=620;
-    g.font='800 34px '+F;g.fillStyle='rgba(255,255,255,.85)';g.fillText(myName+' вырастил',X,190);
+    g.font='800 34px '+F;g.fillStyle='rgba(255,255,255,.85)';g.fillText('Я вырастил',X,190);
     g.fillStyle='#ffd23f';fitText(g,frogName(lv),X,290,W-X-60,84,F);
     g.font='800 36px '+F;g.fillStyle='#fff';g.fillText(`Уровень ${lv} из ${LEVELS.length}`,X,370);
     g.fillText('Редкость '+rarTxt(lv),X,425);
     g.font='800 30px '+F;g.fillStyle='rgba(255,255,255,.7)';g.fillText('SWAMP · Kissed Frog Holders',X,560);
+    g.font='900 34px '+F;g.fillStyle='#ffd23f';g.fillText('Попробуй тоже',X,610);
   }
   return c.toDataURL('image/jpeg',0.92);
 }

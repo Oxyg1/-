@@ -254,7 +254,11 @@ const api = {
         const r = await tg('savePreparedInlineMessage', {
           user_id: +a.id, allow_user_chats: true, allow_group_chats: true, allow_channel_chats: false, allow_bot_chats: false,
           result: { type: 'photo', id: crypto.randomBytes(6).toString('hex'), photo_url: url, thumbnail_url: url, photo_width: story ? 1080 : 1200, photo_height: story ? 1920 : 675,
-            caption: `${em('frog')} ${a.name} вырастил ${L.n} — уровень ${lv} из ${LEVELS.length}, редкость ${String(L.r).replace('.', ',')}%`,
+            // тег tg-emoji тут не сработает: сообщение уходит от лица пользователя через
+            // inline-механизм, а не как прямое сообщение бота — Telegram молча подменит его на обычный юникод
+            caption: `🐸 Я вырастил ${L.n} — уровень ${lv} из ${LEVELS.length}, редкость ${String(L.r).replace('.', ',')}%
+
+Попробуй тоже 👇`,
             parse_mode: 'HTML',
             reply_markup: { inline_keyboard: [[{ text: EMO_BTN + 'Играть в SWAMP', url: CFG.appLink }]] } },
         });
