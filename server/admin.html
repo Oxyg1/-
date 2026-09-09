@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SWAMP — админка</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -68,7 +69,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 
 <div id="gate" class="gate">
   <h1>SWAMP — админка</h1>
-  <p class="sub">Введи ключ из <code>ADMIN_KEY</code> в server/.env</p>
+  <p class="sub">Открой эту страницу из Telegram под своим аккаунтом — пустят без ключа. Либо введи <code>ADMIN_KEY</code> из server/.env.</p>
   <input id="key" type="password" placeholder="Ключ доступа" autocomplete="current-password">
   <div class="err" id="gateErr"></div>
   <button id="enter" style="width:100%">Войти</button>
@@ -127,10 +128,13 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 <script>
 const $=s=>document.querySelector(s);
 let KEY=sessionStorage.getItem('swampAdminKey')||'';
+// если админку открыли из Telegram под аккаунтом владельца — ключ не нужен
+const TGW=(window.Telegram&&window.Telegram.WebApp)||null;
+const INIT=TGW?TGW.initData:'';
 let PLAYERS=[];
 
 async function api(body){
-  const r=await fetch('/api/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:KEY,...body})});
+  const r=await fetch('/api/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:KEY,initData:INIT,...body})});
   return r.json();
 }
 let toastT;
@@ -142,18 +146,19 @@ const ago=t=>{if(!t)return '—';const d=(Date.now()-t)/1000;
   if(d<86400)return Math.floor(d/3600)+' ч назад';return Math.floor(d/86400)+' дн назад';};
 
 /* ---------- вход ---------- */
-async function tryKey(k){
+async function tryKey(k,quiet){
   KEY=k;
   const r=await api({act:'stats'});
-  if(!r.ok){$('#gateErr').textContent=r.error||'Не вышло';return false;}
-  sessionStorage.setItem('swampAdminKey',k);
+  if(!r.ok){ if(!quiet)$('#gateErr').textContent=r.error||'Не вышло'; return false; }
+  if(k)sessionStorage.setItem('swampAdminKey',k);
   $('#gate').hidden=true;$('#app').hidden=false;
   renderStats(r.stats);
   return true;
 }
 $('#enter').onclick=()=>tryKey($('#key').value.trim());
 $('#key').onkeydown=e=>{if(e.key==='Enter')$('#enter').click();};
-if(KEY)tryKey(KEY);
+// сперва пробуем войти по Telegram-аккаунту, потом по сохранённому ключу
+(async()=>{ if(INIT&&await tryKey('',true)) return; if(KEY) tryKey(KEY,true); })();
 
 /* ---------- вкладки ---------- */
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{

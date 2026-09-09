@@ -181,7 +181,16 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .item.donate{grid-template-columns:52px 1fr}
 .item.donate .row{justify-content:flex-start;margin-top:6px}
 .item.donate .buy{padding:7px 10px}
-.stars{font-size:12px;opacity:.85;text-align:center}
+.stars{font-size:12px;opacity:.85;text-align:center;line-height:1.45}
+.stars .muted{opacity:.7}
+.shop-h{font:900 12.5px Nunito,sans-serif;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.55);margin:14px 2px 7px}
+.offer{border:2px solid var(--acc);border-radius:18px;padding:8px;margin-bottom:6px;background:rgba(255,210,63,.08)}
+.offer-t{font:900 11.5px Nunito,sans-serif;letter-spacing:.07em;text-transform:uppercase;color:var(--acc);margin:2px 4px 6px}
+.offer .item{margin:0;background:rgba(0,0,0,.28)}
+.badge2{display:inline-block;font:900 10px Nunito,sans-serif;font-style:normal;letter-spacing:.04em;text-transform:uppercase;background:var(--acc);color:#5a3b00;border-radius:999px;padding:2px 7px;margin-left:6px;vertical-align:1px}
+.item .live{color:#9dffb0;font-size:12px}
+.pricebox{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.pricebox s{font-size:11.5px;opacity:.6}
 
 /* LEADERBOARD */
 .pond{width:100%;background:rgba(0,0,0,.25);border-radius:14px;padding:10px 12px}
@@ -202,7 +211,10 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 /* CARD PREVIEW */
 #cardImg{max-width:100%;max-height:60dvh;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
 
-#loading .card{align-items:center}
+#loading .card{align-items:center;gap:4px}
+#loadFrog{width:min(46vw,190px);aspect-ratio:1;margin-bottom:2px}
+#loadFrog svg,#loadFrog img{display:block;width:100%;height:100%;object-fit:contain}
+#loading h2{font-size:20px}
 #loading .bar{width:100%;height:12px;border-radius:8px;background:rgba(0,0,0,.35);overflow:hidden}
 #loading .bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
 @media (prefers-reduced-motion:reduce){.frog.idle img,#fly{animation:none}}
@@ -364,7 +376,8 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 
 <div id="loading" class="overlay">
   <div class="card">
-    <h2><svg class="ic "><use href="#i-frog"></use></svg> Лягушки просыпаются…</h2>
+    <div id="loadFrog"></div>
+    <h2>Лягушки просыпаются…</h2>
     <div class="bar"><i id="loadBar"></i></div>
   </div>
 </div>
@@ -489,7 +502,7 @@ const rarity=lv=>lv>=1&&lv<=LEVELS.length?LEVELS[lv-1].r:null;
 const rarTxt=lv=>{const r=rarity(lv);return r==null?'':String(r).replace('.',',')+'%';};
 
 /* ---------- ASSETS ---------- */
-const frogFile=lv=>(lv===0||lv===WILD)?'original':LEVELS[lv-1].f;
+const frogFile=lv=>typeof lv==='string'?lv:(lv===0||lv===WILD)?'original':LEVELS[lv-1].f;
 const frogName=lv=>lv===WILD?'Дикая лягушка':lv===0?'Original':LEVELS[lv-1].n;
 const dataCache=new Map();
 function loadFrogData(lv){
@@ -522,94 +535,100 @@ function thumb(lv){
 }
 
 /* ---------- ЗВУК ----------
-   Задача — не «пикать», а расслаблять: мягкие синусы вместо пил и квадратов,
-   общий фильтр срезает резкость, короткое эхо даёт объём, а все ноты берутся
-   из пентатоники — в ней любое сочетание звучит консонансно, поэтому даже
-   быстрый долбёж по лягушке не превращается в какофонию. */
-let ac=null,bus=null,wet=null;
+   Правила, по которым это собрано:
+   • тап — сухой и короткий (60 мс), без хвоста эха: иначе при 10 тапах в секунду
+     звуки накладываются в кашу;
+   • питч тапа случайно гуляет ±12% — мозг перестаёт слышать повтор;
+   • полифония ограничена: больше 6 голосов одновременно не звучит, иначе громкость
+     складывается и режет уши;
+   • при спаме тапов громкость приседает на 35%;
+   • слияние — питч по уровню лягушки: мелкие тонко и высоко, крупные низко и густо,
+     на слух понятно, что собрал что-то ценное;
+   • каскад ведёт ноту вверх по пентатонике: цепочка ощущается физически;
+   • всё в до-мажоре, награды заметно громче рутины. */
+let ac=null,dry=null,send=null,voices=0;
 function audio(){
   if(!ac){
     try{ac=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return null;}
-    // общая шина: мягкий лимит по громкости + срез резких верхов
-    bus=ac.createGain();bus.gain.value=.9;
-    const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=5200;lp.Q.value=.6;
-    // ненавязчивое эхо вместо реверба: дёшево и добавляет «воздух»
-    const dl=ac.createDelay(1);dl.delayTime.value=.16;
-    const fb=ac.createGain();fb.gain.value=.22;
-    wet=ac.createGain();wet.gain.value=.3;
-    bus.connect(lp);lp.connect(ac.destination);
-    lp.connect(dl);dl.connect(fb);fb.connect(dl);dl.connect(wet);wet.connect(ac.destination);
+    const master=ac.createGain();master.gain.value=.9;
+    const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6000;lp.Q.value=.5;
+    master.connect(lp);lp.connect(ac.destination);
+    dry=ac.createGain();dry.gain.value=1;dry.connect(master);
+    // эхо только для наград, тапы туда не идут принципиально
+    const dl=ac.createDelay(1);dl.delayTime.value=.17;
+    const fb=ac.createGain();fb.gain.value=.24;
+    const wet=ac.createGain();wet.gain.value=.34;
+    send=ac.createGain();send.gain.value=1;
+    send.connect(dl);dl.connect(fb);fb.connect(dl);dl.connect(wet);wet.connect(master);
+    send.connect(master);
   }
   if(ac.state==='suspended')ac.resume();
   return ac;
 }
-// до-мажорная пентатоника на несколько октав: фальшивых сочетаний не бывает
-const SCALE=[0,2,4,7,9];
+const SCALE=[0,2,4,7,9];                                  // до-мажорная пентатоника
 const note=(deg,oct=0)=>261.63*Math.pow(2,oct+Math.floor(deg/5))*Math.pow(2,SCALE[((deg%5)+5)%5]/12);
-// один мягкий голос: синус + короткая «древесная» призвука сверху
-function voice(f,dur,vol,t0=0,glide=0){
+// один голос. reward=true — уходит в эхо и звучит громче
+function voice(f,dur,vol,t0=0,{glide=0,reward=false,type='sine'}={}){
   const a=audio();if(!a||!state.sound)return;
+  if(!isFinite(f)||voices>=6)return;                      // потолок полифонии
   const t=a.currentTime+t0;
-  if(!isFinite(f)||!isFinite(t))return;
+  voices++;setTimeout(()=>voices--,(t0+dur)*1000+40);
   const o=a.createOscillator(),g=a.createGain();
-  o.type='sine';
-  o.frequency.setValueAtTime(f,t);
+  o.type=type;o.frequency.setValueAtTime(f,t);
   if(glide)o.frequency.exponentialRampToValueAtTime(Math.max(40,f*glide),t+dur);
-  // плавная атака и длинный хвост — резкий старт как раз и звучит «дёшево»
   g.gain.setValueAtTime(.0001,t);
-  g.gain.exponentialRampToValueAtTime(vol,t+.012);
+  g.gain.exponentialRampToValueAtTime(vol,t+.008);
   g.gain.exponentialRampToValueAtTime(.0001,t+dur);
-  o.connect(g).connect(bus);
-  o.start(t);o.stop(t+dur+.03);
-  // тихая октава сверху даёт «стеклянный» призвук, без неё звук глуховат
-  if(vol>.05){
+  o.connect(g).connect(reward?send:dry);
+  o.start(t);o.stop(t+dur+.02);
+  if(reward&&vol>.05){                                    // октава сверху для «стекла»
     const o2=a.createOscillator(),g2=a.createGain();
     o2.type='sine';o2.frequency.setValueAtTime(f*2,t);
     g2.gain.setValueAtTime(.0001,t);
-    g2.gain.exponentialRampToValueAtTime(vol*.22,t+.01);
-    g2.gain.exponentialRampToValueAtTime(.0001,t+dur*.6);
-    o2.connect(g2).connect(bus);
-    o2.start(t);o2.stop(t+dur+.03);
+    g2.gain.exponentialRampToValueAtTime(vol*.2,t+.01);
+    g2.gain.exponentialRampToValueAtTime(.0001,t+dur*.55);
+    o2.connect(g2).connect(send);o2.start(t);o2.stop(t+dur+.02);
   }
 }
-// мягкий низкий «пух» — телесность без щелчка
 function thud(vol,t0=0,f=140){
   const a=audio();if(!a||!state.sound)return;
   const t=a.currentTime+t0;
   const o=a.createOscillator(),g=a.createGain();
-  o.type='sine';o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*.45,t+.16);
-  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.01);
-  g.gain.exponentialRampToValueAtTime(.0001,t+.2);
-  o.connect(g).connect(bus);o.start(t);o.stop(t+.24);
+  o.type='sine';o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*.5,t+.13);
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.008);
+  g.gain.exponentialRampToValueAtTime(.0001,t+.16);
+  o.connect(g).connect(dry);o.start(t);o.stop(t+.2);
 }
-let tapDeg=0,tapAt=0;
+let tapAt=0,tapRate=0;
 const S={
-  // тап: капля воды. При частых тапах нота ползёт вверх по пентатонике —
-  // получается мелодия, а не долбёжка, и мозг получает «прогресс» на слух
+  // сухой короткий «пок». Частим — звук приседает, чтобы не резал уши
   pop:crit=>{
-    const t=now();
-    if(t-tapAt>900)tapDeg=0; else tapDeg=(tapDeg+1)%10;
-    tapAt=t;
-    voice(note(tapDeg+5),.5,.07,0,.9);
-    if(crit){voice(note(tapDeg+8),.7,.06,.04);voice(note(tapDeg+12),.9,.035,.09);}
+    const t=now(),gap=t-tapAt;tapAt=t;
+    tapRate=gap<100?Math.min(tapRate+1,10):Math.max(tapRate-1,0);
+    const duck=tapRate>5?.65:1;                            // спам — тише на 35%
+    const pitch=1+(Math.random()*.24-.12);                 // ±12%
+    voice(523.25*pitch,.06,.05*duck,0,{glide:.55});
+    if(crit){voice(784*pitch,.09,.05,.02,{reward:true});voice(1046*pitch,.12,.03,.05,{reward:true});}
   },
-  spawn:()=>{thud(.05,0,190);voice(note(3),.35,.045,.02,1.1);},
-  // слияние: восходящее трезвучие, с комбо поднимается на октаву выше
-  merge:c=>{
-    const base=2+Math.min(Math.max(c-1,0),3)*2;
-    [0,2,4].forEach((d,k)=>voice(note(base+d),.75,.075,k*.07));
-    thud(.05,0,150);
+  spawn:()=>voice(659*(1+(Math.random()*.2-.1)),.07,.035,0,{glide:1.3}),
+  // слияние: чем выше уровень лягушки, тем ниже и толще; каскад ведёт вверх по гамме
+  merge:(c,lv)=>{
+    const tier=Math.min(Math.max(lv||1,1),50);
+    const oct=1-Math.floor((tier-1)/12);                   // высокие тиры звучат ниже
+    const step=Math.min(Math.max(c-1,0),6);                // ступень каскада
+    [0,2,4].forEach((d,k)=>voice(note(step+d,oct),.5,.085,k*.06,{reward:true}));
+    thud(.06,0,120+tier);
   },
-  // новый уровень: разбег по пентатонике вверх и мягкий «хвост»
+  // новый максимум — редкое событие, можно позволить настоящую мелодию
   level:()=>{
-    [0,1,2,3,4,5,6].forEach((d,k)=>voice(note(d+3),.7,.075,k*.075));
-    voice(note(10),1.4,.05,.6);
-    thud(.07,0,120);
+    [0,2,4,5,7].forEach((d,k)=>voice(note(d,1),.55,.09,k*.1,{reward:true}));
+    voice(note(9,1),1.2,.07,.55,{reward:true});
+    thud(.09,0,110);
   },
-  eat:()=>{thud(.07,0,170);voice(note(1),.3,.04,.02,.6);},
-  err:()=>{voice(note(0)*.75,.4,.05,0,.85);},
-  ui:()=>voice(note(6),.16,.03),
-  buy:()=>{[0,2,4,6].forEach((d,k)=>voice(note(d+4),.6,.06,k*.06));},
+  eat:()=>{thud(.06,0,160);voice(note(1),.12,.03,.02,{glide:.6});},
+  err:()=>thud(.07,0,90),                                  // мягкий низкий стук, не резкий
+  ui:()=>voice(note(6),.045,.018),                         // почти неслышный тик
+  buy:()=>{[0,2,4].forEach((d,k)=>voice(note(d+3,1),.5,.08,k*.07,{reward:true}));},
 };
 
 /* ---------- FX ---------- */
@@ -778,16 +797,24 @@ async function mergeCells(win,lv,target,combo){
   const nl=lv+1;state.cells[target]=nl;makeFrogEl(target,nl);state.merges++;state.score+=nl;
   const [x,y]=cellCenter(target);
   sparks(x,y,14,['#ffd23f','#9dffb0','#fff','#7fe3ff']);
-  S.merge(combo);haptic.heavy();fullPlay();
+  S.merge(combo,nl);haptic.heavy();fullPlay();
   const reward=mergeReward(nl,combo);addCoins(reward);
   floatText(x,y-cs*.4,(combo>1?'x'+combo+' КОМБО  ':'')+'+'+fmt(reward),'big');
   if(nl>state.maxLv){await levelUp(nl);}
   if(nl<LEVELS.length)thumb(nl+1).catch(()=>{});
 }
 async function resolve(focus){
-  busy=true;let combo=0,line;
-  while((line=findLine(focus))){combo++;await mergeCells(line.win,line.lv,line.target,combo);focus=line.target;await wait(140);}
-  busy=false;refreshJunk();save();updateHud();
+  busy=true;
+  try{
+    let combo=0,line;
+    while((line=findLine(focus))){combo++;await mergeCells(line.win,line.lv,line.target,combo);focus=line.target;await wait(140);}
+  }catch(e){
+    console.error('resolve',e);
+    toast('Что-то не догрузилось, но прогресс сохранён');
+  }finally{
+    // без finally одна сетевая ошибка вешала игру намертво
+    busy=false;refreshJunk();save();updateHud();
+  }
 }
 
 /* drag & drop */
@@ -958,11 +985,11 @@ setInterval(()=>{
 setInterval(()=>{if(boostMult()===1&&$('#frogName .boost'))updateHud();if(!autoOn()&&$('#fly').classList.contains('on'))updateHud();},5000);
 
 /* ---------- LEVEL UP ---------- */
-let luAnim=null,luLv=1;
+let luAnim=null,luLv=1,luPending=null;
 async function levelUp(lv){
   state.maxLv=lv;luLv=lv;if(!state.disc.includes(lv))state.disc.push(lv);
   save();updateHud();refreshJunk();
-  await setClickerSkin(lv);
+  try{await setClickerSkin(lv);}catch(e){console.error('skin',e);}
   const ov=$('#levelup');
   $('#luName').textContent=frogName(lv);$('#luLvN').textContent=lv;$('#luRar').textContent='редкость '+rarTxt(lv);
   const mine=ownsLevel(lv),last=lv===LEVELS.length;
@@ -971,11 +998,29 @@ async function levelUp(lv){
   sub.textContent=mine?'Самая лучшая лягушка — твоя. Цени её.':last?'Это последняя лягушка в списке':'Скин кликера обновлён';
   const card=ov.querySelector('.card');card.querySelectorAll('.conf').forEach(c=>c.remove());
   for(let i=0;i<26;i++){const c=document.createElement('i');c.className='conf';c.style.left=rnd(0,100)+'%';c.style.setProperty('--c',pick(['#ffd23f','#9dffb0','#7fe3ff','#ff8fa3','#fff']));c.style.animationDelay=rnd(-2,0)+'s';c.style.animationDuration=rnd(1.8,3)+'s';card.appendChild(c);}
-  if(luAnim)luAnim.destroy();$('#luLottie').innerHTML='';
-  luAnim=lottie.loadAnimation({container:$('#luLottie'),renderer:'svg',loop:true,autoplay:true,animationData:structuredClone(await loadFrogData(lv))});
+  if(luAnim){luAnim.destroy();luAnim=null;}
+  $('#luLottie').innerHTML='';
+  // картинка — приятный бонус, но окно должно открыться даже без неё
+  try{
+    const d=await loadFrogData(lv);
+    luAnim=lottie.loadAnimation({container:$('#luLottie'),renderer:'svg',loop:true,autoplay:true,animationData:structuredClone(d)});
+  }catch(e){
+    console.error('luAnim',e);
+    const img=thumbs.get(lv);
+    if(img)$('#luLottie').innerHTML=`<img src="${img}" alt="" style="width:100%;height:100%;object-fit:contain">`;
+  }
   ov.classList.remove('hidden');S.level();haptic.success();
   sync(true);
-  await new Promise(r=>{$('#luOk').onclick=()=>{ov.classList.add('hidden');if(luAnim){luAnim.destroy();luAnim=null;}S.ui();r();};});
+  if(luPending){const p=luPending;luPending=null;p();}   // не оставляем предыдущее окно висеть
+  await new Promise(r=>{
+    luPending=r;
+    $('#luOk').onclick=()=>{
+      ov.classList.add('hidden');
+      if(luAnim){luAnim.destroy();luAnim=null;}
+      S.ui();
+      if(luPending){luPending=null;r();}
+    };
+  });
 }
 $('#luChat').onclick=()=>share('chat',luLv);
 $('#luStory').onclick=()=>share('story',luLv);
@@ -1038,16 +1083,23 @@ $('#cardClose').onclick=()=>$('#cardPrev').classList.add('hidden');
 
 /* ---------- SHOP ---------- */
 const BD_PRICE=59;
+// Витрина: короткая выгода вместо описаний, группы вместо простыни,
+// цифры считаются от реального заработка игрока — это честный аргумент, а не давилка
 const SHOP=[
-  {id:'auto1d',name:'Мушка на сутки',desc:'Лягушка сама тапает раз в секунду, пока игра открыта',price:50,icon:'icons/bolt.png'},
-  {id:'autoForever',name:'Мушка навсегда',desc:'Автотап без ограничений по времени',price:490,icon:'icons/bolt.png',once:'autoForever'},
-  {id:'boost1h',name:'Ускорение ×2 на час',desc:'Двойные монеты с каждого тапа',price:25,icon:'icons/fire.png'},
-  {id:'boost1d',name:'Ускорение ×2 на сутки',desc:'Двойные монеты весь день',price:99,icon:'icons/fire.png'},
-  {id:'bigBoard',name:'Большой пруд 6×6',desc:'Ещё 11 клеток навсегда. Поле почти не забивается',price:299,icon:'icons/jelly.png',once:'bigBoard'},
-  {id:'wild3',name:'Дикая лягушка ×3',desc:'Сливается с любыми двумя одинаковыми. Спасает из тупика',price:39,icon:'wild'},
-  {id:'sub',name:'Абонемент пруда · 30 дней',desc:'Мушка включена, значок в лидерборде, ранний доступ к фонам',price:199,icon:'icons/lv.png',sub:true},
-  {id:'donate',name:'Покормить пруд',desc:'Донат в общую цель чата. Имя попадёт в дневной отчёт',prices:[10,50,100],icon:'icons/heart.png',donate:true},
+  {id:'starter',g:'start',name:'Стартовый набор',desc:'Мушка и ×2 на сутки + 3 диких',price:99,was:188,icon:'icons/jelly.png',once:'starter',badge:'−47%'},
+
+  {id:'autoForever',g:'earn',name:'Мушка навсегда',desc:'Тапает за тебя, всегда',price:490,icon:'icons/bolt.png',once:'autoForever',badge:'навсегда'},
+  {id:'auto1d',g:'earn',name:'Мушка на сутки',desc:'Тапает за тебя 24 часа',price:50,icon:'icons/bolt.png',badge:'хит'},
+  {id:'boost1d',g:'earn',name:'Ускорение ×2 · сутки',desc:'Двойные монеты весь день',price:99,icon:'icons/fire.png'},
+  {id:'boost1h',g:'earn',name:'Ускорение ×2 · час',desc:'Быстро подтолкнуть прогресс',price:25,icon:'icons/fire.png'},
+
+  {id:'bigBoard',g:'room',name:'Большой пруд 6×6',desc:'+11 клеток навсегда',price:299,icon:'icons/jelly.png',once:'bigBoard',badge:'навсегда'},
+  {id:'wild3',g:'room',name:'Дикая лягушка ×3',desc:'Выход из любого тупика',price:39,icon:'wild'},
+
+  {id:'sub',g:'club',name:'Абонемент пруда',desc:'Мушка, значок в топе и новые фоны',price:199,icon:'icons/lv.png',sub:true,badge:'6,6★ в день'},
+  {id:'donate',g:'help',name:'Покормить пруд',desc:'Ускорить общую цель чата',prices:[10,50,100],icon:'icons/heart.png',donate:true},
 ];
+const GROUPS=[['start',''],['earn','Зарабатывать быстрее'],['room','Больше места'],['skin','Фоны твоих лягушек'],['club','Клуб'],['help','Поддержать чат']];
 function grantLocal(id,amount){
   const inv=state.inv,t=now();
   switch(id){
@@ -1057,6 +1109,7 @@ function grantLocal(id,amount){
     case 'boost1d':inv.boostUntil=Math.max(inv.boostUntil||0,t)+DAY;break;
     case 'bigBoard':inv.bigBoard=true;break;
     case 'wild3':state.wild+=3;break;
+    case 'starter':inv.starter=true;inv.autoUntil=Math.max(inv.autoUntil||0,t)+DAY;inv.boostUntil=Math.max(inv.boostUntil||0,t)+DAY;state.wild+=3;break;
     case 'sub':inv.subUntil=Math.max(inv.subUntil||0,t)+30*DAY;break;
     case 'donate':inv.donated=(inv.donated||0)+(amount||0);break;
     default:if(id.startsWith('bd:')){inv.themes=inv.themes||[];const th=id.slice(3);if(!inv.themes.includes(th))inv.themes.push(th);state.theme=th;}
@@ -1093,35 +1146,79 @@ function applyTheme(){
   st.setProperty('--card2',mix(c.e,'#000000',.25));
 }
 const timeLeft=ms=>{const s=Math.max(0,ms)/1000;if(s>=86400)return Math.ceil(s/86400)+' д';if(s>=3600)return Math.ceil(s/3600)+' ч';return Math.max(1,Math.ceil(s/60))+' мин';};
+function shopHeader(){
+  const perTap=tapValue(), perHour=Math.round(perTap*3600*0.5);   // ~2 тапа в секунду вполсилы
+  const parts=[`Сейчас <b>${fmt(perTap)}</b> за тап`];
+  if(autoOn())parts.push('мушка работает');
+  if(boostMult()>1)parts.push('ускорение ×2');
+  return parts.join(' · ')+`<br><span class="muted">мушка приносит примерно ${fmt(Math.round(perTap*3600))} монет за час без единого тапа</span>`;
+}
+// подсказка ровно в тот момент, когда игрок упёрся — это уместно, а не назойливо
+function contextOffer(){
+  const inv=state.inv,full=state.cells.filter(Boolean).length===CELLS;
+  if(full&&!canMergeAny()&&!state.wild)return {id:'wild3',why:'Поле встало намертво — дикая лягушка расчистит'};
+  if(full&&!inv.bigBoard)return {id:'bigBoard',why:'Поле забито. На 6×6 такое почти не случается'};
+  if(!inv.starter&&!inv.autoForever&&state.maxLv>=3)return {id:'starter',why:'Самый выгодный набор на старте'};
+  if(!autoOn())return {id:'auto1d',why:'Устал тапать? Мушка сделает это за тебя'};
+  return null;
+}
+function itemCard(it,inv,t,extra){
+  const d=document.createElement('div');d.className='item'+(it.donate?' donate':'');
+  const icon=it.icon==='wild'?(thumbs.get(WILD)||''):it.icon;
+  const bc=it.backdrop&&bdColors(it.backdrop);
+  let btn='',status='';
+  if(it.donate)btn='';
+  else if(it.once&&inv[it.once])btn='<button class="buy owned">Есть</button>';
+  else if(it.backdrop&&(inv.themes||[]).includes(it.backdrop))btn=`<button class="buy ${state.theme===it.backdrop?'owned':''}" data-theme="${esc(it.backdrop)}">${state.theme===it.backdrop?'Включён':'Включить'}</button>`;
+  else if(it.id==='sub'&&(inv.subUntil||0)>t)btn=`<button class="buy time">${timeLeft(inv.subUntil-t)}</button>`;
+  else btn=`<button class="buy" data-buy="${it.id}">${it.price} <img class="ic" src="icons/tgstar.png" alt=""></button>`;
+  if(it.id==='auto1d'&&autoOn()&&!inv.autoForever)status=`активна ещё ${timeLeft(Math.max(inv.autoUntil||0,inv.subUntil||0)-t)}`;
+  if(it.id.startsWith('boost')&&boostMult()>1)status=`активно ещё ${timeLeft(inv.boostUntil-t)}`;
+  if(it.id==='wild3'&&state.wild>0)status=`в запасе ×${state.wild}`;
+  const badge=it.badge?`<i class="badge2">${it.badge}</i>`:'';
+  const was=it.was?`<s>${it.was}</s> `:'';
+  d.innerHTML=
+    (bc?`<i class="bdview" style="background:radial-gradient(circle at 40% 32%, ${bc.c}, ${bc.e})"></i>`:`<img src="${icon}" alt="">`)+
+    `<div><b>${it.name}${badge}</b><span>${extra||it.desc}</span>${status?`<span class="live">${status}</span>`:''}`+
+    (it.donate?`<div class="row">${it.prices.map(p=>`<button class="buy" data-buy="donate" data-amount="${p}">${p} <img class="ic" src="icons/tgstar.png" alt=""></button>`).join('')}</div>`:'')+
+    `</div>`+
+    (was&&!inv[it.once]?`<div class="pricebox">${was}${btn}</div>`:btn);
+  return d;
+}
 function renderShop(){
   const l=$('#shopList');l.innerHTML='';const inv=state.inv,t=now();
-  $('#shopNote').textContent=inTG?(net.online?'Оплата в Telegram Stars':'Сервер не отвечает, покупки недоступны'):'Демо-режим: покупки бесплатны для теста. В Telegram оплата в Stars.';
+  $('#shopNote').innerHTML=inTG?(net.online?shopHeader():'Сервер не отвечает, покупки недоступны'):shopHeader()+'<br><span class="muted">демо-режим: покупки бесплатны</span>';
+
   const owned=(net.holder&&net.holder.frogs)||[];
   const bdItems=[...new Map(owned.filter(f=>f.backdrop).map(f=>[f.backdrop,f])).values()].map(f=>({
-    id:'bd:'+f.backdrop,name:'Фон «'+f.backdrop+'»',
-    desc:'Бэкдроп твоей '+f.model+(f.number?' #'+f.number:''),
+    id:'bd:'+f.backdrop,g:'skin',name:'Фон «'+f.backdrop+'»',
+    desc:'С твоей '+f.model+(f.number?' #'+f.number:''),
     price:BD_PRICE,icon:'icons/ticket-blue.png',backdrop:f.backdrop}));
-  [...SHOP,...bdItems].forEach(it=>{
-    const d=document.createElement('div');d.className='item'+(it.donate?' donate':'');
-    const icon=it.icon==='wild'?(thumbs.get(WILD)||''):it.icon;
-    const bc=it.backdrop&&bdColors(it.backdrop);
-    let btn='';
-    if(it.donate)btn='';
-    else if(it.once&&inv[it.once])btn='<button class="buy owned">Куплено</button>';
-    else if(it.backdrop&&(inv.themes||[]).includes(it.backdrop))btn=`<button class="buy ${state.theme===it.backdrop?'owned':''}" data-theme="${esc(it.backdrop)}">${state.theme===it.backdrop?'Включён':'Включить'}</button>`;
-    else if(it.id==='sub'&&(inv.subUntil||0)>t)btn=`<button class="buy time">Ещё ${timeLeft(inv.subUntil-t)}</button>`;
-    else btn=`<button class="buy" data-buy="${it.id}">${it.price} <img class="ic" src="icons/tgstar.png" alt=""></button>`;
-    let status='';
-    if(it.id==='auto1d'&&autoOn()&&!inv.autoForever)status=` · активна ещё ${timeLeft(Math.max(inv.autoUntil||0,inv.subUntil||0)-t)}`;
-    if(it.id.startsWith('boost')&&boostMult()>1)status=` · активно ещё ${timeLeft(inv.boostUntil-t)}`;
-    if(it.id==='wild3'&&state.wild>0)status=` · есть ×${state.wild}`;
-    d.innerHTML=`${bc?`<i class="bdview" style="background:radial-gradient(circle at 40% 32%, ${bc.c}, ${bc.e})"></i>`:`<img src="${icon}" alt="">`}<div><b>${it.name}</b><span>${it.desc}${status}</span>${it.donate?`<div class="row">${it.prices.map(p=>`<button class="buy" data-buy="donate" data-amount="${p}">${p} <img class="ic" src="icons/tgstar.png" alt=""></button>`).join('')}</div>`:''}</div>${btn}`;
-    l.appendChild(d);
+  const all=[...SHOP,...bdItems];
+
+  // 1. предложение под текущую боль — сверху и с объяснением, почему именно оно
+  const off=contextOffer();
+  if(off){
+    const it=all.find(x=>x.id===off.id);
+    if(it&&!(it.once&&inv[it.once])){
+      const wrap=document.createElement('div');wrap.className='offer';
+      wrap.innerHTML='<div class="offer-t">Пригодится прямо сейчас</div>';
+      wrap.appendChild(itemCard(it,inv,t,off.why));
+      l.appendChild(wrap);
+    }
+  }
+  // 2. остальное по группам, чтобы взгляд не тонул в списке
+  GROUPS.forEach(([g,title])=>{
+    const items=all.filter(x=>x.g===g&&!(x.id===(off&&off.id)));
+    if(!items.length)return;
+    if(title){const h=document.createElement('div');h.className='shop-h';h.textContent=title;l.appendChild(h);}
+    items.forEach(it=>l.appendChild(itemCard(it,inv,t)));
   });
   if(!bdItems.length){
+    const h=document.createElement('div');h.className='shop-h';h.textContent='Фоны твоих лягушек';l.appendChild(h);
     const d=document.createElement('div');d.className='item';
     d.innerHTML=`<i class="bdview" style="background:radial-gradient(circle at 40% 32%, #2f6b4f, #14301f)"></i>`+
-      `<div><b>Фон твоей лягушки</b><span>${net.online?'Бот не нашёл у тебя Kissed Frog. Появится лягушка — её фон появится здесь.':'Фоны своих лягушек видны, когда игра запущена в Telegram.'}</span></div>`+
+      `<div><b>Фон твоей лягушки</b><span>${net.online?'Появится лягушка в профиле — её фон появится здесь':'Видны, когда игра открыта в Telegram'}</span></div>`+
       `<button class="buy" data-chat="1">Где взять</button>`;
     l.appendChild(d);
   }
@@ -1217,6 +1314,11 @@ $('#btnSound').onclick=()=>{state.sound=!state.sound;save();updateHud();S.ui();}
 
 /* ---------- INIT ---------- */
 async function init(){
+  // стикер на загрузочном экране показываем первым делом, чтобы не смотреть в пустоту
+  loadFrogData('loader').then(d=>{
+    if($('#loading').classList.contains('hidden'))return;
+    lottie.loadAnimation({container:$('#loadFrog'),renderer:'svg',loop:true,autoplay:true,animationData:d});
+  }).catch(()=>{});
   await load();
   const need=new Set([WILD,1,...state.cells.filter(v=>v>0),state.maxLv,state.maxLv+1]);
   for(let l=baseSpawnLv();l<=state.maxLv+1;l++)need.add(l);

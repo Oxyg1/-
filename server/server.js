@@ -46,6 +46,7 @@ const levelByName = name => LEVELS.findIndex(l => l.n.toLowerCase() === String(n
 
 /* ---------- SHOP ---------- */
 const SHOP = {
+  starter: { title: 'Стартовый набор', desc: 'Мушка и ускорение ×2 на сутки + 3 диких лягушки', price: 99, once: 'starter' },
   auto1d: { title: 'Мушка на сутки', desc: 'Автотап на 24 часа', price: 50 },
   autoForever: { title: 'Мушка навсегда', desc: 'Автотап без ограничений', price: 490, once: 'autoForever' },
   boost1h: { title: 'Ускорение ×2 на час', desc: 'Двойные монеты с тапа на час', price: 25 },
@@ -85,6 +86,7 @@ function grant(user, item, amount) {
     case 'boost1d': inv.boostUntil = Math.max(inv.boostUntil || 0, t) + DAY; break;
     case 'bigBoard': inv.bigBoard = true; break;
     case 'wild3': user.wild = (user.wild || 0) + 3; break;
+    case 'starter': inv.starter = true; inv.autoUntil = Math.max(inv.autoUntil || 0, t) + DAY; inv.boostUntil = Math.max(inv.boostUntil || 0, t) + DAY; user.wild = (user.wild || 0) + 3; break;
     case 'sub': inv.subUntil = Math.max(inv.subUntil || 0, t) + 30 * DAY; break;
     case 'donate': inv.donated = (inv.donated || 0) + amount; db.pond.stars += amount; db.pond.count += amount * 10; db.pond.donors[user.id] = (db.pond.donors[user.id] || 0) + amount; break;
     default: if (String(item).startsWith('bd:')) { const th = String(item).slice(3); inv.themes = inv.themes || []; if (!inv.themes.includes(th)) inv.themes.push(th); }
@@ -266,7 +268,12 @@ const api = {
 
   /* ---------- АДМИНКА ---------- */
   async admin(body) {
-    if (!CFG.adminKey || body.key !== CFG.adminKey) return { ok: false, error: 'Неверный ключ' };
+    // пускаем двумя путями: по ключу из .env либо по своему Telegram ID,
+    // если админка открыта прямо из Mini App под аккаунтом владельца
+    const byKey = CFG.adminKey && body.key === CFG.adminKey;
+    const tgUser = checkInitData(body.initData);
+    const byTg = tgUser && CFG.adminId && String(tgUser.id) === String(CFG.adminId);
+    if (!byKey && !byTg) return { ok: false, error: 'Нет доступа' };
     pondCheck();
     const t = Date.now();
     const all = Object.values(db.users);
@@ -391,7 +398,11 @@ server.listen(CFG.port, () => log(`SWAMP server on :${CFG.port}  app=${CFG.appUr
 
 /* ---------- BOT ---------- */
 const kb = (text, url) => ({ inline_keyboard: [[{ text, url }]] });
-const playKb = () => ({ inline_keyboard: [[{ text: EMO_BTN + 'Играть', url: CFG.appLink }]] });
+// В личке кнопка web_app запускает Mini App гарантированно.
+// В группах такие кнопки запрещены Telegram, там остаётся прямая ссылка на приложение.
+const playKb = (priv) => ({ inline_keyboard: [[priv
+  ? { text: EMO_BTN + 'Играть', web_app: { url: CFG.appUrl } }
+  : { text: EMO_BTN + 'Играть', url: CFG.appLink }]] });
 function topText(n = 10) {
   const rows = topRows(n);
   if (!rows.length) return 'Пока никто не играл. Будь первым ' + em('frog');
@@ -411,10 +422,10 @@ async function onMessage(m) {
     await tg('sendMessage', { chat_id: chat.id, text: `${em('frog')} <b>SWAMP</b>\nТапай лягушку, призывай новых и соединяй три в ряд.\n\nИгровой чат: ${CFG.chatLink}`, parse_mode: 'HTML',
       reply_markup: { inline_keyboard: rows } });
   } else if (cmd === '/play' || (cmd === '/start' && !priv)) {
-    await tg('sendMessage', { chat_id: chat.id, text: `${em('frog')} <b>SWAMP</b> — кликер + три в ряд с нашими лягушками. Жми и играй прямо здесь.`, parse_mode: 'HTML', reply_markup: playKb() });
+    await tg('sendMessage', { chat_id: chat.id, text: `${em('frog')} <b>SWAMP</b> — кликер + три в ряд с нашими лягушками. Жми и играй прямо здесь.`, parse_mode: 'HTML', reply_markup: playKb(priv) });
   } else if (cmd === '/top') {
     pondCheck();
-    await tg('sendMessage', { chat_id: chat.id, text: `${em('trophy')} <b>Топ пруда</b>\n${topText(10)}\n\n${em('wave')} Общий пруд: ${fmt(db.pond.count)} / ${fmt(CFG.pondGoal)}`, parse_mode: 'HTML', reply_markup: playKb() });
+    await tg('sendMessage', { chat_id: chat.id, text: `${em('trophy')} <b>Топ пруда</b>\n${topText(10)}\n\n${em('wave')} Общий пруд: ${fmt(db.pond.count)} / ${fmt(CFG.pondGoal)}`, parse_mode: 'HTML', reply_markup: playKb(priv) });
   } else if (cmd === '/digest' && String(m.from.id) === CFG.adminId) {
     await sendDigest(true);
   } else if (cmd === '/paysupport' && priv) {
@@ -432,7 +443,7 @@ async function onPayment(m) {
   save();
   log('payment', u.id, item, stars);
   const it = SHOP[item];
-  try { await tg('sendMessage', { chat_id: m.chat.id, text: `${em('star')} Спасибо! ${it ? it.title : item} активировано. Открой игру — всё уже там.`, parse_mode: 'HTML', reply_markup: playKb() }); } catch (e) {}
+  try { await tg('sendMessage', { chat_id: m.chat.id, text: `${em('star')} Спасибо! ${it ? it.title : item} активировано. Открой игру — всё уже там.`, parse_mode: 'HTML', reply_markup: playKb(true) }); } catch (e) {}
 }
 async function sendDigest(force) {
   pondCheck();
