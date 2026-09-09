@@ -458,7 +458,7 @@ const tgUser=(TG&&TG.initDataUnsafe&&TG.initDataUnsafe.user)||null;
 const myName=tgUser?(tgUser.first_name||tgUser.username||'Игрок'):'Ты';
 
 /* ---------- STATE ---------- */
-const state={coins:0,maxLv:1,n:5,cells:Array(25).fill(0),disc:[1],sound:true,merges:0,score:0,taps:0,wild:0,theme:'',inv:{},order:null,own:[],mode:'normal',runs:0,t:0};
+const state={coins:0,maxLv:1,n:5,cells:Array(25).fill(0),disc:[1],sound:true,merges:0,score:0,taps:0,wild:0,wildUsed:0,theme:'',inv:{},order:null,own:[],mode:'normal',runs:0,t:0};
 // базовый порядок уровней — как в списке редкости. Лягушки, которыми игрок владеет,
 // поднимаются в самый верх лестницы, поэтому у каждого владельца свой финал.
 const BASE=LEVELS.slice();
@@ -735,12 +735,22 @@ function applyServer(r){
   net.online=true;net.me=r.me||null;net.top=r.top||[];if(r.pond)net.pond=r.pond;net.holder=r.holder||null;net.lastSync=now();
   applyOwnership();
   if(r.inv){Object.assign(state.inv,r.inv);applyInv();}
-  if(r.wild!=null&&r.wild>state.wild)state.wild=r.wild;
+  // сервер — единственный источник истины по остатку диких лягушек (см. server.js:sync):
+  // он сам вычитает то, что мы отчитались как потраченное, и присылает реальный остаток
+  if(r.wild!=null)state.wild=Math.max(0,r.wild);
 }
 async function sync(force){
   if(!CFG.api)return null;
   if(!force&&now()-net.lastSync<15000)return null;
-  try{const r=await api('sync',{name:myName,coins:Math.round(state.coins),maxLv:state.maxLv,score:state.score,merges:state.merges,taps:state.taps,theme:state.theme,wild:state.wild});applyServer(r);save();updateHud();return r;}
+  const usedNow=state.wildUsed||0;
+  try{
+    const r=await api('sync',{name:myName,coins:Math.round(state.coins),maxLv:state.maxLv,score:state.score,merges:state.merges,taps:state.taps,theme:state.theme,wildUsed:usedNow});
+    // сервер принял это как потраченное — больше не шлём то же самое повторно.
+    // Если новые траты случились уже ПОСЛЕ отправки (пока запрос летел), их не трогаем —
+    // они уйдут следующим вызовом
+    state.wildUsed=Math.max(0,(state.wildUsed||0)-usedNow);
+    applyServer(r);save();updateHud();return r;
+  }
   catch(e){net.online=false;return null;}
 }
 
@@ -890,13 +900,18 @@ let drag=null,selected=-1;
 function setSelected(i){if(selected>=0&&els[selected])els[selected].classList.remove('selected');selected=i;if(i>=0&&els[i])els[i].classList.add('selected');renderActions();}
 function clearHl(){cellEls.forEach(c=>c.classList.remove('hl'));$('#clicker').classList.remove('feed');}
 board.addEventListener('pointerdown',e=>{
-  if(busy)return;audio();
+  if(busy)return;
+  // второй палец на доске, пока первый уже что-то тащит: drag — одна глобальная запись
+  // на весь жест, и без этой проверки второе касание тихо подменяет её данными другого
+  // пальца — первый палец потом двигает не ту лягушку и не туда
+  if(drag)return;
+  audio();
   const i=cellAt(e.clientX,e.clientY);if(i<0)return;
-  if(state.cells[i]){drag={from:i,x0:e.clientX,y0:e.clientY,moving:false,over:i};try{board.setPointerCapture(e.pointerId);}catch(err){}}
+  if(state.cells[i]){drag={pointerId:e.pointerId,from:i,x0:e.clientX,y0:e.clientY,moving:false,over:i};try{board.setPointerCapture(e.pointerId);}catch(err){}}
   else if(selected>=0){moveFrog(selected,i);setSelected(-1);}
 });
 board.addEventListener('pointermove',e=>{
-  if(!drag)return;
+  if(!drag||e.pointerId!==drag.pointerId)return;
   const dx=e.clientX-drag.x0,dy=e.clientY-drag.y0;
   if(!drag.moving){if(Math.hypot(dx,dy)<6)return;drag.moving=true;setSelected(-1);els[drag.from].classList.add('dragging');S.ui();}
   const el=els[drag.from];const [x,y]=cellXY(drag.from);
@@ -907,7 +922,7 @@ board.addEventListener('pointermove',e=>{
   if(over!==drag.over||feed!==drag.feed){clearHl();if(over>=0)cellEls[over].classList.add('hl');if(feed)$('#clicker').classList.add('feed');drag.over=over;drag.feed=feed;}
 });
 function endDrag(e){
-  if(!drag)return;const d=drag;drag=null;clearHl();
+  if(!drag||e.pointerId!==drag.pointerId)return;const d=drag;drag=null;clearHl();
   const el=els[d.from];if(!el)return;
   el.classList.remove('dragging');
   if(!d.moving){if(selected===d.from)setSelected(-1);else if(selected>=0){moveFrog(selected,d.from);setSelected(-1);}else{setSelected(d.from);S.ui();}return;}
@@ -953,7 +968,7 @@ function placeWild(){
     if(idx<0)idx=0;
     const el=els[idx];if(el){el.remove();els[idx]=null;}
   }
-  state.wild--;state.cells[idx]=WILD;makeFrogEl(idx,WILD);
+  state.wild--;state.wildUsed=(state.wildUsed||0)+1;state.cells[idx]=WILD;makeFrogEl(idx,WILD);
   const [x,y]=cellCenter(idx);sparks(x,y,12,['#ffd23f','#ff5d7a','#7fe3ff']);S.spawn();haptic.medium();
   toast('Дикая лягушка сливается с любыми двумя одинаковыми');
   setSelected(-1);resolve(idx);
@@ -1507,7 +1522,11 @@ window.addEventListener('resize',layout);
 if(TG){try{TG.onEvent('viewportChanged',layout);TG.onEvent('safeAreaChanged',layout);TG.onEvent('contentSafeAreaChanged',layout);TG.onEvent('fullscreenChanged',layout);}catch(e){}}
 document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('visibilitychange',()=>{if(document.hidden){save();sync(true);}});
-window.__frog={state,spawn,resolve,thumbs,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName};
+// живой доступ к state — удобно для отладки, но в руках игрока это редактор своего сейва
+// (maxLv/score/inv напрямую влияют на то, что уходит на сервер при следующей синхронизации).
+// Внутри настоящего Telegram-приложения не подключаем вообще; вне него (локальная разработка,
+// предпросмотр в браузере) оставляем — там это просто мы сами
+if(!inTG)window.__frog={state,spawn,resolve,thumbs,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName};
 init().catch(e=>{console.error(e);$('#loading h2').textContent='Ошибка загрузки: '+e.message;});
 })();
 </script>

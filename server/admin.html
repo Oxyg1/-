@@ -139,7 +139,10 @@ async function api(body){
 }
 let toastT;
 function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('on'),2200);}
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// имя игрока подставляется и в обычный HTML, и внутрь inline onclick="..." (single-quoted JS-строка
+// в двойных кавычках атрибута) — если не экранировать ', апостроф в имени рвёт JS-строку и всё,
+// что идёт следом в onclick, выполняется как код в браузере админа
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>(n||0).toLocaleString('ru-RU');
 const ago=t=>{if(!t)return '—';const d=(Date.now()-t)/1000;
   if(d<60)return 'только что';if(d<3600)return Math.floor(d/60)+' мин назад';
@@ -203,9 +206,16 @@ function renderPlayers(){
     if(!q)return true;
     return (p.name+' '+p.username+' '+p.id).toLowerCase().includes(q);
   });
+  // имя игрока — произвольный текст из Telegram, в нём может быть что угодно, включая кавычки.
+  // Раньше оно подставлялось прямо в onclick="..." JS-строкой: HTML-экранирование тут не
+  // спасает — браузер декодирует &#39; обратно в ' ДО того, как передаёт содержимое onclick
+  // в JS, так что апостроф всё равно рвёт JS-строку и всё, что после него, выполняется как код.
+  // Единственный надёжный способ — вообще не строить JS-код склейкой с пользовательским
+  // текстом: кнопки без onclick, обработчики навешиваются ниже и берут p.name как ЗНАЧЕНИЕ
+  // переменной, а не как часть исходного кода
   $('#players').innerHTML=`
     <tr><th>Игрок</th><th>Ур.</th><th>Очки</th><th>Слияний</th><th>Звёзд</th><th>Был</th><th>Действия</th></tr>`+
-    rows.map(p=>`<tr>
+    rows.map(p=>`<tr data-id="${esc(p.id)}">
       <td>${esc(p.name)||'<span class="muted">без имени</span>'}
         ${p.username?`<span class="muted">@${esc(p.username)}</span>`:''}
         ${p.test?'<span class="tag test">тест</span>':''}
@@ -219,12 +229,20 @@ function renderPlayers(){
       <td class="num">${p.spent?fmt(p.spent):'—'}</td>
       <td class="num muted">${ago(p.lastSeen)}</td>
       <td><div class="row-act">
-        <button class="ghost sm" onclick="act({act:'${p.hidden?'show':'hide'}',id:'${p.id}'})">${p.hidden?'Вернуть':'Скрыть'}</button>
-        <button class="ghost sm" onclick="grantTo('${p.id}')">Выдать</button>
-        <button class="ghost sm" onclick="confirmAct('Обнулить прогресс ${esc(p.name)||p.id}?',{act:'wipe',id:'${p.id}'})">Обнулить</button>
-        <button class="bad sm" onclick="confirmAct('Удалить игрока ${esc(p.name)||p.id} насовсем?',{act:'delete',id:'${p.id}'})">Удалить</button>
+        <button class="ghost sm" data-act="toggle-hide">${p.hidden?'Вернуть':'Скрыть'}</button>
+        <button class="ghost sm" data-act="grant">Выдать</button>
+        <button class="ghost sm" data-act="wipe">Обнулить</button>
+        <button class="bad sm" data-act="delete">Удалить</button>
       </div></td>
     </tr>`).join('')||'<tr><td class="muted">Никого не нашлось</td></tr>';
+  $('#players').querySelectorAll('tr[data-id]').forEach(tr=>{
+    const p=rows.find(x=>x.id===tr.dataset.id); if(!p)return;
+    const on=(sel,fn)=>{const b=tr.querySelector(sel); if(b)b.onclick=fn;};
+    on('[data-act=toggle-hide]',()=>act({act:p.hidden?'show':'hide',id:p.id}));
+    on('[data-act=grant]',()=>grantTo(p.id));
+    on('[data-act=wipe]',()=>confirmAct('Обнулить прогресс '+(p.name||p.id)+'?',{act:'wipe',id:p.id}));
+    on('[data-act=delete]',()=>confirmAct('Удалить игрока '+(p.name||p.id)+' насовсем?',{act:'delete',id:p.id}));
+  });
 }
 
 /* ---------- платежи ---------- */

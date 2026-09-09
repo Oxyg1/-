@@ -113,6 +113,9 @@ async function tg(method, params) {
   return j.result;
 }
 function checkInitData(initData) {
+  // без токена секрет вырождается в HMAC('WebAppData','') — известную всем константу,
+  // и initData можно подделать под любой user.id. Без токена доверять подписи нельзя вообще
+  if (!CFG.token) return null;
   if (!initData) return null;
   const p = new URLSearchParams(initData);
   const hash = p.get('hash'); if (!hash) return null;
@@ -121,7 +124,7 @@ function checkInitData(initData) {
   const secret = crypto.createHmac('sha256', 'WebAppData').update(CFG.token).digest();
   const h = crypto.createHmac('sha256', secret).update(dcs).digest('hex');
   if (h !== hash) return null;
-  if (Date.now() / 1000 - (+p.get('auth_date') || 0) > 7 * 86400) return null;
+  if (Date.now() / 1000 - (+p.get('auth_date') || 0) > DAY / 1000) return null;
   try { return JSON.parse(p.get('user') || 'null'); } catch (e) { return null; }
 }
 function authUser(body, req) {
@@ -188,23 +191,64 @@ function topRows(n = 20) {
 }
 function rankOf(id) { const i = leaderboard().findIndex(u => u.id === id); return i < 0 ? null : i + 1; }
 
+/* ---------- RATE LIMIT (простое скользящее окно в памяти, без зависимостей) ---------- */
+const rateBuckets = new Map();
+function rateLimited(key, max, windowMs) {
+  const t = Date.now();
+  let b = rateBuckets.get(key);
+  if (!b || t - b.start > windowMs) { b = { start: t, count: 0 }; rateBuckets.set(key, b); }
+  b.count++;
+  return b.count > max;
+}
+setInterval(() => { const t = Date.now(); for (const [k, b] of rateBuckets) if (t - b.start > 3600e3) rateBuckets.delete(k); }, 600e3);
+// замок на разовые счета: userId:item -> когда истекает. Снимается оплатой или по таймауту
+const pendingInvoices = new Map();
+setInterval(() => { const t = Date.now(); for (const [k, until] of pendingInvoices) if (until < t) pendingInvoices.delete(k); }, 60e3);
+const clientIp = req => (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'x').split(',')[0].trim();
+// сравнение ключа не должно занимать разное время в зависимости от того, сколько символов совпало —
+// иначе тайминг ответа сам по себе подсказывает, где именно ключ подобран верно
+function safeKeyEqual(a, b) {
+  if (!a || !b) return false;
+  const ab = Buffer.from(String(a)), bb = Buffer.from(String(b));
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
+}
+
 /* ---------- API ---------- */
 const CARDS = path.join(__dirname, 'cards'); fs.mkdirSync(CARDS, { recursive: true });
 const api = {
   async sync(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     const u = getUser(a); pondCheck();
-    const merges = Math.max(0, Math.min(+body.merges || 0, 1e7));
-    const delta = Math.max(0, merges - (u.merges || 0));
-    // мягкий антинакрут: не больше 3 слияний в секунду с прошлой синхронизации
-    const dt = Math.max(1, (Date.now() - (u.syncAt || 0)) / 1000);
-    if (u.syncAt && delta > dt * 3 + 30) { u.flags = (u.flags || 0) + 1; }
-    u.merges = merges; db.pond.count += delta;
-    const maxLv = Math.max(1, Math.min(+body.maxLv || 1, LEVELS.length));
+    // мерджи — монотонный счётчик. Раньше при рывке дельту только помечали флагом,
+    // но сам мердж всё равно принимался целиком — можно было одним запросом заявить
+    // maxLv=50 без единого реального слияния. Теперь лишнее не флагом отмечается, а обрезается.
+    // Точка отсчёта — не только последний sync, но и момент создания аккаунта: иначе самый
+    // первый вызов (u.syncAt ещё не установлен) вообще ничем не ограничен, а отличить его
+    // от подделанного первого вызова читера снаружи нечем
+    const reportedMerges = Math.max(0, Math.min(+body.merges || 0, 1e7));
+    const dt = Math.max(1, (Date.now() - (u.syncAt || u.created || Date.now())) / 1000);
+    const maxDelta = Math.ceil(dt * 3 + 30);
+    let delta = Math.max(0, reportedMerges - (u.merges || 0));
+    if (delta > maxDelta) { u.flags = (u.flags || 0) + 1; delta = maxDelta; }
+    u.merges = (u.merges || 0) + delta;
+    db.pond.count += delta;
+    // maxLv и score не берутся с потолка: механика слияний сама задаёт им верхнюю границу —
+    // каждый мердж поднимает лягушку ровно на 1 уровень и добавляет в очки её новый уровень,
+    // так что без merges такого maxLv/score попросту не бывает
+    const maxLv = Math.max(1, Math.min(+body.maxLv || 1, LEVELS.length, u.merges + 1));
     if (maxLv > u.maxLv) { u.maxLv = maxLv; const r = LEVELS[maxLv - 1].r; if (r <= 1) db.events.push({ t: Date.now(), id: u.id, name: u.name, lv: maxLv, frog: LEVELS[maxLv - 1].n, r }); }
-    u.score = Math.max(u.score || 0, Math.min(+body.score || 0, 1e9));
-    u.taps = Math.max(u.taps || 0, +body.taps || 0); u.coins = +body.coins || 0; u.theme = body.theme || '';
-    if (body.wild != null && +body.wild < (u.wild || 0)) u.wild = Math.max(0, +body.wild);
+    const scoreCap = u.merges * LEVELS.length;
+    u.score = Math.max(u.score || 0, Math.min(+body.score || 0, 1e9, scoreCap));
+    u.taps = Math.max(u.taps || 0, Math.min(+body.taps || 0, 1e9));
+    u.coins = Math.max(0, Math.min(+body.coins || 0, 1e15)) || 0; // без потолка Infinity бьёт JSON.stringify в null
+    u.theme = body.theme || '';
+    // дикие лягушки: клиент шлёт не остаток, а сколько штук потратил с прошлой удачной
+    // синхронизации (и сам обнуляет свой счётчик после успешного ответа — см. index.html).
+    // Раньше слался абсолютный остаток, и «Сбросить прогресс» на клиенте (state.wild=0)
+    // выглядел как «потратил всё» и стирал реально купленный за звёзды запас
+    const wildUsed = Math.max(0, Math.min(+body.wildUsed || 0, 1e6));
+    u.wild = Math.max(0, (u.wild || 0) - wildUsed);
     u.syncAt = Date.now();
     await checkHolder(u, a.real);
     if (u.holder && u.holder.level && u.holder.level <= u.maxLv && !u.holderDone) { u.holderDone = Date.now(); db.events.push({ t: Date.now(), id: u.id, name: u.name, lv: u.holder.level, frog: u.holder.model, r: LEVELS[u.holder.level - 1]?.r, own: true }); }
@@ -227,17 +271,26 @@ const api = {
     if (!it) return { ok: false, error: 'Нет такого товара' };
     if (it.once && u.inv && u.inv[it.once]) return { ok: false, error: 'Уже куплено' };
     if (it.backdrop && u.inv && (u.inv.themes || []).includes(it.backdrop)) return { ok: false, error: 'Уже куплено' };
+    // для разового товара нельзя создавать второй счёт, пока висит неоплаченный первый —
+    // иначе оба можно оплатить (звёзды спишутся дважды), а выдастся всё равно один раз
+    const lockKey = it.once || it.backdrop ? `${u.id}:${body.item}` : null;
+    if (lockKey) { const until = pendingInvoices.get(lockKey); if (until && until > Date.now()) return { ok: false, error: 'Счёт уже выставлен — заверши его или подожди пару минут' }; }
     let price = it.price;
     if (it.donate) { price = Math.round(+body.amount || 0); if (price < 1 || price > 500) return { ok: false, error: 'Сумма от 1 до 500 звёзд' }; }
     if (!CFG.token) return { ok: false, error: 'Сервер без BOT_TOKEN: платежи недоступны' };
     const nonce = crypto.randomBytes(4).toString('hex');
     const params = { title: it.title.slice(0, 32), description: it.desc.slice(0, 255), payload: `${body.item}:${u.id}:${price}:${nonce}`, provider_token: '', currency: 'XTR', prices: [{ label: it.title.slice(0, 32), amount: price }] };
     if (it.sub) params.subscription_period = 2592000;
-    try { const link = await tg('createInvoiceLink', params); return { ok: true, link }; }
-    catch (e) { log('invoice', e.message); return { ok: false, error: 'Не удалось создать счёт' }; }
+    try {
+      const link = await tg('createInvoiceLink', params);
+      if (lockKey) pendingInvoices.set(lockKey, Date.now() + 5 * 60e3);
+      return { ok: true, link };
+    } catch (e) { log('invoice', e.message); return { ok: false, error: 'Не удалось создать счёт' }; }
   },
   async card(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    // без лимита можно закидать диск картинками быстрее, чем их успевает подчищать 2-дневная уборка
+    if (rateLimited('card:' + a.id, 15, 3600e3)) return { ok: false, error: 'Слишком часто. Попробуй через час' };
     const png = String(body.png || ''); if (png.length < 100 || png.length > 6e6) return { ok: false, error: 'bad image' };
     const buf = Buffer.from(png, 'base64');
     const isPng = buf.slice(1, 4).toString() === 'PNG';
@@ -271,10 +324,14 @@ const api = {
   },
 
   /* ---------- АДМИНКА ---------- */
-  async admin(body) {
+  async admin(body, req) {
+    // подбор ключа перебором иначе ничем не ограничен — это публичный HTTP-эндпоинт
+    if (rateLimited('admin:' + clientIp(req), 20, 60e3)) return { ok: false, error: 'Слишком много попыток, подожди минуту' };
     // пускаем двумя путями: по ключу из .env либо по своему Telegram ID,
-    // если админка открыта прямо из Mini App под аккаунтом владельца
-    const byKey = CFG.adminKey && body.key === CFG.adminKey;
+    // если админка открыта прямо из Mini App под аккаунтом владельца.
+    // сравнение ключа — константное по времени: обычное === выдаёт тайминг-сигнал о том,
+    // сколько символов совпало, чем можно подбирать ключ посимвольно
+    const byKey = safeKeyEqual(body.key, CFG.adminKey);
     const tgUser = checkInitData(body.initData);
     const byTg = tgUser && CFG.adminId && String(tgUser.id) === String(CFG.adminId);
     if (!byKey && !byTg) return { ok: false, error: 'Нет доступа' };
@@ -447,11 +504,12 @@ async function onPayment(m) {
   const a = { id: String(m.from.id), name: m.from.first_name || m.from.username || 'Игрок', username: m.from.username || '', real: true };
   const u = getUser(a); pondCheck();
   grant(u, item, stars);
+  pendingInvoices.delete(`${u.id}:${item}`);
   db.payments.push({ t: Date.now(), id: u.id, item, stars, charge: sp.telegram_payment_charge_id, sub: !!sp.subscription_expiration_date, recurring: !!sp.is_recurring });
   save();
   log('payment', u.id, item, stars);
   const it = SHOP[item];
-  try { await tg('sendMessage', { chat_id: m.chat.id, text: `${em('star')} Спасибо! ${it ? it.title : item} активировано. Открой игру — всё уже там.`, parse_mode: 'HTML', reply_markup: playKb(true) }); } catch (e) {}
+  try { await tg('sendMessage', { chat_id: m.chat.id, text: `${em('star')} Спасибо! ${esc(it ? it.title : item)} активировано. Открой игру — всё уже там.`, parse_mode: 'HTML', reply_markup: playKb(true) }); } catch (e) {}
 }
 async function sendDigest(force) {
   pondCheck();
