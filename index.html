@@ -1665,8 +1665,10 @@ async function openTop(){
     const rowName=rowFrogName(lv,r.holder,rsp);
     d.innerHTML=`<div class="rk ${r.rank<=3?'top':''}">${medal}</div><img alt=""><div class="nm">${esc(r.name||'Игрок')}${r.holder?'<span class="badge"><img class="badge-ico" alt=""> холдер</span>':''}${r.sub?'<span class="badge" style="background:#ffd23f;color:#5a3b00">абонент</span>':''}<small>${rowName} · ур. ${lv}</small></div><div class="sc">${fmt(r.score||0)}</div>`;
     thumb(rowFrogAsset(lv,r.holder,rsp)).then(u=>d.querySelector('img').src=u);
-    // на плашке холдера — Original того вида, которым игрок реально владеет
-    if(r.holder)thumb(rsp+'s/original').then(u=>{const i=d.querySelector('.badge-ico');if(i)i.src=u;}).catch(()=>{});
+    // на плашке холдера — Original того вида, которым игрок реально владеет.
+    // Это НЕ обязательно rsp (вид, за который он сейчас играет и ранжируется) —
+    // холдер кота остаётся холдером кота, даже переключившись на лягушек
+    if(r.holder)thumb((r.holderSp||rsp)+'s/original').then(u=>{const i=d.querySelector('.badge-ico');if(i)i.src=u;}).catch(()=>{});
     list.appendChild(d);
   });
   $('#topNote').textContent=note;

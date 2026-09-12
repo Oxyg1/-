@@ -233,23 +233,25 @@ function getUser(a) {
 /* ---------- HOLDER CHECK (getUserGifts) ---------- */
 async function checkHolder(u, real) {
   if (!CFG.token || !real) return;
-  const sp = spOf(u);
   if (!u.holderBySp) u.holderBySp = {};
-  // холдерство хранится ОТДЕЛЬНО на каждый вид: раньше был один общий u.holder,
-  // который переписывался под текущий вид игрока — играешь лягушкой и реально
-  // владеешь только котом, а u.holder после проверки лягушачьего подарка становился
-  // null, и в топе у кошатника пропадала плашка «холдер», даже когда он играл за кота
-  const cached = u.holderBySp[sp];
-  if (cached && Date.now() - cached.at < DAY) { u.holder = cached.data; return; }
+  // холдерство — это факт владения подарком, а не текущий игровой режим: холдер
+  // Scared Cat остаётся холдером кота, даже если сейчас играет за лягушек. Поэтому
+  // проверяем ОБА подарка за один and тот же вызов getUserGifts, а не только тот,
+  // что соответствует активному сейчас виду — иначе кэш под одним видом молча стирал
+  // то, что было известно про другой
+  if (u.holderCheckedAt && Date.now() - u.holderCheckedAt < DAY) { u.holder = (u.holderBySp[spOf(u)] || {}).data || null; return; }
+  u.holderCheckedAt = Date.now();
   try {
-    let offset = '', frogs = [];
+    let offset = '', bySp = { frog: [], cat: [] };
     for (let i = 0; i < 5; i++) {
       const r = await tg('getUserGifts', { user_id: +u.id, exclude_unlimited: true, exclude_limited_non_upgradable: true, offset, limit: 100 });
       for (const g of r.gifts || []) {
-        if (g.type === 'unique' && g.gift && g.gift.base_name === GIFT[sp]) {
+        if (g.type !== 'unique' || !g.gift) continue;
+        for (const sp of ['frog', 'cat']) {
+          if (g.gift.base_name !== GIFT[sp]) continue;
           const model = g.gift.model && g.gift.model.name;
-          // игрок может владеть несколькими лягушками — забираем все, вместе с бэкдропами
-          frogs.push({
+          // игрок может владеть несколькими лягушками/котами — забираем все, вместе с бэкдропами
+          bySp[sp].push({
             model, level: levelByName(model, sp), name: g.gift.name, number: g.gift.number,
             rarity: g.gift.model && g.gift.model.rarity_per_mille / 10,
             backdrop: g.gift.backdrop && g.gift.backdrop.name || null,
@@ -258,24 +260,29 @@ async function checkHolder(u, real) {
       }
       offset = r.next_offset || ''; if (!offset) break;
     }
-    // дубли по модели схлопываем, самая редкая — первой
-    frogs = [...new Map(frogs.map(f => [f.model + '#' + f.number, f])).values()].sort((a, b) => b.level - a.level);
-    const top = frogs[0] || null;
-    u.holder = top ? { model: top.model, level: top.level, backdrop: top.backdrop, frogs } : null;
-    u.holderBySp[sp] = { at: Date.now(), data: u.holder };
-    // в чат холдеров зовём один раз и только того, у кого лягушка действительно есть
-    if (top && !u.holdersInvited && sp === 'frog') {   // чата холдеров котов пока нет
-      u.holdersInvited = Date.now();
-      const names = frogs.map(f => f.model).join(', ');
-      try {
-        await tg('sendMessage', {
-          chat_id: +u.id, parse_mode: 'HTML',
-          text: `${em('crown')} У тебя есть ${frogs.length > 1 ? 'лягушки' : 'лягушка'}: <b>${names}</b>.\n` +
-                `Тебе открыт чат холдеров — туда пускают только владельцев.`,
-          reply_markup: { inline_keyboard: [[{ text: 'Чат холдеров', url: CFG.holdersLink }], [{ text: EMO_BTN + 'Играть', url: CFG.appLink }]] },
-        });
-      } catch (e) { log('holders invite', u.id, e.message); }
+    for (const sp of ['frog', 'cat']) {
+      // дубли по модели схлопываем, самая редкая — первой
+      const list = [...new Map(bySp[sp].map(f => [f.model + '#' + f.number, f])).values()].sort((a, b) => b.level - a.level);
+      const top = list[0] || null;
+      const data = top ? { model: top.model, level: top.level, backdrop: top.backdrop, frogs: list } : null;
+      u.holderBySp[sp] = { at: Date.now(), data };
+      // в чат холдеров зовём один раз и только того, у кого лягушка действительно есть
+      if (top && !u.holdersInvited && sp === 'frog') {   // чата холдеров котов пока нет
+        u.holdersInvited = Date.now();
+        const names = list.map(f => f.model).join(', ');
+        try {
+          await tg('sendMessage', {
+            chat_id: +u.id, parse_mode: 'HTML',
+            text: `${em('crown')} У тебя есть ${list.length > 1 ? 'лягушки' : 'лягушка'}: <b>${names}</b>.\n` +
+                  `Тебе открыт чат холдеров — туда пускают только владельцев.`,
+            reply_markup: { inline_keyboard: [[{ text: 'Чат холдеров', url: CFG.holdersLink }], [{ text: EMO_BTN + 'Играть', url: CFG.appLink }]] },
+          });
+        } catch (e) { log('holders invite', u.id, e.message); }
+      }
     }
+    // легаси-поле для ладдер-персонализации и покупки фонов — те завязаны на ТЕКУЩИЙ
+    // вид игрока (переставить лестницу под лягушку нужно по лягушачьему подарку)
+    u.holder = (u.holderBySp[spOf(u)] || {}).data || null;
   } catch (e) { log('getUserGifts', u.id, e.message); }
 }
 
@@ -286,13 +293,19 @@ const isRealPlayer = u => !u.hidden && !String(u.id).startsWith('dev-');
 function leaderboard() {
   return Object.values(db.users).filter(u => isRealPlayer(u) && (u.score > 0 || u.maxLv > 1)).sort((a, b) => b.score - a.score || b.maxLv - a.maxLv);
 }
+// холдерство — это то, чем игрок реально владеет, а не то, за кого он сейчас играет:
+// холдер кота остаётся холдером кота в топе, даже переключившись на лягушек.
+// Если владеет обоими — лягушка в приоритете просто как более старый/основной подарок игры
+function holderOf(u) {
+  const b = u.holderBySp || {};
+  if (b.frog && b.frog.data) return { sp: 'frog', data: b.frog.data };
+  if (b.cat && b.cat.data) return { sp: 'cat', data: b.cat.data };
+  return null;
+}
 function topRows(n = 20) {
   return leaderboard().slice(0, n).map((u, i) => {
-    const sp = spOf(u);
-    // холдерство строки — по виду ЭТОЙ строки, а не по последнему проверенному
-    // у игрока в моменте (см. checkHolder: раньше был один общий u.holder)
-    const hb = u.holderBySp && u.holderBySp[sp];
-    return { rank: i + 1, id: u.id, name: u.name, sp, maxLv: u.maxLv, score: u.score, holder: hb && hb.data ? hb.data.model : null, sub: (u.inv && u.inv.subUntil || 0) > Date.now() };
+    const h = holderOf(u);
+    return { rank: i + 1, id: u.id, name: u.name, sp: spOf(u), maxLv: u.maxLv, score: u.score, holder: h ? h.data.model : null, holderSp: h ? h.sp : null, sub: (u.inv && u.inv.subUntil || 0) > Date.now() };
   });
 }
 function rankOf(id) { const i = leaderboard().findIndex(u => u.id === id); return i < 0 ? null : i + 1; }
