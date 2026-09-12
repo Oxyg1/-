@@ -179,14 +179,21 @@ function warCheck() {
 function warTop(n = 5) {
   return Object.keys(db.war.by).map(id => {
     const b = db.war.by[id], u = db.users[id] || {};
-    return { id, name: u.name || 'Игрок', sp: warSideOf(b), n: (b.f || 0) + (b.c || 0), hidden: !isRealPlayer(u) };
+    // строка подписана одной стороной (доминирующей) — число рядом должно быть про
+    // ЭТУ сторону, а не сумму обеих: иначе тот, кто успел поддержать и тех и тех,
+    // видит цифру, которая не сходится с подписью
+    const side = warSideOf(b);
+    return { id, name: u.name || 'Игрок', sp: side, n: (side === 'cat' ? b.c : b.f) || 0, hidden: !isRealPlayer(u) };
   }).filter(x => x.n > 0 && !x.hidden).sort((a, b) => b.n - a.n).slice(0, n)
     .map(x => ({ name: x.name, sp: x.sp, n: x.n }));
 }
 const warState = u => ({
   week: db.war.week, frog: db.war.frog || 0, cat: db.war.cat || 0, stars: db.war.stars || 0,
   perStar: STARS_PER_PULL, top: warTop(5), last: db.war.last || null,
-  mine: u ? ((db.war.by[u.id] || {}).f || 0) + ((db.war.by[u.id] || {}).c || 0) : 0,
+  // подпись на клиенте всегда «за <текущий вид>» — цифра должна быть именно про
+  // эту сторону, а не сумма обеих (иначе не сходится, если игрок успел поддержать
+  // и тех и тех после переключения вида в течение недели)
+  mine: u ? (spOf(u) === 'cat' ? (db.war.by[u.id] || {}).c : (db.war.by[u.id] || {}).f) || 0 : 0,
 });
 const dayKey = () => new Date().toISOString().slice(0, 10);
 
