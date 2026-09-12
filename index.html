@@ -49,7 +49,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .ic.m1{color:#ffd23f}.ic.m2{color:#d3dae0}.ic.m3{color:#cd8032}
 .ic.gold{color:#ffd23f}
 .badge .ic{width:11px;height:11px;vertical-align:-.12em}
-.badge-ico{width:13px;height:13px;object-fit:contain;vertical-align:-.18em;margin-right:1px}
+.lb .badge-ico{width:13px;height:13px;object-fit:contain;vertical-align:-.18em;margin-right:1px}
 #hint .ic{width:16px;height:16px;vertical-align:-.22em}
 #loading h2 .ic{width:26px;height:26px;vertical-align:-.25em}
 .float .ic{width:19px;height:19px;vertical-align:-.2em}
@@ -1536,7 +1536,7 @@ function itemCard(it,inv,t,extra){
     (bc?`<i class="bdview" style="background:radial-gradient(circle at 40% 32%, ${bc.c}, ${bc.e})"></i>`:`<img src="${icon}" alt="">`)+
     `<div><b>${itName}${badge}</b><span>${extra||itDesc}</span>${status?`<span class="live">${status}</span>`:''}${chev}`+
     (it.donate?`<div class="row">${it.prices.map(p=>`<button class="buy" data-buy="${it.id}" data-amount="${p}">${p} <img class="ic" src="icons/tgstar.png" alt=""></button>`).join('')}</div>`:'')+
-    (it.customAmount?`<div class="row war-custom"><input type="number" class="amt" min="1" max="500" placeholder="своя сумма" data-amt-for="${it.id}"><button class="buy" data-buy-input="${it.id}">Поддержать <img class="ic" src="icons/tgstar.png" alt=""></button></div><div class="war-note">${WAR_NOTE}</div>`:'')+
+    (it.customAmount?`<div class="row war-custom"><input type="number" class="amt" min="1" max="500" placeholder="своя сумма" data-amt-for="${it.id}"><button class="buy" data-buy-input="${it.id}">Поддержать</button></div><div class="war-note">${WAR_NOTE}</div>`:'')+
     `</div>`+
     (was&&!inv[it.once]?`<div class="pricebox">${was}${btn}</div>`:btn);
   // разворачиваемая расшифровка — по тапу на карточку показываем, из чего набор
@@ -1690,7 +1690,7 @@ function renderWar(){
   $('#warTop').innerHTML=top?'Больше всех поддержали:<br>'+top:'';
   const b=$('#warPush');
   b.textContent=`${T.warPush} · 1${'★'} = ${w.perStar||5}`;
-  b.onclick=()=>{S.ui();openShop('war');};
+  b.onclick=()=>{S.ui();$('#top').classList.add('hidden');openShop('war');};
 }
 let warAck=null;
 async function showWarResult(res){
