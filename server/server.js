@@ -73,6 +73,7 @@ const SHOP = {
   wild3: { title: 'Дикая лягушка ×3', desc: 'Три джокера для слияния', price: 39 },
   sub: { title: 'Абонемент пруда', desc: 'Мушка, значок и ранний доступ к фонам на 30 дней', price: 199, sub: true },
   donate: { title: 'Покормить пруд', desc: 'Донат в общую цель чата', donate: true },
+  war: { title: 'Двинуть шкалу', desc: 'Перетянуть битву видов на свою сторону', warPush: true },
 };
 
 /* ---------- ЭМОДЗИ ----------
@@ -95,10 +96,10 @@ const EMO_BTN = E.EMOJI_BUTTON === '0' ? '' : EMO_FB.frog + ' ';
 // у товаров, завязанных на живность, подпись зависит от вида — её видно в окне оплаты Telegram
 const SHOP_SP = {
   frog: { wild3: 'Дикая лягушка ×3', auto1d: 'Мушка на сутки', autoForever: 'Мушка навсегда',
-    bigBoard: 'Большой пруд 6×6', sub: 'Абонемент пруда', donate: 'Покормить пруд',
+    bigBoard: 'Большой пруд 6×6', sub: 'Абонемент пруда', donate: 'Покормить пруд', war: 'Тянуть за лягушек',
     starterDesc: 'Мушка и ускорение ×2 на сутки + 3 диких лягушки', subDesc: 'Мушка, значок и ранний доступ к фонам на 30 дней' },
   cat: { wild3: 'Дикий кот ×3', auto1d: 'Мышка на сутки', autoForever: 'Мышка навсегда',
-    bigBoard: 'Большая крыша 6×6', sub: 'Абонемент клуба', donate: 'Поддержать общую цель',
+    bigBoard: 'Большая крыша 6×6', sub: 'Абонемент клуба', donate: 'Поддержать общую цель', war: 'Тянуть за котов',
     starterDesc: 'Мышка и ускорение ×2 на сутки + 3 диких кота', subDesc: 'Мышка, значок и ранний доступ к фонам на 30 дней' },
 };
 function shopItem(id, sp) {
@@ -126,19 +127,67 @@ function grant(user, item, amount) {
     case 'starter': inv.starter = true; inv.autoUntil = Math.max(inv.autoUntil || 0, t) + DAY; inv.boostUntil = Math.max(inv.boostUntil || 0, t) + DAY; user.wild = (user.wild || 0) + 3; break;
     case 'sub': inv.subUntil = Math.max(inv.subUntil || 0, t) + 30 * DAY; break;
     case 'donate': inv.donated = (inv.donated || 0) + amount; db.pond.stars += amount; db.pond.count += amount * 10; db.pond.donors[user.id] = (db.pond.donors[user.id] || 0) + amount; break;
+    case 'war': { warCheck(); const side = spOf(user); warPull(user, side, amount * STARS_PER_PULL); db.war.stars += amount; warBucket(user.id).s += amount; inv.warStars = (inv.warStars || 0) + amount; break; }
     default: if (String(item).startsWith('bd:')) { const th = String(item).slice(3); inv.themes = inv.themes || []; if (!inv.themes.includes(th)) inv.themes.push(th); }
   }
 }
 
 /* ---------- DB (json-файл) ---------- */
 const DB_FILE = path.join(__dirname, 'data.json');
-let db = { users: {}, payments: [], pond: { week: '', count: 0, stars: 0, donors: {} }, digest: { day: '' }, events: [] };
+let db = { users: {}, payments: [], pond: { week: '', count: 0, stars: 0, donors: {} }, war: { week: '', frog: 0, cat: 0, stars: 0, by: {}, last: null }, digest: { day: '' }, events: [] };
 try { if (fs.existsSync(DB_FILE)) db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch (e) { log('db read error', e.message); }
 let saveT = null;
 function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { fs.writeFileSync(DB_FILE + '.tmp', JSON.stringify(db)); fs.renameSync(DB_FILE + '.tmp', DB_FILE); } catch (e) { log('db write', e.message); } }, 1500); }
 process.on('SIGINT', () => { clearTimeout(saveT); try { fs.writeFileSync(DB_FILE, JSON.stringify(db)); } catch (e) {} process.exit(0); });
 function weekKey(d = new Date()) { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); const day = (x.getUTCDay() + 6) % 7; x.setUTCDate(x.getUTCDate() - day); return x.toISOString().slice(0, 10); }
 function pondCheck() { const w = weekKey(); if (db.pond.week !== w) { db.pond = { week: w, count: 0, stars: 0, donors: {} }; } }
+
+/* ---------- БИТВА ВИДОВ ----------
+   Недельное перетягивание каната: слияние за лягушек двигает шкалу вправо,
+   за котов — влево. Двигать можно и звёздами: 1 звезда = STARS_PER_PULL слияний.
+   Слияния приходят из того же проверенного delta, что и всё остальное в sync,
+   так что накрутка режется там же и отдельной дыры тут не появляется. */
+const STARS_PER_PULL = 5;
+function warSideOf(b) { return (b && (b.c || 0) > (b.f || 0)) ? 'cat' : 'frog'; }
+function warBucket(id) { return db.war.by[id] || (db.war.by[id] = { f: 0, c: 0, s: 0 }); }
+function warPull(u, side, n) {
+  if (!n) return;
+  db.war[side] = (db.war[side] || 0) + n;
+  const b = warBucket(u.id);
+  b[side === 'frog' ? 'f' : 'c'] += n;
+}
+function warCheck() {
+  const w = weekKey();
+  if (db.war.week === w) return;
+  // закрываем прошлый сезон: победа, награды участникам, история
+  if (db.war.week && (db.war.frog || db.war.cat)) {
+    const win = db.war.frog === db.war.cat ? 'draw' : (db.war.frog > db.war.cat ? 'frog' : 'cat');
+    db.war.last = { week: db.war.week, frog: db.war.frog, cat: db.war.cat, win };
+    for (const id of Object.keys(db.war.by)) {
+      const u = db.users[id]; if (!u) continue;
+      const b = db.war.by[id];
+      if (!((b.f || 0) + (b.c || 0))) continue;      // награждаем только тех, кто реально тянул
+      const side = warSideOf(b);
+      const won = win === 'draw' || side === win;
+      grant(u, won ? 'boost1d' : 'boost1h', 0);
+      if (won) u.wild = (u.wild || 0) + 2;
+      u.warPending = { week: db.war.week, win, side, frog: db.war.frog, cat: db.war.cat, mine: (b.f || 0) + (b.c || 0) };
+    }
+  }
+  db.war = { week: w, frog: 0, cat: 0, stars: 0, by: {}, last: db.war.last || null };
+}
+function warTop(n = 5) {
+  return Object.keys(db.war.by).map(id => {
+    const b = db.war.by[id], u = db.users[id] || {};
+    return { id, name: u.name || 'Игрок', sp: warSideOf(b), n: (b.f || 0) + (b.c || 0), hidden: !isRealPlayer(u) };
+  }).filter(x => x.n > 0 && !x.hidden).sort((a, b) => b.n - a.n).slice(0, n)
+    .map(x => ({ name: x.name, sp: x.sp, n: x.n }));
+}
+const warState = u => ({
+  week: db.war.week, frog: db.war.frog || 0, cat: db.war.cat || 0, stars: db.war.stars || 0,
+  perStar: STARS_PER_PULL, top: warTop(5), last: db.war.last || null,
+  mine: u ? ((db.war.by[u.id] || {}).f || 0) + ((db.war.by[u.id] || {}).c || 0) : 0,
+});
 const dayKey = () => new Date().toISOString().slice(0, 10);
 
 /* ---------- TELEGRAM API ---------- */
@@ -258,7 +307,7 @@ const CARDS = path.join(__dirname, 'cards'); fs.mkdirSync(CARDS, { recursive: tr
 const api = {
   async sync(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
-    const u = getUser(a); pondCheck();
+    const u = getUser(a); pondCheck(); warCheck();
     if (body.species === 'cat' || body.species === 'frog') u.species = body.species;
     const L = ladderOf(u);
     // мерджи — монотонный счётчик. Раньше при рывке дельту только помечали флагом,
@@ -277,6 +326,7 @@ const api = {
     rec.merges = (rec.merges || 0) + delta;
     u.merges = (u.merges || 0) + delta;
     db.pond.count += delta;
+    warPull(u, spOf(u), delta);   // то же проверенное delta тянет шкалу битвы
     // maxLv и score не берутся с потолка: механика слияний сама задаёт им верхнюю границу —
     // каждый мердж поднимает лягушку ровно на 1 уровень и добавляет в очки её новый уровень,
     // так что без merges такого maxLv/score попросту не бывает
@@ -300,9 +350,11 @@ const api = {
     const doneKey = 'holderDone_' + spOf(u);
     if (u.holder && u.holder.level && u.holder.level <= u.maxLv && !u[doneKey]) { u[doneKey] = Date.now(); db.events.push({ t: Date.now(), id: u.id, name: u.name, lv: u.holder.level, frog: u.holder.model, r: L[u.holder.level - 1]?.r, own: true, sp: spOf(u) }); }
     save();
-    return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
+    // итог прошлого сезона отдаём, пока клиент не подтвердит, что показал его
+    if (body.warAck && u.warPending && String(body.warAck) === String(u.warPending.week)) delete u.warPending;
+    return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, war: warState(u), warResult: u.warPending || null, holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
   },
-  async leaderboard() { pondCheck(); return { ok: true, top: topRows(50), pond: { count: db.pond.count, goal: CFG.pondGoal } }; },
+  async leaderboard() { pondCheck(); warCheck(); return { ok: true, top: topRows(50), pond: { count: db.pond.count, goal: CFG.pondGoal }, war: warState(null) }; },
   async invoice(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     const u = getUser(a);
@@ -323,7 +375,7 @@ const api = {
     const lockKey = it.once || it.backdrop ? `${u.id}:${body.item}` : null;
     if (lockKey) { const until = pendingInvoices.get(lockKey); if (until && until > Date.now()) return { ok: false, error: 'Счёт уже выставлен — заверши его или подожди пару минут' }; }
     let price = it.price;
-    if (it.donate) { price = Math.round(+body.amount || 0); if (price < 1 || price > 500) return { ok: false, error: 'Сумма от 1 до 500 звёзд' }; }
+    if (it.donate || it.warPush) { price = Math.round(+body.amount || 0); if (price < 1 || price > 500) return { ok: false, error: 'Сумма от 1 до 500 звёзд' }; }
     if (!CFG.token) return { ok: false, error: 'Сервер без BOT_TOKEN: платежи недоступны' };
     const nonce = crypto.randomBytes(4).toString('hex');
     const params = { title: it.title.slice(0, 32), description: it.desc.slice(0, 255), payload: `${body.item}:${u.id}:${price}:${nonce}`, provider_token: '', currency: 'XTR', prices: [{ label: it.title.slice(0, 32), amount: price }] };
@@ -400,6 +452,7 @@ const api = {
           stars: paid,
           payments: db.payments.length,
           pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars, week: db.pond.week },
+          war: { frog: db.war.frog || 0, cat: db.war.cat || 0, stars: db.war.stars || 0, week: db.war.week, last: db.war.last || null },
           digestDay: db.digest.day || '—',
           chatId: CFG.chatId || '', botOn: !!CFG.token,
         },
@@ -456,6 +509,10 @@ const api = {
       for (const id of Object.keys(db.users)) if (String(id).startsWith('dev-')) { delete db.users[id]; n++; }
       save();
       return { ok: true, msg: 'Удалено тестовых аккаунтов: ' + n };
+    }
+    if (act === 'warReset') {
+      db.war = { week: weekKey(), frog: 0, cat: 0, stars: 0, by: {}, last: db.war.last || null }; save();
+      return { ok: true, msg: 'Битва недели обнулена' };
     }
     if (act === 'pondReset') {
       db.pond = { week: weekKey(), count: 0, stars: 0, donors: {} }; save();
@@ -517,6 +574,21 @@ function topText(n = 10) {
   return rows.map(r => { const L = LADDER[r.sp] || LADDER.frog; const lv = Math.max(1, Math.min(r.maxLv || 1, L.length));
     return `${r.rank <= 3 ? em(['gold', 'silver', 'bronze'][r.rank - 1]) : r.rank + '.'} ${esc(r.name)}${r.holder ? ' ' + em('crown') : ''} — ${L[lv - 1].n} (ур. ${lv}) · ${fmt(r.score)}`; }).join('\n');
 }
+function warText() {
+  warCheck();
+  const f = db.war.frog || 0, c = db.war.cat || 0, all = f + c;
+  if (!all) return `${em('frog')} Битва недели ещё не началась — первое слияние двинет шкалу.`;
+  const pf = Math.round(f / all * 100), pc = 100 - pf;
+  // шкала: слева коты, справа лягушки
+  const cells = 12, fc = Math.max(0, Math.min(cells, Math.round(f / all * cells)));
+  const bar = '▓'.repeat(cells - fc) + '│' + '▒'.repeat(fc);
+  const lead = f === c ? 'ровно посередине' : (f > c ? 'лягушки тянут' : 'коты тянут');
+  const top = warTop(3).map((x, i) => `${i + 1}. ${esc(x.name)} — ${fmt(x.n)} (${x.sp === 'cat' ? 'коты' : 'лягушки'})`).join('\n');
+  return `${em('trophy')} <b>Битва недели: коты против лягушек</b>\n` +
+    `<code>${bar}</code>\n` +
+    `Коты ${fmt(c)} (${pc}%)  ·  Лягушки ${fmt(f)} (${pf}%)\n` +
+    `Сейчас ${lead}.` + (top ? `\n\n${em('sparkle')} Больше всех тянут:\n${top}` : '');
+}
 const esc = s => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n);
 async function onMessage(m) {
@@ -535,6 +607,8 @@ async function onMessage(m) {
   } else if (cmd === '/top') {
     pondCheck();
     await tg('sendMessage', { chat_id: chat.id, text: `${em('trophy')} <b>Топ пруда</b>\n${topText(10)}\n\n${em('wave')} Общий пруд: ${fmt(db.pond.count)} / ${fmt(CFG.pondGoal)}`, parse_mode: 'HTML', reply_markup: playKb(priv) });
+  } else if (cmd === '/war') {
+    await tg('sendMessage', { chat_id: chat.id, text: warText(), parse_mode: 'HTML', reply_markup: playKb(priv) });
   } else if (cmd === '/digest' && String(m.from.id) === CFG.adminId) {
     await sendDigest(true);
   } else if (cmd === '/admin' && priv && String(m.from.id) === CFG.adminId) {
@@ -573,6 +647,7 @@ async function sendDigest(force) {
   const pct = Math.min(100, Math.round(db.pond.count / CFG.pondGoal * 100));
   const bar = '█'.repeat(Math.round(pct / 10)) + '░'.repeat(10 - Math.round(pct / 10));
   const text = [`${em('frog')} <b>Пруд за сегодня</b>`, '', `${em('trophy')} <b>Топ-10</b>`, topText(10), '',
+    warText() + '\n',
     rare.length ? `${em('sparkle')} <b>Редкие находки</b>\n${rare.join('\n')}\n` : '',
     own.length ? `${em('crown')} <b>Личные финалы</b>\n${own.join('\n')}\n` : '',
     `${em('wave')} <b>Общий пруд недели</b>\n<code>${bar}</code> ${pct}%\n${fmt(db.pond.count)} из ${fmt(CFG.pondGoal)} слияний${pct >= 100 ? ' — цель взята, всем бустер на сутки!' : ''}`,
@@ -586,7 +661,7 @@ async function sendDigest(force) {
 async function poll() {
   let offset = 0;
   try { await tg('deleteWebhook', { drop_pending_updates: false }); } catch (e) {}
-  try { await tg('setMyCommands', { commands: [{ command: 'play', description: 'Играть в SWAMP' }, { command: 'top', description: 'Топ пруда' }] }); } catch (e) {}
+  try { await tg('setMyCommands', { commands: [{ command: 'play', description: 'Играть в SWAMP' }, { command: 'top', description: 'Топ пруда' }, { command: 'war', description: 'Битва: коты против лягушек' }] }); } catch (e) {}
   while (true) {
     try {
       const ups = await tg('getUpdates', { offset, timeout: 30, allowed_updates: ['message', 'pre_checkout_query', 'my_chat_member'] });

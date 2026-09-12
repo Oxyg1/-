@@ -236,7 +236,28 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 /* CARD PREVIEW */
 #cardImg{max-width:100%;max-height:60dvh;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
 
-#pickSpecies,#newsCats{z-index:150}
+#pickSpecies,#newsCats,#warResult{z-index:150}
+.war{width:100%;background:rgba(0,0,0,.25);border-radius:14px;padding:10px 12px 11px;margin-bottom:8px}
+.war-t{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:7px}
+.war-t b{font-size:12px;opacity:.75;font-weight:800}
+.war-bar{position:relative;height:16px;border-radius:9px;overflow:hidden;display:flex;background:rgba(0,0,0,.35)}
+.war-bar i{display:block;height:100%;transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.war-bar i{position:relative;flex:none}
+.war-bar i.wc{background:linear-gradient(90deg,#6f5bd0,#a980f3)}
+.war-bar i.wf{background:linear-gradient(90deg,#9dffb0,#3fbf72)}
+/* засечка ровно по центру: сразу видно, кто перетянул */
+.war-bar u{position:absolute;left:50%;top:-2px;bottom:-2px;width:2px;margin-left:-1px;background:rgba(255,255,255,.55);text-decoration:none}
+.war-n{display:flex;justify-content:space-between;margin-top:6px;font-size:14px;font-weight:900}
+.war-n span{display:flex;align-items:center;gap:5px}
+.war-n img{width:22px;height:22px;object-fit:contain}
+.war-n span{position:relative}
+.war-n .wc{color:#c3adff}
+.war-n .wf{color:#9dffb0}
+.war-me{font-size:12px;opacity:.8;margin-top:5px;font-weight:700}
+.war-top{font-size:11.5px;opacity:.7;margin-top:3px;line-height:1.5;font-weight:700}
+.war .btn.sm{width:100%;margin-top:8px}
+#wrArt{width:130px;height:130px}
+#wrArt img{width:100%;height:100%;object-fit:contain}
 #newsArt{width:140px;height:140px;margin:2px 0}
 #newsArt img,#newsArt svg{width:100%;height:100%;object-fit:contain}
 .segbar{display:flex;gap:6px;width:100%;background:rgba(0,0,0,.28);border-radius:14px;padding:4px}
@@ -415,6 +436,14 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 <div id="top" class="overlay hidden">
   <div class="card" style="height:92dvh">
     <div class="head"><h2><svg class="ic "><use href="#i-trophy"></use></svg> Лидерборд</h2><button class="iconbtn" id="topClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
+    <div class="war" id="warBox">
+      <div class="war-t"><span><svg class="ic "><use href="#i-trophy"></use></svg> Битва недели</span><b id="warLeft"></b></div>
+      <div class="war-bar"><i class="wc" id="warCat"></i><i class="wf" id="warFrog"></i><u></u></div>
+      <div class="war-n"><span class="wc"><img id="warCatIco" alt=""><b id="warCatN">0</b></span><span class="wf"><b id="warFrogN">0</b><img id="warFrogIco" alt=""></span></div>
+      <div class="war-me" id="warMe"></div>
+      <div class="war-top" id="warTop"></div>
+      <button class="btn sm" id="warPush"></button>
+    </div>
     <div class="pond"><div class="t"><span><svg class="ic "><use href="#i-wave"></use></svg> <span id="pondLabel">Общий пруд чата</span></span><b id="pondTxt"></b></div><div class="bar"><i id="pondBar"></i></div></div>
     <div class="scroll" id="topList"></div>
     <div class="demo" id="topNote"></div>
@@ -436,6 +465,16 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
     <h2 id="askTitle">Вопрос</h2>
     <div class="sub" id="askText"></div>
     <div class="row"><button class="btn ghost" id="askNo">Отмена</button><button class="btn" id="askYes">Да</button></div>
+  </div>
+</div>
+
+<div id="warResult" class="overlay hidden">
+  <div class="card">
+    <h2 id="wrTitle"></h2>
+    <div class="sub" id="wrText"></div>
+    <div id="wrArt"></div>
+    <div class="fn-stats" id="wrStats"></div>
+    <button class="btn" id="wrOk">Понятно</button>
   </div>
 </div>
 
@@ -506,6 +545,8 @@ const SPECIES={
       pond:'Общий пруд чата',
       fly1d:'Мушка на сутки', flyForever:'Мушка навсегда',
       bigBoard:'Большой пруд 6×6', subName:'Абонемент пруда', donate:'Покормить пруд',
+      warPush:'Тянуть за лягушек', warSide:'лягушек', warMy:'Лягушки',
+      warDesc:'Сдвинуть шкалу битвы в сторону лягушек',
       starterDesc:'Мушка и ×2 на сутки + 3 диких',
       subDesc:'Мушка, значок в топе и новые фоны',
     }
@@ -538,6 +579,8 @@ const SPECIES={
       pond:'Общая цель чата',
       fly1d:'Мышка на сутки', flyForever:'Мышка навсегда',
       bigBoard:'Большая крыша 6×6', subName:'Абонемент клуба', donate:'Поддержать общую цель',
+      warPush:'Тянуть за котов', warSide:'котов', warMy:'Коты',
+      warDesc:'Сдвинуть шкалу битвы в сторону котов',
       starterDesc:'Мышка и ×2 на сутки + 3 диких',
       subDesc:'Мышка, значок в топе и новые фоны',
     }
@@ -858,7 +901,7 @@ function sparks(x,y,n,colors){
 let toastT=null;function toast(t,ms=1800){const el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('on'),ms);}
 
 /* ---------- NETWORK ---------- */
-const net={online:false,me:null,top:[],pond:{count:0,goal:CFG.pondGoal},holder:null,lastSync:0};
+const net={online:false,me:null,top:[],pond:{count:0,goal:CFG.pondGoal},war:null,holder:null,lastSync:0};
 async function api(path,body){
   if(!CFG.api)throw new Error('no api');
   const r=await fetch(CFG.api+'/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({initData:TG?TG.initData:'',dev:!inTG},body||{}))});
@@ -880,7 +923,8 @@ function applyOwnership(){
 }
 function applyServer(r){
   if(!r||!r.ok)return;
-  net.online=true;net.me=r.me||null;net.top=r.top||[];if(r.pond)net.pond=r.pond;net.holder=r.holder||null;net.lastSync=now();
+  net.online=true;net.me=r.me||null;net.top=r.top||[];if(r.pond)net.pond=r.pond;if(r.war)net.war=r.war;net.holder=r.holder||null;net.lastSync=now();
+  if(r.warResult)showWarResult(r.warResult);
   applyOwnership();
   if(r.inv){Object.assign(state.inv,r.inv);applyInv();}
   // сервер — единственный источник истины по остатку диких лягушек (см. server.js:sync):
@@ -892,7 +936,7 @@ async function sync(force){
   if(!force&&now()-net.lastSync<15000)return null;
   const usedNow=state.wildUsed||0;
   try{
-    const r=await api('sync',{name:myName,species:SP.key,coins:Math.round(state.coins),maxLv:state.maxLv,score:state.score,merges:state.merges,taps:state.taps,theme:state.theme,wildUsed:usedNow});
+    const r=await api('sync',{name:myName,species:SP.key,warAck,coins:Math.round(state.coins),maxLv:state.maxLv,score:state.score,merges:state.merges,taps:state.taps,theme:state.theme,wildUsed:usedNow});
     // сервер принял это как потраченное — больше не шлём то же самое повторно.
     // Если новые траты случились уже ПОСЛЕ отправки (пока запрос летел), их не трогаем —
     // они уйдут следующим вызовом
@@ -1394,6 +1438,7 @@ const SHOP=[
   {id:'wild3',g:'room',nameKey:'wild3',desc:'Выход из любого тупика',price:39,icon:'wild'},
 
   {id:'sub',g:'club',nameKey:'subName',descKey:'subDesc',price:199,icon:'icons/lv.png',sub:true,badge:'6,6★ в день'},
+  {id:'war',g:'help',nameKey:'warPush',desc:null,descKey:'warDesc',prices:[10,50,100],icon:'icons/fire.png',donate:true},
   {id:'donate',g:'help',nameKey:'donate',desc:'Ускорить общую цель чата',prices:[10,50,100],icon:'icons/heart.png',donate:true},
 ];
 const GROUPS=()=>[['start',''],['earn','Зарабатывать быстрее'],['room','Больше места'],['skin',T.bdGroup],['club','Клуб'],['help','Поддержать чат']];
@@ -1481,7 +1526,7 @@ function itemCard(it,inv,t,extra){
   d.innerHTML=
     (bc?`<i class="bdview" style="background:radial-gradient(circle at 40% 32%, ${bc.c}, ${bc.e})"></i>`:`<img src="${icon}" alt="">`)+
     `<div><b>${itName}${badge}</b><span>${extra||itDesc}</span>${status?`<span class="live">${status}</span>`:''}${chev}`+
-    (it.donate?`<div class="row">${it.prices.map(p=>`<button class="buy" data-buy="donate" data-amount="${p}">${p} <img class="ic" src="icons/tgstar.png" alt=""></button>`).join('')}</div>`:'')+
+    (it.donate?`<div class="row">${it.prices.map(p=>`<button class="buy" data-buy="${it.id}" data-amount="${p}">${p} <img class="ic" src="icons/tgstar.png" alt=""></button>`).join('')}</div>`:'')+
     `</div>`+
     (was&&!inv[it.once]?`<div class="pricebox">${was}${btn}</div>`:btn);
   // разворачиваемая расшифровка — по тапу на карточку показываем, из чего набор
@@ -1582,6 +1627,7 @@ async function openTop(){
     rows.sort((a,b)=>b.score-a.score).forEach((r,i)=>r.rank=i+1);
     note='Пример таблицы. Настоящий лидерборд появится, когда игра запущена в Telegram с сервером.';
   }
+  renderWar();
   const pond=net.pond;const pct=Math.min(100,pond.count/pond.goal*100);
   $('#pondTxt').textContent=`${fmt(pond.count)} / ${fmt(pond.goal)} слияний`;$('#pondBar').style.width=pct+'%';
   list.innerHTML='';
@@ -1604,6 +1650,47 @@ $('#btnTop').onclick=openTop;
 $('#topClose').onclick=()=>{$('#top').classList.add('hidden');S.ui();};
 $('#topShare').onclick=()=>share('chat',state.maxLv);
 $('#btnChat').onclick=()=>{S.ui();openTg(CFG.chat);};
+
+/* ---------- БИТВА ВИДОВ ----------
+   Общая недельная шкала: слева коты, справа лягушки. Каждое слияние тянет свою
+   сторону, звёздами можно дотянуть. Считает сервер — клиент только рисует. */
+function renderWar(){
+  const w=net.war, box=$('#warBox');
+  if(!w){box.hidden=true;return;}
+  box.hidden=false;
+  const f=w.frog||0,c=w.cat||0,all=f+c;
+  const pf=all?f/all*100:50;
+  $('#warCat').style.width=(100-pf)+'%';
+  $('#warFrog').style.width=pf+'%';
+  $('#warCatN').textContent=fmt(c);
+  $('#warFrogN').textContent=fmt(f);
+  thumb('cats/'+SPECIES.cat.ladder[0].f).then(u=>$('#warCatIco').src=u).catch(()=>{});
+  thumb('frogs/'+SPECIES.frog.ladder[0].f).then(u=>$('#warFrogIco').src=u).catch(()=>{});
+  $('#warLeft').textContent=all?(f===c?'ровно посередине':(f>c?'ведут лягушки':'ведут коты')):'ещё не началась';
+  $('#warMe').textContent=w.mine?`Твой вклад на этой неделе: ${fmt(w.mine)} за ${T.warSide}`:`Каждое твоё слияние тянет за ${T.warSide}`;
+  const top=(w.top||[]).map((x,i)=>`${i+1}. ${esc(x.name)} — ${fmt(x.n)}`).join('<br>');
+  $('#warTop').innerHTML=top?'Больше всех тянут:<br>'+top:'';
+  const b=$('#warPush');
+  b.textContent=`${T.warPush} · 1${'★'} = ${w.perStar||5}`;
+  b.onclick=()=>{S.ui();openShop('war');};
+}
+let warAck=null;
+async function showWarResult(res){
+  if(!res)return;
+  warAck=res.week;
+  const won=res.win==='draw'||res.side===res.win;
+  const ov=$('#warResult');
+  $('#wrTitle').textContent=res.win==='draw'?'Ничья':(won?'Ваши победили!':'В этот раз не вышло');
+  $('#wrText').textContent=res.win==='draw'
+    ?'Неделя закончилась ровно по нулям — ничья. Всем участникам ускорение ×2 на сутки и две диких карты.'
+    :(won?`${res.win==='cat'?'Коты':'Лягушки'} перетянули шкалу. Тебе — ускорение ×2 на сутки и две диких карты.`
+         :`${res.win==='cat'?'Коты':'Лягушки'} перетянули шкалу. Тебе — ускорение на час за участие. Неделя новая, шкала на нуле.`);
+  $('#wrStats').innerHTML=`<div><b>${fmt(res.cat)}</b><span>коты</span></div><div><b>${fmt(res.frog)}</b><span>лягушки</span></div><div><b>${fmt(res.mine||0)}</b><span>твой вклад</span></div>`;
+  const side=res.win==='cat'?'cats/'+SPECIES.cat.ladder[49].f:'frogs/'+SPECIES.frog.ladder[49].f;
+  thumb(res.win==='draw'?(SP.dir+'/'+SP.ladder[0].f):side).then(u=>{$('#wrArt').innerHTML=`<img src="${u}" alt="">`;}).catch(()=>{});
+  ov.classList.remove('hidden');S.level();haptic.success();
+  $('#wrOk').onclick=()=>{ov.classList.add('hidden');S.ui();sync(true);};
+}
 
 /* ---------- COLLECTION ---------- */
 const isHolder=()=>!!((net.holder&&net.holder.frogs||[]).length);
@@ -1794,7 +1881,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){save();syn
 // (maxLv/score/inv напрямую влияют на то, что уходит на сервер при следующей синхронизации).
 // Внутри настоящего Telegram-приложения не подключаем вообще; вне него (локальная разработка,
 // предпросмотр в браузере) оставляем — там это просто мы сами
-if(!inTG)window.__frog={state,spawn,resolve,thumbs,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName};
+if(!inTG)window.__frog={state,spawn,resolve,thumbs,renderWar,showWarResult,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName};
 init().catch(e=>{console.error(e);$('#loading h2').textContent='Ошибка загрузки: '+e.message;});
 })();
 </script>
