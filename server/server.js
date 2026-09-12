@@ -300,6 +300,11 @@ function holderOf(u) {
   const b = u.holderBySp || {};
   if (b.frog && b.frog.data) return { sp: 'frog', data: b.frog.data };
   if (b.cat && b.cat.data) return { sp: 'cat', data: b.cat.data };
+  // holderBySp появилось только что и заполняется по мере того, как у игроков
+  // проходит собственный sync (проверка раз в 24 часа) — до тех пор он пуст у всех,
+  // кто не заходил в игру именно с этого момента. Пока свежих данных нет,
+  // не теряем то, что уже знали раньше через старое общее поле u.holder
+  if (u.holder) return { sp: spOf(u), data: u.holder };
   return null;
 }
 function topRows(n = 20) {
