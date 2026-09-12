@@ -49,6 +49,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .ic.m1{color:#ffd23f}.ic.m2{color:#d3dae0}.ic.m3{color:#cd8032}
 .ic.gold{color:#ffd23f}
 .badge .ic{width:11px;height:11px;vertical-align:-.12em}
+.badge-ico{width:13px;height:13px;object-fit:contain;vertical-align:-.18em;margin-right:1px}
 #hint .ic{width:16px;height:16px;vertical-align:-.22em}
 #loading h2 .ic{width:26px;height:26px;vertical-align:-.25em}
 .float .ic{width:19px;height:19px;vertical-align:-.2em}
@@ -206,6 +207,10 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .item.donate{grid-template-columns:52px 1fr}
 .item.donate .row{justify-content:flex-start;margin-top:6px}
 .item.donate .buy{padding:7px 10px}
+.war-custom{align-items:center;margin-top:2px}
+.war-custom .amt{width:88px;min-width:0;background:rgba(0,0,0,.3);border:0;border-radius:10px;padding:7px 9px;color:#fff;font:800 13px Nunito,system-ui}
+.war-custom .amt::placeholder{color:rgba(255,255,255,.5)}
+.war-note{flex-basis:100%;font-size:11px;opacity:.65;font-weight:700;margin-top:4px;line-height:1.3}
 .stars{font-size:12px;opacity:.85;text-align:center;line-height:1.45}
 .stars .muted{opacity:.7}
 .shop-h{font:900 12.5px Nunito,sans-serif;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.55);margin:14px 2px 7px}
@@ -545,7 +550,7 @@ const SPECIES={
       pond:'Общий пруд чата',
       fly1d:'Мушка на сутки', flyForever:'Мушка навсегда',
       bigBoard:'Большой пруд 6×6', subName:'Абонемент пруда', donate:'Покормить пруд',
-      warPush:'Тянуть за лягушек', warSide:'лягушек', warMy:'Лягушки',
+      warPush:'Поддержать лягушек', warSide:'лягушек', warMy:'Лягушки',
       warDesc:'Сдвинуть шкалу битвы в сторону лягушек',
       starterDesc:'Мушка и ×2 на сутки + 3 диких',
       subDesc:'Мушка, значок в топе и новые фоны',
@@ -579,7 +584,7 @@ const SPECIES={
       pond:'Общая цель чата',
       fly1d:'Мышка на сутки', flyForever:'Мышка навсегда',
       bigBoard:'Большая крыша 6×6', subName:'Абонемент клуба', donate:'Поддержать общую цель',
-      warPush:'Тянуть за котов', warSide:'котов', warMy:'Коты',
+      warPush:'Поддержать котов', warSide:'котов', warMy:'Коты',
       warDesc:'Сдвинуть шкалу битвы в сторону котов',
       starterDesc:'Мышка и ×2 на сутки + 3 диких',
       subDesc:'Мышка, значок в топе и новые фоны',
@@ -588,6 +593,7 @@ const SPECIES={
 };
 let SP=SPECIES.frog, SAVE_KEY=SP.save, T=SP.t;
 const NEWS_KEY='swamp.newsCats';
+const WAR_NOTE='Поддержать вторую сторону можно, переключив вид в коллекции.';
 // лестница живёт в LEVELS (её перетасовывает applyOrder) и в BASE (эталон вида).
 // Обе меняем на месте: на них завязаны все ссылки по коду
 function setSpecies(key){
@@ -925,6 +931,9 @@ function applyServer(r){
   if(!r||!r.ok)return;
   net.online=true;net.me=r.me||null;net.top=r.top||[];if(r.pond)net.pond=r.pond;if(r.war)net.war=r.war;net.holder=r.holder||null;net.lastSync=now();
   if(r.warResult)showWarResult(r.warResult);
+  // фоновый sync раз в 30 сек обновляет net.war и без открытого лидерборда — но если
+  // он уже открыт, дорисовать шкалу заново тоже, иначе цифры на экране стынут
+  if(!$('#top').classList.contains('hidden'))renderWar();
   applyOwnership();
   if(r.inv){Object.assign(state.inv,r.inv);applyInv();}
   // сервер — единственный источник истины по остатку диких лягушек (см. server.js:sync):
@@ -1438,7 +1447,7 @@ const SHOP=[
   {id:'wild3',g:'room',nameKey:'wild3',desc:'Выход из любого тупика',price:39,icon:'wild'},
 
   {id:'sub',g:'club',nameKey:'subName',descKey:'subDesc',price:199,icon:'icons/lv.png',sub:true,badge:'6,6★ в день'},
-  {id:'war',g:'help',nameKey:'warPush',desc:null,descKey:'warDesc',prices:[10,50,100],icon:'icons/fire.png',donate:true},
+  {id:'war',g:'help',nameKey:'warPush',desc:null,descKey:'warDesc',prices:[10,50,100],icon:'icons/fire.png',donate:true,customAmount:true},
   {id:'donate',g:'help',nameKey:'donate',desc:'Ускорить общую цель чата',prices:[10,50,100],icon:'icons/heart.png',donate:true},
 ];
 const GROUPS=()=>[['start',''],['earn','Зарабатывать быстрее'],['room','Больше места'],['skin',T.bdGroup],['club','Клуб'],['help','Поддержать чат']];
@@ -1527,6 +1536,7 @@ function itemCard(it,inv,t,extra){
     (bc?`<i class="bdview" style="background:radial-gradient(circle at 40% 32%, ${bc.c}, ${bc.e})"></i>`:`<img src="${icon}" alt="">`)+
     `<div><b>${itName}${badge}</b><span>${extra||itDesc}</span>${status?`<span class="live">${status}</span>`:''}${chev}`+
     (it.donate?`<div class="row">${it.prices.map(p=>`<button class="buy" data-buy="${it.id}" data-amount="${p}">${p} <img class="ic" src="icons/tgstar.png" alt=""></button>`).join('')}</div>`:'')+
+    (it.customAmount?`<div class="row war-custom"><input type="number" class="amt" min="1" max="500" placeholder="своя сумма" data-amt-for="${it.id}"><button class="buy" data-buy-input="${it.id}">Поддержать <img class="ic" src="icons/tgstar.png" alt=""></button></div><div class="war-note">${WAR_NOTE}</div>`:'')+
     `</div>`+
     (was&&!inv[it.once]?`<div class="pricebox">${was}${btn}</div>`:btn);
   // разворачиваемая расшифровка — по тапу на карточку показываем, из чего набор
@@ -1589,6 +1599,12 @@ function renderShop(){
   }
   l.querySelectorAll('[data-chat]').forEach(b=>b.onclick=()=>{S.ui();openTg(CFG.chat);});
   l.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>buy(b.dataset.buy,Number(b.dataset.amount||0)));
+  l.querySelectorAll('[data-buy-input]').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.buyInput,input=l.querySelector(`.amt[data-amt-for="${id}"]`);
+    const amt=Math.round(+input.value||0);
+    if(amt<1||amt>500){toast('Сумма от 1 до 500 звёзд');input.focus();return;}
+    buy(id,amt);
+  });
   l.querySelectorAll('[data-theme]').forEach(b=>b.onclick=()=>{state.theme=b.dataset.theme;applyTheme();save();renderShop();S.ui();});
 }
 async function buy(id,amount){
@@ -1640,8 +1656,10 @@ async function openTop(){
     // у каждого игрока своя лестница: viewer'ская LEVELS для чужой строки врёт с именем,
     // особенно на вершине — там у каждого владельца стоит его личная лягушка
     const rowName=rowFrogName(lv,r.holder,rsp);
-    d.innerHTML=`<div class="rk ${r.rank<=3?'top':''}">${medal}</div><img alt=""><div class="nm">${esc(r.name||'Игрок')}${r.holder?'<span class="badge">'+ic('crown')+' холдер</span>':''}${r.sub?'<span class="badge" style="background:#ffd23f;color:#5a3b00">абонент</span>':''}<small>${rowName} · ур. ${lv}</small></div><div class="sc">${fmt(r.score||0)}</div>`;
+    d.innerHTML=`<div class="rk ${r.rank<=3?'top':''}">${medal}</div><img alt=""><div class="nm">${esc(r.name||'Игрок')}${r.holder?'<span class="badge"><img class="badge-ico" alt=""> холдер</span>':''}${r.sub?'<span class="badge" style="background:#ffd23f;color:#5a3b00">абонент</span>':''}<small>${rowName} · ур. ${lv}</small></div><div class="sc">${fmt(r.score||0)}</div>`;
     thumb(rowFrogAsset(lv,r.holder,rsp)).then(u=>d.querySelector('img').src=u);
+    // на плашке холдера — Original того вида, которым игрок реально владеет
+    if(r.holder)thumb(rsp+'s/original').then(u=>{const i=d.querySelector('.badge-ico');if(i)i.src=u;}).catch(()=>{});
     list.appendChild(d);
   });
   $('#topNote').textContent=note;
@@ -1664,12 +1682,12 @@ function renderWar(){
   $('#warFrog').style.width=pf+'%';
   $('#warCatN').textContent=fmt(c);
   $('#warFrogN').textContent=fmt(f);
-  thumb('cats/'+SPECIES.cat.ladder[0].f).then(u=>$('#warCatIco').src=u).catch(()=>{});
-  thumb('frogs/'+SPECIES.frog.ladder[0].f).then(u=>$('#warFrogIco').src=u).catch(()=>{});
+  thumb('cats/original').then(u=>$('#warCatIco').src=u).catch(()=>{});
+  thumb('frogs/original').then(u=>$('#warFrogIco').src=u).catch(()=>{});
   $('#warLeft').textContent=all?(f===c?'ровно посередине':(f>c?'ведут лягушки':'ведут коты')):'ещё не началась';
-  $('#warMe').textContent=w.mine?`Твой вклад на этой неделе: ${fmt(w.mine)} за ${T.warSide}`:`Каждое твоё слияние тянет за ${T.warSide}`;
+  $('#warMe').textContent=w.mine?`Твой вклад на этой неделе: ${fmt(w.mine)} за ${T.warSide}`:`Каждое твоё слияние поддерживает ${T.warSide}`;
   const top=(w.top||[]).map((x,i)=>`${i+1}. ${esc(x.name)} — ${fmt(x.n)}`).join('<br>');
-  $('#warTop').innerHTML=top?'Больше всех тянут:<br>'+top:'';
+  $('#warTop').innerHTML=top?'Больше всех поддержали:<br>'+top:'';
   const b=$('#warPush');
   b.textContent=`${T.warPush} · 1${'★'} = ${w.perStar||5}`;
   b.onclick=()=>{S.ui();openShop('war');};
