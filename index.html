@@ -1689,7 +1689,7 @@ function renderWar(){
   const top=(w.top||[]).map((x,i)=>`${i+1}. ${esc(x.name)} — ${fmt(x.n)}`).join('<br>');
   $('#warTop').innerHTML=top?'Больше всех поддержали:<br>'+top:'';
   const b=$('#warPush');
-  b.textContent=`${T.warPush} · 1${'★'} = ${w.perStar||5}`;
+  b.innerHTML=`${T.warPush} · 1<img class="ic" src="icons/tgstar.png" alt=""> = ${w.perStar||5}`;
   b.onclick=()=>{S.ui();$('#top').classList.add('hidden');openShop('war');};
 }
 let warAck=null;
