@@ -234,9 +234,13 @@ function getUser(a) {
 async function checkHolder(u, real) {
   if (!CFG.token || !real) return;
   const sp = spOf(u);
-  // кэш сбрасываем, если игрок сменил вид: искать надо уже другой подарок
-  if (u.holderCheckedAt && u.holderSpecies === sp && Date.now() - u.holderCheckedAt < DAY) return;
-  u.holderCheckedAt = Date.now(); u.holderSpecies = sp;
+  if (!u.holderBySp) u.holderBySp = {};
+  // холдерство хранится ОТДЕЛЬНО на каждый вид: раньше был один общий u.holder,
+  // который переписывался под текущий вид игрока — играешь лягушкой и реально
+  // владеешь только котом, а u.holder после проверки лягушачьего подарка становился
+  // null, и в топе у кошатника пропадала плашка «холдер», даже когда он играл за кота
+  const cached = u.holderBySp[sp];
+  if (cached && Date.now() - cached.at < DAY) { u.holder = cached.data; return; }
   try {
     let offset = '', frogs = [];
     for (let i = 0; i < 5; i++) {
@@ -258,6 +262,7 @@ async function checkHolder(u, real) {
     frogs = [...new Map(frogs.map(f => [f.model + '#' + f.number, f])).values()].sort((a, b) => b.level - a.level);
     const top = frogs[0] || null;
     u.holder = top ? { model: top.model, level: top.level, backdrop: top.backdrop, frogs } : null;
+    u.holderBySp[sp] = { at: Date.now(), data: u.holder };
     // в чат холдеров зовём один раз и только того, у кого лягушка действительно есть
     if (top && !u.holdersInvited && sp === 'frog') {   // чата холдеров котов пока нет
       u.holdersInvited = Date.now();
@@ -282,7 +287,13 @@ function leaderboard() {
   return Object.values(db.users).filter(u => isRealPlayer(u) && (u.score > 0 || u.maxLv > 1)).sort((a, b) => b.score - a.score || b.maxLv - a.maxLv);
 }
 function topRows(n = 20) {
-  return leaderboard().slice(0, n).map((u, i) => ({ rank: i + 1, id: u.id, name: u.name, sp: spOf(u), maxLv: u.maxLv, score: u.score, holder: u.holder ? u.holder.model : null, sub: (u.inv && u.inv.subUntil || 0) > Date.now() }));
+  return leaderboard().slice(0, n).map((u, i) => {
+    const sp = spOf(u);
+    // холдерство строки — по виду ЭТОЙ строки, а не по последнему проверенному
+    // у игрока в моменте (см. checkHolder: раньше был один общий u.holder)
+    const hb = u.holderBySp && u.holderBySp[sp];
+    return { rank: i + 1, id: u.id, name: u.name, sp, maxLv: u.maxLv, score: u.score, holder: hb && hb.data ? hb.data.model : null, sub: (u.inv && u.inv.subUntil || 0) > Date.now() };
+  });
 }
 function rankOf(id) { const i = leaderboard().findIndex(u => u.id === id); return i < 0 ? null : i + 1; }
 
@@ -324,11 +335,15 @@ const api = {
     // первый вызов (u.syncAt ещё не установлен) вообще ничем не ограничен, а отличить его
     // от подделанного первого вызова читера снаружи нечем
     const rec = spRec(u);
-    const reportedMerges = Math.max(0, Math.min(+body.merges || 0, 1e7));
     const dt = Math.max(1, (Date.now() - (u.syncAt || u.created || Date.now())) / 1000);
     const maxDelta = Math.ceil(dt * 3 + 30);
-    // дельту считаем от слияний ЭТОГО вида: клиент шлёт прогресс своего сейва
-    let delta = Math.max(0, reportedMerges - (rec.merges || 0));
+    // клиент шлёт не абсолютный итог, а сколько слияний случилось с прошлой удачной
+    // синхронизации (тот же принцип, что у wildUsed) — раньше слался абсолютный
+    // счётчик, и сервер вычислял дельту вычитанием из своей памяти; если локальное
+    // число оказывалось НИЖЕ, чем сервер уже помнил (после переключения вида, сброса
+    // прогресса, другого устройства — сейв-то на клиенте свой на каждый вид), дельта
+    // уходила в минус, обрезалась до нуля, и слияния переставали засчитываться молча
+    let delta = Math.max(0, Math.min(+body.mergesDelta || 0, 1e6));
     if (delta > maxDelta) { u.flags = (u.flags || 0) + 1; delta = maxDelta; }
     rec.merges = (rec.merges || 0) + delta;
     u.merges = (u.merges || 0) + delta;
@@ -454,7 +469,7 @@ const api = {
           players: all.filter(isRealPlayer).length,
           test: all.length - all.filter(isRealPlayer).length,
           today: all.filter(u => t - (u.lastSeen || 0) < DAY).length,
-          holders: all.filter(u => u.holder && (u.holder.frogs || []).length).length,
+          holders: all.filter(u => Object.values(u.holderBySp || {}).some(h => h.data && (h.data.frogs || []).length)).length,
           merges: all.reduce((s, u) => s + (u.merges || 0), 0),
           stars: paid,
           payments: db.payments.length,
@@ -473,7 +488,7 @@ const api = {
           id: u.id, name: u.name || '', username: u.username || '',
           maxLv: u.maxLv || 1, score: u.score || 0, coins: u.coins || 0,
           merges: u.merges || 0, taps: u.taps || 0, wild: u.wild || 0,
-          holder: u.holder ? (u.holder.frogs || []).map(f => f.model).join(', ') : '',
+          holder: Object.values(u.holderBySp || {}).flatMap(h => (h.data && h.data.frogs) || []).map(f => f.model).join(', '),
           sub: (u.inv && u.inv.subUntil || 0) > t,
           spent: db.payments.filter(p => p.id === u.id).reduce((s, p) => s + (p.stars || 0), 0),
           lastSeen: u.lastSeen || 0, created: u.created || 0,

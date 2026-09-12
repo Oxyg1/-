@@ -211,6 +211,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .war-custom .amt{width:88px;min-width:0;background:rgba(0,0,0,.3);border:0;border-radius:10px;padding:7px 9px;color:#fff;font:800 13px Nunito,system-ui}
 .war-custom .amt::placeholder{color:rgba(255,255,255,.5)}
 .war-note{flex-basis:100%;font-size:11px;opacity:.65;font-weight:700;margin-top:4px;line-height:1.3}
+.war-note .ic{width:1.1em;height:1.1em;vertical-align:-.18em}
 .stars{font-size:12px;opacity:.85;text-align:center;line-height:1.45}
 .stars .muted{opacity:.7}
 .shop-h{font:900 12.5px Nunito,sans-serif;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.55);margin:14px 2px 7px}
@@ -633,7 +634,7 @@ const tgUser=(TG&&TG.initDataUnsafe&&TG.initDataUnsafe.user)||null;
 const myName=tgUser?(tgUser.first_name||tgUser.username||'Игрок'):'Ты';
 
 /* ---------- STATE ---------- */
-const state={species:'frog',coins:0,maxLv:1,n:5,cells:Array(25).fill(0),disc:[1],sound:true,merges:0,score:0,taps:0,wild:0,wildUsed:0,theme:'',inv:{},order:null,own:[],mode:'normal',runs:0,t:0};
+const state={species:'frog',coins:0,maxLv:1,n:5,cells:Array(25).fill(0),disc:[1],sound:true,merges:0,mergesUnsynced:0,score:0,taps:0,wild:0,wildUsed:0,theme:'',inv:{},order:null,own:[],mode:'normal',runs:0,t:0};
 // базовый порядок уровней — как в списке редкости. Лягушки, которыми игрок владеет,
 // поднимаются в самый верх лестницы, поэтому у каждого владельца свой финал.
 const BASE=LEVELS.slice();   // заполняется под выбранный вид в setSpecies()
@@ -944,12 +945,18 @@ async function sync(force){
   if(!CFG.api)return null;
   if(!force&&now()-net.lastSync<15000)return null;
   const usedNow=state.wildUsed||0;
+  // как и wildUsed: шлём не итог, а сколько слияний случилось с прошлой удачной
+  // синхронизации. Абсолютный merges сервер тоже видит (для истории), но дельту
+  // считает уже сам клиент — так переключение вида или сброс прогресса не может
+  // случайно занизить дельту ниже нуля и обнулить свежие слияния
+  const mergedNow=state.mergesUnsynced||0;
   try{
-    const r=await api('sync',{name:myName,species:SP.key,warAck,coins:Math.round(state.coins),maxLv:state.maxLv,score:state.score,merges:state.merges,taps:state.taps,theme:state.theme,wildUsed:usedNow});
+    const r=await api('sync',{name:myName,species:SP.key,warAck,coins:Math.round(state.coins),maxLv:state.maxLv,score:state.score,mergesDelta:mergedNow,taps:state.taps,theme:state.theme,wildUsed:usedNow});
     // сервер принял это как потраченное — больше не шлём то же самое повторно.
     // Если новые траты случились уже ПОСЛЕ отправки (пока запрос летел), их не трогаем —
     // они уйдут следующим вызовом
     state.wildUsed=Math.max(0,(state.wildUsed||0)-usedNow);
+    state.mergesUnsynced=Math.max(0,(state.mergesUnsynced||0)-mergedNow);
     applyServer(r);save();updateHud();return r;
   }
   catch(e){net.online=false;return null;}
@@ -1073,7 +1080,7 @@ async function mergeCells(win,lv,target,combo){
   win.forEach(i=>state.cells[i]=0);
   await wait(230);
   for(const i of win){if(els[i]){els[i].remove();els[i]=null;}}
-  const nl=lv+1;state.cells[target]=nl;makeFrogEl(target,nl);state.merges++;state.score+=nl;
+  const nl=lv+1;state.cells[target]=nl;makeFrogEl(target,nl);state.merges++;state.mergesUnsynced=(state.mergesUnsynced||0)+1;state.score+=nl;
   const [x,y]=cellCenter(target);
   sparks(x,y,14,['#ffd23f','#9dffb0','#fff','#7fe3ff']);
   S.merge(combo,nl);haptic.heavy();fullPlay();
@@ -1536,7 +1543,7 @@ function itemCard(it,inv,t,extra){
     (bc?`<i class="bdview" style="background:radial-gradient(circle at 40% 32%, ${bc.c}, ${bc.e})"></i>`:`<img src="${icon}" alt="">`)+
     `<div><b>${itName}${badge}</b><span>${extra||itDesc}</span>${status?`<span class="live">${status}</span>`:''}${chev}`+
     (it.donate?`<div class="row">${it.prices.map(p=>`<button class="buy" data-buy="${it.id}" data-amount="${p}">${p} <img class="ic" src="icons/tgstar.png" alt=""></button>`).join('')}</div>`:'')+
-    (it.customAmount?`<div class="row war-custom"><input type="number" class="amt" min="1" max="500" placeholder="своя сумма" data-amt-for="${it.id}"><button class="buy" data-buy-input="${it.id}">Поддержать</button></div><div class="war-note">${WAR_NOTE}</div>`:'')+
+    (it.customAmount?`<div class="war-note">1<img class="ic" src="icons/tgstar.png" alt=""> = ${(net.war&&net.war.perStar)||5} слияний</div><div class="row war-custom"><input type="number" class="amt" min="1" max="500" placeholder="своя сумма" data-amt-for="${it.id}"><button class="buy" data-buy-input="${it.id}">Поддержать</button></div><div class="war-note">${WAR_NOTE}</div>`:'')+
     `</div>`+
     (was&&!inv[it.once]?`<div class="pricebox">${was}${btn}</div>`:btn);
   // разворачиваемая расшифровка — по тапу на карточку показываем, из чего набор
@@ -1689,7 +1696,7 @@ function renderWar(){
   const top=(w.top||[]).map((x,i)=>`${i+1}. ${esc(x.name)} — ${fmt(x.n)}`).join('<br>');
   $('#warTop').innerHTML=top?'Больше всех поддержали:<br>'+top:'';
   const b=$('#warPush');
-  b.innerHTML=`${T.warPush} · 1<img class="ic" src="icons/tgstar.png" alt=""> = ${w.perStar||5}`;
+  b.innerHTML=`${T.warPush} <img class="ic" src="icons/tgstar.png" alt="">`;
   b.onclick=()=>{S.ui();$('#top').classList.add('hidden');openShop('war');};
 }
 let warAck=null;
