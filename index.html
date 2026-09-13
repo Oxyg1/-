@@ -1908,7 +1908,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){save();syn
 // (maxLv/score/inv напрямую влияют на то, что уходит на сервер при следующей синхронизации).
 // Внутри настоящего Telegram-приложения не подключаем вообще; вне него (локальная разработка,
 // предпросмотр в браузере) оставляем — там это просто мы сами
-if(!inTG)window.__frog={state,spawn,resolve,thumbs,renderWar,showWarResult,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName};
+if(!inTG)window.__frog={state,spawn,resolve,thumbs,renderWar,showWarResult,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName,save,startGame,applySave,setSpecies,resetState};
 init().catch(e=>{console.error(e);$('#loading h2').textContent='Ошибка загрузки: '+e.message;});
 })();
 </script>

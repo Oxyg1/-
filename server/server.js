@@ -240,7 +240,6 @@ async function checkHolder(u, real) {
   // что соответствует активному сейчас виду — иначе кэш под одним видом молча стирал
   // то, что было известно про другой
   if (u.holderCheckedAt && Date.now() - u.holderCheckedAt < DAY) { u.holder = (u.holderBySp[spOf(u)] || {}).data || null; return; }
-  u.holderCheckedAt = Date.now();
   try {
     let offset = '', bySp = { frog: [], cat: [] };
     for (let i = 0; i < 5; i++) {
@@ -260,6 +259,12 @@ async function checkHolder(u, real) {
       }
       offset = r.next_offset || ''; if (!offset) break;
     }
+    // кэш на сутки ставим только теперь, когда запрос реально прошёл — если бы это
+    // стояло до try (как было раньше), одна упавшая проверка (сеть, рейт-лимит
+    // Telegram) на сутки замораживала бы «не холдер» для настоящего холдера: сервер
+    // отвечал бы null, клиент честно разбирал его персональную лестницу обратно —
+    // и выглядело это как «поле 50 уровня сбрасывается на каждый вход»
+    u.holderCheckedAt = Date.now();
     for (const sp of ['frog', 'cat']) {
       // дубли по модели схлопываем, самая редкая — первой
       const list = [...new Map(bySp[sp].map(f => [f.model + '#' + f.number, f])).values()].sort((a, b) => b.level - a.level);
