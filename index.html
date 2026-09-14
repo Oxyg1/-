@@ -662,7 +662,20 @@ function shuffledOrder(){
   for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}
   return a;
 }
-// перестановка лестницы с переносом уже добытых лягушек: на поле остаются те же виды
+// Просто ставит лестницу и НЕ трогает поле.
+// Нужна отдельно от applyOrder: в сейве номера клеток записаны уже в координатах
+// СВОЕГО порядка, их пересчитывать не надо — надо просто восстановить тот порядок.
+function setLadder(order){
+  if(!order||order.length!==BASE.length)return false;
+  const next=order.map(f=>BASE.find(l=>l.f===f)).filter(Boolean);
+  if(next.length!==BASE.length)return false;
+  LEVELS.length=0;LEVELS.push(...next);
+  state.order=order;
+  return true;
+}
+// перестановка лестницы с переносом уже добытых лягушек: на поле остаются те же виды.
+// Вызывается только когда лестница меняется ПО ХОДУ игры (нашлось владение, новый круг),
+// то есть когда номера на поле записаны в СТАРОМ порядке и их правда надо пересчитать
 function applyOrder(order){
   if(!order||order.length!==BASE.length)return false;
   // порядок уже стоит — перестраивать нечего, но запомнить его обязательно:
@@ -708,7 +721,13 @@ function applySave(s){
   state.disc=(Array.isArray(state.disc)?state.disc:[1]).filter(l=>l>=1&&l<=LEVELS.length);
   // сейв без лестницы, но со списком своих лягушек — восстанавливаем её однозначно
   if(!Array.isArray(state.order)&&(state.own||[]).length&&state.mode!=='random')state.order=buildOrder(state.own);
-  if(Array.isArray(state.order)&&state.order.length===BASE.length){const o=state.order;state.order=null;applyOrder(o);}
+  // ВАЖНО: именно setLadder, а не applyOrder. Раньше здесь стоял applyOrder, который
+  // пересчитывал номера клеток из текущей лестницы в сохранённую — но при загрузке
+  // текущая лестница это всегда базовая, а клетки в сейве уже лежат в сохранённом
+  // порядке. Пересчёт бил по живому: на каждом заходе номера на поле и в коллекции
+  // перемешивались заново, из-за чего на поле возникали случайные тройки высоких
+  // уровней, которые тут же схлопывались и выбрасывали игрока с 9 уровня на 40+
+  if(Array.isArray(state.order)&&state.order.length===BASE.length)setLadder(state.order);
   N=state.n||5;CELLS=N*N;
   if(state.cells.length!==CELLS){const old=state.cells,on=Math.round(Math.sqrt(old.length));const nc=Array(CELLS).fill(0);for(let r=0;r<Math.min(on,N);r++)for(let c=0;c<Math.min(on,N);c++)nc[r*N+c]=old[r*on+c]||0;state.cells=nc;}
 }
@@ -1075,18 +1094,25 @@ function findLine(focus){
   return {win:w.idx,lv:w.lv,target:w.idx.includes(focus)?focus:w.idx[1]};
 }
 let busy=false;
+// Слияния, которые случились не по воле игрока, а при разборе загруженного поля,
+// не должны приносить ни очков, ни уровней: иначе любая порча сейва превращается
+// в ферму счёта простым перезаходом
+let silentFix=false;
 async function mergeCells(win,lv,target,combo){
   for(const i of win){if(i!==target&&els[i]){els[i].classList.add('merging');position(els[i],target);}}
   win.forEach(i=>state.cells[i]=0);
   await wait(230);
   for(const i of win){if(els[i]){els[i].remove();els[i]=null;}}
-  const nl=lv+1;state.cells[target]=nl;makeFrogEl(target,nl);state.merges++;state.mergesUnsynced=(state.mergesUnsynced||0)+1;state.score+=nl;
+  const nl=lv+1;state.cells[target]=nl;makeFrogEl(target,nl);
+  if(!silentFix){state.merges++;state.mergesUnsynced=(state.mergesUnsynced||0)+1;state.score+=nl;}
   const [x,y]=cellCenter(target);
   sparks(x,y,14,['#ffd23f','#9dffb0','#fff','#7fe3ff']);
   S.merge(combo,nl);haptic.heavy();fullPlay();
-  const reward=mergeReward(nl,combo);addCoins(reward);
-  floatText(x,y-cs*.4,(combo>1?'x'+combo+' КОМБО  ':'')+'+'+fmt(reward),'big');
-  if(nl>state.maxLv){await levelUp(nl);}
+  if(!silentFix){
+    const reward=mergeReward(nl,combo);addCoins(reward);
+    floatText(x,y-cs*.4,(combo>1?'x'+combo+' КОМБО  ':'')+'+'+fmt(reward),'big');
+    if(nl>state.maxLv){await levelUp(nl);}
+  }
   if(nl<LEVELS.length)thumb(nl+1).catch(()=>{});
 }
 async function resolve(focus){
@@ -1830,7 +1856,8 @@ async function startGame(){
   await setClickerSkin(state.maxLv);
   updateHud();
   $('#loading').classList.add('hidden');
-  resolve(-1);
+  silentFix=true;
+  try{await resolve(-1);}finally{silentFix=false;}
 }
 // смена вида по ходу игры: текущий прогресс дописываем на диск, дальше вид
 // живёт в своём сейве и ничего чужого не трогает
