@@ -75,6 +75,10 @@ const SHOP = {
   donate: { title: 'Покормить пруд', desc: 'Донат в общую цель чата', donate: true },
   war: { title: 'Поддержать сторону', desc: 'Сдвинуть битву видов в свою пользу', warPush: true },
   revive: { title: 'Вернуть серию', desc: 'Продолжить оборвавшуюся бесконечную серию', revive: true },
+  // отдельная фикс-цена на возврат, если игрок застал поле уже забитым, ВЕРНУВШИСЬ
+  // в приложение — не нарастающая, как у обычного revive: считаем честным не
+  // штрафовать за то, что он не видел стоп-экран вживую и не мог отреагировать раньше
+  reviveReturn: { title: 'Вернуть серию (при входе)', desc: 'Разовая скидка — поле стало тупиком, пока приложение было закрыто', price: 15 },
 };
 
 /* ---------- ЭМОДЗИ ----------
@@ -133,7 +137,7 @@ function grant(user, item, amount) {
     case 'starter': inv.starter = true; inv.autoUntil = Math.max(inv.autoUntil || 0, t) + DAY; inv.boostUntil = Math.max(inv.boostUntil || 0, t) + DAY; user.wild = (user.wild || 0) + 3; break;
     case 'sub': inv.subUntil = Math.max(inv.subUntil || 0, t) + 30 * DAY; break;
     case 'donate': inv.donated = (inv.donated || 0) + amount; db.pond.stars += amount; db.pond.count += amount * 10; db.pond.donors[user.id] = (db.pond.donors[user.id] || 0) + amount; break;
-    case 'revive': { const e = user.endless || (user.endless = {}); e.cont = (e.cont || 0) + 1; inv.reviveLeft = (inv.reviveLeft || 0) + 1; break; }
+    case 'revive': case 'reviveReturn': { const e = user.endless || (user.endless = {}); e.cont = (e.cont || 0) + 1; inv.reviveLeft = (inv.reviveLeft || 0) + 1; break; }
     case 'war': { warCheck(); const side = spOf(user); warPull(user, side, amount * STARS_PER_PULL); db.war.stars += amount; warBucket(user.id).s += amount; inv.warStars = (inv.warStars || 0) + amount; break; }
     default: if (String(item).startsWith('bd:')) { const th = String(item).slice(3); inv.themes = inv.themes || []; if (!inv.themes.includes(th)) inv.themes.push(th); }
   }
@@ -472,7 +476,8 @@ const api = {
     if (lockKey) { const until = pendingInvoices.get(lockKey); if (until && until > Date.now()) return { ok: false, error: 'Счёт уже выставлен — заверши его или подожди пару минут' }; }
     let price = it.price;
     if (it.donate || it.warPush) { price = Math.round(+body.amount || 0); if (price < 1 || price > 500) return { ok: false, error: 'Сумма от 1 до 500 звёзд' }; }
-    if (it.revive) price = revivePrice(u);   // цену возврата считает сервер, а не клиент
+    if (body.item === 'revive') price = revivePrice(u);   // цену возврата считает сервер, а не клиент
+    // reviveReturn — фикс-цена из SHOP выше, дальше не трогаем
     if (!CFG.token) return { ok: false, error: 'Сервер без BOT_TOKEN: платежи недоступны' };
     const nonce = crypto.randomBytes(4).toString('hex');
     const params = { title: it.title.slice(0, 32), description: it.desc.slice(0, 255), payload: `${body.item}:${u.id}:${price}:${nonce}`, provider_token: '', currency: 'XTR', prices: [{ label: it.title.slice(0, 32), amount: price }] };

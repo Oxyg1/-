@@ -362,12 +362,13 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
   <circle cx="13.7" cy="9.2" r="1.4" fill="#e0405f"/>
 </symbol>
 <symbol id="i-mouse" viewBox="0 0 24 24">
-  <ellipse cx="11" cy="14.6" rx="6.8" ry="5.2" fill="#cfd6de"/>
-  <circle cx="6.8" cy="9.8" r="3.4" fill="#cfd6de"/>
-  <circle cx="6.8" cy="9.8" r="1.8" fill="#f0a9bd"/>
-  <circle cx="13.2" cy="13" r="1.15" fill="#333a45"/>
-  <circle cx="17.2" cy="15.4" r="1" fill="#f0a9bd"/>
-  <path d="M17.6 17.6c2.7.5 3.9-1.1 3.3-2.9" fill="none" stroke="#b9c2cd" stroke-width="1.7" stroke-linecap="round"/>
+  <!-- хвост рисуется первым (уходит под тело) и явно с противоположной от головы
+       стороны: голова у левого края (cx≈6.6), хвост стартует у правого края тела -->
+  <path d="M18.3 15.2c2.6.9 4.6-1 4.3-3.6" fill="none" stroke="#b9c2cd" stroke-width="1.7" stroke-linecap="round"/>
+  <ellipse cx="13" cy="13.4" rx="6.2" ry="4.9" fill="#cfd6de"/>
+  <circle cx="6.6" cy="9.6" r="3.3" fill="#cfd6de"/>
+  <circle cx="4.6" cy="10.3" r="1.4" fill="#f0a9bd"/>
+  <circle cx="6.9" cy="8.4" r="1" fill="#333a45"/>
 </symbol>
 <symbol id="i-frog" viewBox="0 0 24 24">
   <circle cx="7.4" cy="7" r="3.6" fill="#5cbf7d"/>
@@ -679,7 +680,7 @@ const tgUser=(TG&&TG.initDataUnsafe&&TG.initDataUnsafe.user)||null;
 const myName=tgUser?(tgUser.first_name||tgUser.username||'Игрок'):'Ты';
 
 /* ---------- STATE ---------- */
-const state={species:'frog',coins:0,maxLv:1,runScore:0,runCont:0,runOver:false,runSent:false,runNew:false,reviveUsed:0,n:5,cells:Array(25).fill(0),disc:[1],sound:true,merges:0,mergesUnsynced:0,score:0,taps:0,wild:0,wildUsed:0,theme:'',inv:{},order:null,mixLadder:null,own:[],mode:'normal',runs:0,t:0};
+const state={species:'frog',coins:0,maxLv:1,runScore:0,runCont:0,runOver:false,runSent:false,runNew:false,returnRevive:false,reviveUsed:0,n:5,cells:Array(25).fill(0),disc:[1],sound:true,merges:0,mergesUnsynced:0,score:0,taps:0,wild:0,wildUsed:0,theme:'',inv:{},order:null,mixLadder:null,own:[],mode:'normal',runs:0,t:0};
 // базовый порядок уровней — как в списке редкости. Лягушки, которыми игрок владеет,
 // поднимаются в самый верх лестницы, поэтому у каждого владельца свой финал.
 const BASE=LEVELS.slice();   // заполняется под выбранный вид в setSpecies()
@@ -869,7 +870,11 @@ const frogName=lv=>{
 function assetRef(lv){
   if(typeof lv==='string')return lv.includes('/')?lv:SP.dir+'/'+lv;
   const L=(lv!==0&&lv!==WILD)?ladderAt(lv):null;
-  const dir=(L&&L.sp&&SPECIES[L.sp])?SPECIES[L.sp].dir:SP.dir;
+  // дикая карта в перемешке — всегда кот: единый узнаваемый образ вместо
+  // случайного мигания между видами в зависимости от того, что было активно раньше
+  const dir=(L&&L.sp&&SPECIES[L.sp])?SPECIES[L.sp].dir
+    :(lv===WILD&&mixMode())?SPECIES.cat.dir
+    :SP.dir;
   return dir+'/'+frogFile(lv);
 }
 // кэш по слагу лягушки, не по номеру уровня: после перестановки лестницы
@@ -1230,7 +1235,7 @@ let busy=false;
 // Слияния, которые случились не по воле игрока, а при разборе загруженного поля,
 // не должны приносить ни очков, ни уровней: иначе любая порча сейва превращается
 // в ферму счёта простым перезаходом
-let silentFix=false;
+let silentFix=false,onLoadCheck=false;
 async function mergeCells(win,lv,target,combo){
   for(const i of win){if(i!==target&&els[i]){els[i].classList.add('merging');position(els[i],target);}}
   win.forEach(i=>state.cells[i]=0);
@@ -1259,7 +1264,10 @@ async function resolve(focus){
   }finally{
     // без finally одна сетевая ошибка вешала игру намертво
     busy=false;refreshJunk();save();updateHud();
-    if(!silentFix)checkDeadEnd();
+    // раньше эта проверка тоже пряталась за silentFix и на самом заходе в приложение
+    // не срабатывала вообще: игрок мог вернуться на уже намертво забитое поле и не
+    // получить ни экрана, ни предложения — просто тихо стоял тупик
+    checkDeadEnd(onLoadCheck);
   }
 }
 
@@ -1530,6 +1538,7 @@ async function restart(mode){
   if(mode==='endless'||mode==='endless-mix')state.runNew=true;   // серверу: счётчик возвратов с нуля
   if(mode==='endless-mix'){state.mixLadder=null;applyMixLadder(mixedLadder());}
   else{state.mixLadder=null;applyOrder(mode==='random'?shuffledOrder():buildOrder(state.own));}
+  refreshFlyIcon();   // смена режима на лету сюда не проходит через startGame()
   buildBoard();
   try{await setClickerSkin(1);}catch(e){console.error('skin',e);}
   save();updateHud();refreshJunk();sync(true);
@@ -1643,6 +1652,7 @@ function grantLocal(id,amount){
     case 'starter':inv.starter=true;inv.autoUntil=Math.max(inv.autoUntil||0,t)+DAY;inv.boostUntil=Math.max(inv.boostUntil||0,t)+DAY;state.wild+=3;break;
     case 'sub':inv.subUntil=Math.max(inv.subUntil||0,t)+30*DAY;break;
     case 'donate':inv.donated=(inv.donated||0)+(amount||0);break;
+    case 'revive':case 'reviveReturn':if(state.runOver)reviveRun();break;
     default:if(id.startsWith('bd:')){inv.themes=inv.themes||[];const th=id.slice(3);if(!inv.themes.includes(th))inv.themes.push(th);state.theme=th;}
   }
   applyInv();
@@ -1813,8 +1823,11 @@ function purchaseConfirmText(id){
   if(id.startsWith('bd:'))return 'Фон применён — виден в самой игре и на карточках.';
   return 'Активировано.';
 }
+// revive/reviveReturn специально не в витрине SHOP (покупаются только со своей кнопки
+// на стоп-экране серии) — buy() должен узнавать их и без записи в общем списке товаров
+const HIDDEN_ITEMS={revive:{id:'revive',price:0},reviveReturn:{id:'reviveReturn',price:15}};
 async function buy(id,amount){
-  const it=SHOP.find(i=>i.id===id)||(id.startsWith('bd:')?{id,price:BD_PRICE}:null);if(!it)return;
+  const it=SHOP.find(i=>i.id===id)||HIDDEN_ITEMS[id]||(id.startsWith('bd:')?{id,price:BD_PRICE}:null);if(!it)return;
   S.ui();
   if(inTG&&CFG.api){
     if(!net.online){await sync(true);if(!net.online){toast('Сервер не отвечает');return;}}
@@ -1931,15 +1944,20 @@ const REVIVE_BASE=50;
 const revivePrice=()=>(net.endless&&net.endless.price)||Math.min(500,REVIVE_BASE*Math.pow(2,state.runCont||0));
 // сколько клеток расчищаем при возврате — ровно чтобы стало куда ходить
 const REVIVE_CLEAR=6;
-function checkDeadEnd(){
+function checkDeadEnd(onReturn){
   if(!isDeadEnd())return;
-  state.runOver=true;save();
+  state.runOver=true;
+  // тупик обнаружился сразу при заходе, а не во время живой игры — игрок не видел
+  // стоп-экран вживую и не мог среагировать раньше, поэтому цена ниже и разовая
+  if(onReturn)state.returnRevive=true;
+  save();
   showRunOver();
   sync(true);   // результат серии уходит на сервер сразу, пока игрок смотрит итог
 }
 async function showRunOver(){
   const ov=$('#runOver');
-  $('#roText').textContent=T.endlessOver;
+  const isReturn=!!state.returnRevive;
+  $('#roText').textContent=T.endlessOver+(isReturn?' Ты вернулся в игру уже на забитое поле — восстановление разово дешевле.':'');
   $('#roStats').innerHTML=`<div><b>${state.maxLv}</b><span>уровень</span></div>`
     +`<div><b>${fmt(state.runScore||0)}</b><span>очков за серию</span></div>`
     +`<div><b>${fmt(state.merges)}</b><span>слияний всего</span></div>`;
@@ -1948,8 +1966,9 @@ async function showRunOver(){
     ? `Общий рекорд: ${rec.best} уровень — ${rec.name||'игрок'}`
     : 'Общий рекорд ещё никем не поставлен';
   const b=$('#roRevive');
-  b.innerHTML=`Вернуть серию · ${revivePrice()} <img class="ic" src="icons/tgstar.png" alt="">`;
-  b.onclick=()=>{S.ui();buy('revive',0);};
+  const price=isReturn?15:revivePrice();
+  b.innerHTML=`Вернуть серию · ${price} <img class="ic" src="icons/tgstar.png" alt="">`;
+  b.onclick=()=>{S.ui();buy(isReturn?'reviveReturn':'revive',0);};
   thumb(state.maxLv).then(u=>{$('#roArt').innerHTML=`<img src="${u}" alt="">`;}).catch(()=>{});
   ov.classList.remove('hidden');S.err();haptic.error();
 }
@@ -1959,15 +1978,17 @@ function reviveRun(){
     .sort((a,b)=>a.v-b.v).slice(0,REVIVE_CLEAR).map(x=>x.i);
   idx.forEach(i=>{const el=els[i];if(el){el.remove();els[i]=null;}state.cells[i]=0;});
   state.runOver=false;state.runSent=false;state.runCont=(state.runCont||0)+1;
-  state.reviveUsed=(state.reviveUsed||0)+1;
+  state.reviveUsed=(state.reviveUsed||0)+1;state.returnRevive=false;
   $('#runOver').classList.add('hidden');
   buildBoard();save();updateHud();
   toast('Серия продолжается');S.buy();haptic.success();
 }
 function newRun(){
   $('#runOver').classList.add('hidden');
-  state.runOver=false;state.runScore=0;state.runCont=0;
-  restart('endless');
+  state.runOver=false;state.runScore=0;state.runCont=0;state.returnRevive=false;
+  // раньше тут было жёстко 'endless' — из перемешки «Новая серия» откатывала в
+  // обычный бесконечный режим, хотя игрок явно выбирал именно смешанный
+  restart(state.mode==='endless-mix'?'endless-mix':'endless');
 }
 $('#roNew').onclick=()=>{S.ui();newRun();};
 
@@ -2097,8 +2118,13 @@ async function resolveSpecies(){
 function applySpeciesUI(){
   $('#loadTitle').textContent=T.loading;
   $('#pondLabel').textContent=T.pond;
-  $('#fly').innerHTML=ic(SP.fly);
+  $('#fly').innerHTML=ic(SP.fly);   // временная заглушка — refreshFlyIcon() поправит, когда режим уже известен
 }
+// автотап в перемешке — всегда мышка, вне зависимости от вида, который сейчас
+// считается «активным» кликером. Нужна отдельной функцией: применяется и на
+// старте (после load(), когда state.mode уже точно известен), и при смене
+// режима на лету через restart() — тот startGame() вообще не проходит
+function refreshFlyIcon(){$('#fly').innerHTML=ic(mixMode()?'mouse':SP.fly);}
 
 /* ---------- INIT ---------- */
 function loaderSticker(){
@@ -2114,6 +2140,10 @@ async function startGame(){
   applySpeciesUI();
   resetState();
   await load();
+  // applySpeciesUI() выше отработала ДО load() — тогда state.mode ещё старый.
+  // Автотап в перемешке — всегда мышка, вне зависимости от того, кто сейчас
+  // считается «активным» кликером; теперь режим уже точно известен
+  refreshFlyIcon();
   const need=new Set([WILD,1,...state.cells.filter(v=>v>0),state.maxLv,state.maxLv+1]);
   for(let l=baseSpawnLv();l<=state.maxLv+1;l++)need.add(l);
   const list=[...need].filter(l=>l===WILD||l<=LEVELS.length);let done=0;
@@ -2123,8 +2153,10 @@ async function startGame(){
   await setClickerSkin(state.maxLv);
   updateHud();
   $('#loading').classList.add('hidden');
-  silentFix=true;
-  try{await resolve(-1);}finally{silentFix=false;}
+  // тупик, застигнутый прямо при заходе (а не во время живой игры) — считается
+  // отдельно: игрок не видел стоп-экран вживую и не мог отреагировать раньше
+  silentFix=true;onLoadCheck=true;
+  try{await resolve(-1);}finally{silentFix=false;onLoadCheck=false;}
 }
 // смена вида по ходу игры: текущий прогресс дописываем на диск, дальше вид
 // живёт в своём сейве и ничего чужого не трогает
@@ -2202,7 +2234,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){save();syn
 // (maxLv/score/inv напрямую влияют на то, что уходит на сервер при следующей синхронизации).
 // Внутри настоящего Telegram-приложения не подключаем вообще; вне него (локальная разработка,
 // предпросмотр в браузере) оставляем — там это просто мы сами
-if(!inTG)window.__frog={state,spawn,resolve,thumbs,renderWar,showWarResult,isDeadEnd,checkDeadEnd,showRunOver,reviveRun,newRun,ladderAt,ladderLap,revivePrice,renderEndlessTop,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName,save,startGame,applySave,setSpecies,resetState,updateHud,tapValue,buy,purchaseApplied,purchaseConfirmText,mixedLadder,applyMixLadder,assetRef,mixMode,FROG_LADDER,CAT_LADDER,SPECIES};
+if(!inTG)window.__frog={state,spawn,resolve,thumbs,renderWar,showWarResult,isDeadEnd,checkDeadEnd,showRunOver,reviveRun,newRun,ladderAt,ladderLap,revivePrice,renderEndlessTop,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName,save,startGame,applySave,setSpecies,resetState,updateHud,tapValue,buy,purchaseApplied,purchaseConfirmText,mixedLadder,applyMixLadder,assetRef,mixMode,FROG_LADDER,CAT_LADDER,SPECIES,refreshFlyIcon};
 init().catch(e=>{console.error(e);$('#loading h2').textContent='Ошибка загрузки: '+e.message;});
 })();
 </script>
