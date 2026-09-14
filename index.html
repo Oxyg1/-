@@ -424,6 +424,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
       <button class="btn" id="fnNormal">Пройти заново<small>привычный порядок редкостей</small></button>
       <button class="btn ghost" id="fnRandom">Случайный порядок<small>редкости перемешаны: от 0,5% до 4% в любом порядке</small></button>
       <button class="btn ghost" id="fnEndless">Бесконечный<small>лестница не кончается, играешь до тупика — и попадаешь в общий топ серий</small></button>
+      <button class="btn ghost" id="fnEndlessMix">Бесконечный вперемешку<small>лягушки и коты на одном поле, в случайном порядке</small></button>
     </div>
     <button class="btn" id="fnNext"></button>
     <button class="btn ghost sm" id="fnLater" hidden>Позже</button>
@@ -622,6 +623,23 @@ const SPECIES={
 let SP=SPECIES.frog, SAVE_KEY=SP.save, T=SP.t;
 const NEWS_KEY='swamp.newsCats';
 const WAR_NOTE='Поддержать вторую сторону можно, переключив вид в коллекции.';
+// В смешанной бесконечной серии на поле одновременно и лягушки, и коты — видовые
+// тексты («тапай по лягушке», пока там кот) были бы прямой ошибкой, не мелочью.
+// Для геймплейных строк, которые видно прямо во время игры, отдельный нейтральный
+// набор; всё, что показывается между заходами (магазин, коллекция, экран смены
+// режима), продолжает говорить от лица текущего SP — там путаницы не возникает
+const MIX_T={
+  hintTap:'Тапай — копи монеты', hintSpawn:'Жми «Призвать» — на поле появится зверь',
+  hintDrag:'Собери 3 одинаковых в ряд — перетащи', hintStuck:'Тупик! Скорми слабых кликеру или используй дикого зверя',
+  hintRow:l=>`Поле заполнено. Собери трёх зверей ур. ${l} в ряд`, hintWild:'Поле заполнено. Поставь дикого зверя к двум одинаковым',
+  spawnStuck:'Тупик! Скорми слабых зверей кликеру',
+  wild:'Дикий зверь', wildN:n=>`Дикий зверь ×${n}`, wildToast:'Дикий зверь сливается с любыми двумя одинаковыми',
+  offerStuck:'Поле встало намертво — дикий зверь расчистит',
+  newLv:'Новый зверь!', mineLv:'Твой зверь!', lastLv:'Ещё один!',
+  subMine:'Самый лучший — твой. Цени его.', subLast:'',
+};
+const mixMode=()=>state.mode==='endless-mix';
+const MT=()=>mixMode()?MIX_T:T;
 // лестница живёт в LEVELS (её перетасовывает applyOrder) и в BASE (эталон вида).
 // Обе меняем на месте: на них завязаны все ссылки по коду
 function setSpecies(key){
@@ -661,7 +679,7 @@ const tgUser=(TG&&TG.initDataUnsafe&&TG.initDataUnsafe.user)||null;
 const myName=tgUser?(tgUser.first_name||tgUser.username||'Игрок'):'Ты';
 
 /* ---------- STATE ---------- */
-const state={species:'frog',coins:0,maxLv:1,runScore:0,runCont:0,runOver:false,runSent:false,runNew:false,reviveUsed:0,n:5,cells:Array(25).fill(0),disc:[1],sound:true,merges:0,mergesUnsynced:0,score:0,taps:0,wild:0,wildUsed:0,theme:'',inv:{},order:null,own:[],mode:'normal',runs:0,t:0};
+const state={species:'frog',coins:0,maxLv:1,runScore:0,runCont:0,runOver:false,runSent:false,runNew:false,reviveUsed:0,n:5,cells:Array(25).fill(0),disc:[1],sound:true,merges:0,mergesUnsynced:0,score:0,taps:0,wild:0,wildUsed:0,theme:'',inv:{},order:null,mixLadder:null,own:[],mode:'normal',runs:0,t:0};
 // базовый порядок уровней — как в списке редкости. Лягушки, которыми игрок владеет,
 // поднимаются в самый верх лестницы, поэтому у каждого владельца свой финал.
 const BASE=LEVELS.slice();   // заполняется под выбранный вид в setSpecies()
@@ -688,6 +706,23 @@ function shuffledOrder(){
   const a=BASE.map(l=>l.f);
   for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}
   return a;
+}
+// Смешанная бесконечная серия: оба вида в одном перемешанном пуле — можно начать
+// с Happy Pepe, а следующим слотом получить Voodoo. Специально НЕ переиспользует
+// applyOrder/BASE — та пара работает с 50 слагами ОДНОГО вида и персонализацией
+// под владельца, а тут 100 записей сразу двух видов, каждая уже несёт свой .sp.
+// applyOrder бы просто не нашёл кошачий слаг в лягушачьем BASE и тихо отказался
+// переставлять — лучше отдельный путь, чем тянуть чужую механику туда, где она не рассчитана работать
+function mixedLadder(){
+  const pool=[...FROG_LADDER.map(l=>({n:l.n,f:l.f,r:l.r,sp:'frog'})),...CAT_LADDER.map(l=>({n:l.n,f:l.f,r:l.r,sp:'cat'}))];
+  for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=pool[i];pool[i]=pool[j];pool[j]=t;}
+  return pool;
+}
+function applyMixLadder(list){
+  if(!Array.isArray(list)||!list.length||!list.every(l=>l&&l.f&&(l.sp==='frog'||l.sp==='cat')))return false;
+  LEVELS.length=0;LEVELS.push(...list);
+  state.mixLadder=list;state.order=null;
+  return true;
 }
 // Просто ставит лестницу и НЕ трогает поле.
 // Нужна отдельно от applyOrder: в сейве номера клеток записаны уже в координатах
@@ -742,19 +777,31 @@ function applySave(s){
   Object.assign(state,s);
   if(!state.inv)state.inv={};
   state.species=SP.key;   // сейв species-скоупный, но вид задаётся только выбором, не файлом
-  // лечим сейвы с уровнем выше последнего: такой прогресс раньше падал на несуществующей лягушке
-  state.maxLv=Math.max(1,Math.min(state.maxLv|0||1,LEVELS.length));
-  state.cells=state.cells.map(v=>v===WILD?v:Math.min(v|0,LEVELS.length));
-  state.disc=(Array.isArray(state.disc)?state.disc:[1]).filter(l=>l>=1&&l<=LEVELS.length);
-  // сейв без лестницы, но со списком своих лягушек — восстанавливаем её однозначно
-  if(!Array.isArray(state.order)&&(state.own||[]).length&&state.mode!=='random')state.order=buildOrder(state.own);
-  // ВАЖНО: именно setLadder, а не applyOrder. Раньше здесь стоял applyOrder, который
-  // пересчитывал номера клеток из текущей лестницы в сохранённую — но при загрузке
-  // текущая лестница это всегда базовая, а клетки в сейве уже лежат в сохранённом
-  // порядке. Пересчёт бил по живому: на каждом заходе номера на поле и в коллекции
-  // перемешивались заново, из-за чего на поле возникали случайные тройки высоких
-  // уровней, которые тут же схлопывались и выбрасывали игрока с 9 уровня на 40+
-  if(Array.isArray(state.order)&&state.order.length===BASE.length)setLadder(state.order);
+  // лечим сейвы с уровнем выше последнего: такой прогресс раньше падал на несуществующей лягушке.
+  // В бесконечном режиме потолка нет вообще — LEVELS.length всегда остаётся 50/100
+  // (лестница крутится по кругу через ladderAt, а не растёт), так что клэмп по нему
+  // тут же срезал бы прогресс серии до полтинника на каждой перезагрузке
+  const isEndless=state.mode==='endless'||state.mode==='endless-mix';
+  const cap=isEndless?1e6:LEVELS.length;
+  state.maxLv=Math.max(1,Math.min(state.maxLv|0||1,cap));
+  state.cells=state.cells.map(v=>v===WILD?v:Math.min(v|0,cap));
+  state.disc=(Array.isArray(state.disc)?state.disc:[1]).filter(l=>l>=1&&l<=cap);
+  if(state.mode==='endless-mix'){
+    // смешанная лестница восстанавливается из своего собственного поля, а не из
+    // state.order/BASE — applyOrder рассчитан на 50 слагов одного вида и тут не подходит
+    const ml=state.mixLadder;state.mixLadder=null;
+    if(Array.isArray(ml))applyMixLadder(ml);
+  }else{
+    // сейв без лестницы, но со списком своих лягушек — восстанавливаем её однозначно
+    if(!Array.isArray(state.order)&&(state.own||[]).length&&state.mode!=='random')state.order=buildOrder(state.own);
+    // ВАЖНО: именно setLadder, а не applyOrder. Раньше здесь стоял applyOrder, который
+    // пересчитывал номера клеток из текущей лестницы в сохранённую — но при загрузке
+    // текущая лестница это всегда базовая, а клетки в сейве уже лежат в сохранённом
+    // порядке. Пересчёт бил по живому: на каждом заходе номера на поле и в коллекции
+    // перемешивались заново, из-за чего на поле возникали случайные тройки высоких
+    // уровней, которые тут же схлопывались и выбрасывали игрока с 9 уровня на 40+
+    if(Array.isArray(state.order)&&state.order.length===BASE.length)setLadder(state.order);
+  }
   N=state.n||5;CELLS=N*N;
   if(state.cells.length!==CELLS){const old=state.cells,on=Math.round(Math.sqrt(old.length));const nc=Array(CELLS).fill(0);for(let r=0;r<Math.min(on,N);r++)for(let c=0;c<Math.min(on,N);c++)nc[r*N+c]=old[r*on+c]||0;state.cells=nc;}
 }
@@ -808,16 +855,22 @@ const rarTxt=lv=>{const r=rarity(lv);return r==null?'':String(r).replace('.',','
 /* ---------- ASSETS ---------- */
 const frogFile=lv=>typeof lv==='string'?lv:(lv===0||lv===WILD)?'original':ladderAt(lv).f;
 const frogName=lv=>{
-  if(lv===WILD)return T.wild;
+  if(lv===WILD)return MT().wild;
   if(lv===0)return 'Original';
   const L=ladderAt(lv),lap=ladderLap(lv);
   return lap>1?`${L.n} · круг ${lap}`:L.n;
 };
 // ключ ассета всегда с папкой вида: слаги original/loader есть у обоих видов,
 // и без папки кэш путал бы лягушачий стикер с кошачьим (особенно на экране выбора)
+// вид конкретной позиции лестницы: обычно текущий SP, но в смешанной бесконечной
+// серии у каждой позиции свой вид — если тут взять просто SP.dir, кот на кошачьем
+// слоте попытается загрузиться из папки лягушек: либо битая картинка, либо, если
+// слаги совпадут по имени файла, вообще чужой зверь под чужим именем
 function assetRef(lv){
   if(typeof lv==='string')return lv.includes('/')?lv:SP.dir+'/'+lv;
-  return SP.dir+'/'+frogFile(lv);
+  const L=(lv!==0&&lv!==WILD)?ladderAt(lv):null;
+  const dir=(L&&L.sp&&SPECIES[L.sp])?SPECIES[L.sp].dir:SP.dir;
+  return dir+'/'+frogFile(lv);
 }
 // кэш по слагу лягушки, не по номеру уровня: после перестановки лестницы
 // (случайный режим, персональный финал) один и тот же номер указывает на
@@ -976,7 +1029,7 @@ function applyOwnership(){
   const frogs=(net.holder&&net.holder.frogs)||[];
   const models=frogs.map(f=>f.model).filter(Boolean);
   state.own=models;
-  if(state.mode==='random')return;   // в случайном режиме порядок задан кругом, а не владением
+  if(state.mode==='random'||state.mode==='endless-mix')return;   // порядок задан кругом, а не владением
   const want=buildOrder(models);
   if(applyOrder(want)){
     // лестница поменялась — перерисовываем поле и кликер под новый порядок
@@ -1054,6 +1107,11 @@ function updateHud(){
     hudSig=sig;
     $('#btnSound').innerHTML=ic(state.sound?'sound-on':'sound-off');
     $('#fly').classList.toggle('on',auto);
+    // подпись «+N за тап» раньше обновлялась только на setClickerSkin (левелап,
+    // смена вида) — купил ×2 без левелапа, значок появился, а число рядом с ним
+    // осталось старым: выглядело так, будто буст не сработал, хотя реально тап
+    // уже считался с удвоением (tapValue() внутри tap() всегда свежий)
+    const small=$('#frogName small');if(small)small.textContent=`+${fmt(tapValue())} за тап`;
     const nm=$('#frogName');const b=nm.querySelector('.boost');if(b)b.remove();
     if(boost){const s=document.createElement('span');s.className='boost';s.innerHTML='<img src="icons/fire.png" alt="" style="width:14px;height:14px;vertical-align:-.2em"> ×2';nm.appendChild(s);}
   }
@@ -1070,7 +1128,7 @@ function addCoins(v){
 // не распознавалось как тупик: подсказка звала собрать три «ур. 50 в ряд», хотя
 // это невозможно, а выход через дикого зверя не предлагался.
 // В бесконечном режиме потолка нет, поэтому сливается всё
-const canMergeLv=lv=>state.mode==='endless'||lv<LEVELS.length;
+const canMergeLv=lv=>state.mode==='endless'||state.mode==='endless-mix'||lv<LEVELS.length;
 function canMergeAny(){
   const c=levelCounts();const w=state.cells.filter(v=>v===WILD).length;
   const lv=Object.keys(c).map(Number).filter(canMergeLv);
@@ -1082,7 +1140,7 @@ function canMergeAny(){
 // Серия в бесконечном режиме обрывается, когда ходов не осталось совсем:
 // поле забито, сливать нечего, дикого зверя нет и скармливать некого
 function isDeadEnd(){
-  if(state.mode!=='endless'||state.runOver)return false;
+  if((state.mode!=='endless'&&state.mode!=='endless-mix')||state.runOver)return false;
   if(state.cells.filter(Boolean).length<CELLS)return false;
   if(canMergeAny()||state.wild>0)return false;
   return !state.cells.some(isJunk);
@@ -1091,11 +1149,11 @@ function updateHint(){
   const h=$('#hint');let t='';
   const count=state.cells.filter(Boolean).length,c=levelCounts();
   const full=count===CELLS;
-  if(count===0&&state.coins<spawnCost())t=ic('down')+' '+T.hintTap;
-  else if(count<3&&state.coins>=spawnCost())t=T.hintSpawn;
-  else if(count>=3&&state.merges===0)t=T.hintDrag;
-  else if(full&&!canMergeAny())t=T.hintStuck;
-  else if(full){const l=Object.keys(c).map(Number).filter(l=>c[l]>=3&&canMergeLv(l)).sort((a,b)=>b-a)[0];t=l?T.hintRow(l):T.hintWild;}
+  if(count===0&&state.coins<spawnCost())t=ic('down')+' '+MT().hintTap;
+  else if(count<3&&state.coins>=spawnCost())t=MT().hintSpawn;
+  else if(count>=3&&state.merges===0)t=MT().hintDrag;
+  else if(full&&!canMergeAny())t=MT().hintStuck;
+  else if(full){const l=Object.keys(c).map(Number).filter(l=>c[l]>=3&&canMergeLv(l)).sort((a,b)=>b-a)[0];t=l?MT().hintRow(l):MT().hintWild;}
   if(h.dataset.t!==t){h.dataset.t=t;h.innerHTML=t;}
   h.classList.toggle('hide',!t);
 }
@@ -1122,9 +1180,9 @@ function renderActions(){
     const b=document.createElement('button');b.className='chip red';b.innerHTML=`<img src="icons/meat.png" alt="">Скормить слабых (${junk.length}) <b>+${fmt(total)}</b>`;b.onclick=feedJunk;a.appendChild(b);
   }
   if(state.wild>0){
-    const w=document.createElement('button');w.className='chip gold';w.innerHTML=`<img src="${thumbs.get(thumbKey(WILD))||''}" alt="">${T.wildN(state.wild)}`;w.onclick=placeWild;a.appendChild(w);
+    const w=document.createElement('button');w.className='chip gold';w.innerHTML=`<img src="${thumbs.get(thumbKey(WILD))||''}" alt="">${MT().wildN(state.wild)}`;w.onclick=placeWild;a.appendChild(w);
   }else if(full&&!canMergeAny()){
-    const w=document.createElement('button');w.className='chip gold';w.innerHTML=`<img src="${thumbs.get(thumbKey(WILD))||''}" alt="">${T.wild} · 39${ic('star')}`;w.onclick=()=>openShop('wild3');a.appendChild(w);
+    const w=document.createElement('button');w.className='chip gold';w.innerHTML=`<img src="${thumbs.get(thumbKey(WILD))||''}" alt="">${MT().wild} · 39${ic('star')}`;w.onclick=()=>openShop('wild3');a.appendChild(w);
   }
 }
 
@@ -1280,7 +1338,7 @@ function placeWild(){
   }
   state.wild--;state.wildUsed=(state.wildUsed||0)+1;state.cells[idx]=WILD;makeFrogEl(idx,WILD);
   const [x,y]=cellCenter(idx);sparks(x,y,12,['#ffd23f','#ff5d7a','#7fe3ff']);S.spawn();haptic.medium();
-  toast(T.wildToast);
+  toast(MT().wildToast);
   setSelected(-1);resolve(idx);
 }
 
@@ -1290,7 +1348,7 @@ function spawn(){
   const cost=spawnCost();const btn=$('#btnSpawn');
   if(state.coins<cost){btn.classList.remove('shake');void btn.offsetWidth;btn.classList.add('shake');S.err();haptic.error();return false;}
   const empty=[];state.cells.forEach((v,i)=>{if(!v)empty.push(i);});
-  if(!empty.length){toast(canMergeAny()?'Поле заполнено! Соедини три одинаковых':T.spawnStuck);S.err();renderActions();return false;}
+  if(!empty.length){toast(canMergeAny()?'Поле заполнено! Соедини три одинаковых':MT().spawnStuck);S.err();renderActions();return false;}
   state.coins-=cost;
   const i=pick(empty),lv=rollSpawnLevel();
   state.cells[i]=lv;makeFrogEl(i,lv);
@@ -1384,13 +1442,13 @@ async function levelUp(lv){
   save();updateHud();refreshJunk();
   try{await setClickerSkin(lv);}catch(e){console.error('skin',e);}
   // в бесконечном режиме вершины нет: лестница идёт дальше по кругу
-  if(lv===LEVELS.length&&state.mode!=='endless'){await showFinale(lv);return;}
+  if(lv===LEVELS.length&&state.mode!=='endless'&&state.mode!=='endless-mix'){await showFinale(lv);return;}
   const ov=$('#levelup');
   $('#luName').textContent=frogName(lv);$('#luLvN').textContent=lv;$('#luRar').textContent='редкость '+rarTxt(lv);
   const mine=ownsLevel(lv),last=lv===LEVELS.length;
   const card0=ov.querySelector('.card h2'),sub=ov.querySelector('.card .sub');
-  card0.textContent=mine?T.mineLv:last?T.lastLv:T.newLv;
-  sub.textContent=mine?T.subMine:last?T.subLast:'Скин кликера обновлён';
+  card0.textContent=mine?MT().mineLv:last?MT().lastLv:MT().newLv;
+  sub.textContent=mine?MT().subMine:last?MT().subLast:'Скин кликера обновлён';
   const card=ov.querySelector('.card');card.querySelectorAll('.conf').forEach(c=>c.remove());
   for(let i=0;i<26;i++){const c=document.createElement('i');c.className='conf';c.style.left=rnd(0,100)+'%';c.style.setProperty('--c',pick(['#ffd23f','#9dffb0','#7fe3ff','#ff8fa3','#fff']));c.style.animationDelay=rnd(-2,0)+'s';c.style.animationDuration=rnd(1.8,3)+'s';card.appendChild(c);}
   if(luAnim){luAnim.destroy();luAnim=null;}
@@ -1469,17 +1527,21 @@ async function restart(mode){
   state.cells=Array(CELLS).fill(0);
   // поле уже пустое, поэтому перестановка лестницы ничего на нём не испортит
   state.runScore=0;state.runCont=0;state.runOver=false;state.runSent=false;
-  if(mode==='endless')state.runNew=true;   // серверу: счётчик возвратов с нуля
-  applyOrder(mode==='random'?shuffledOrder():buildOrder(state.own));
+  if(mode==='endless'||mode==='endless-mix')state.runNew=true;   // серверу: счётчик возвратов с нуля
+  if(mode==='endless-mix'){state.mixLadder=null;applyMixLadder(mixedLadder());}
+  else{state.mixLadder=null;applyOrder(mode==='random'?shuffledOrder():buildOrder(state.own));}
   buildBoard();
   try{await setClickerSkin(1);}catch(e){console.error('skin',e);}
   save();updateHud();refreshJunk();sync(true);
-  toast(mode==='endless'?'Бесконечная серия пошла':mode==='random'?'Новый круг: редкости перемешаны':'Новый круг: привычный порядок');
+  toast(mode==='endless-mix'?'Бесконечная серия вперемешку — лягушки и коты на одном поле'
+    :mode==='endless'?'Бесконечная серия пошла'
+    :mode==='random'?'Новый круг: редкости перемешаны':'Новый круг: привычный порядок');
 }
 $('#fnNext').onclick=()=>{if(!$('#fnNext').disabled){S.ui();fnStage2();}};
 $('#fnNormal').onclick=()=>restart('normal');
 $('#fnRandom').onclick=()=>restart('random');
 $('#fnEndless').onclick=()=>restart('endless');
+$('#fnEndlessMix').onclick=()=>restart('endless-mix');
 $('#fnLater').onclick=()=>{closeFinale();toast('Новый круг — в коллекции');};
 $('#btnNewRun').onclick=()=>{
   const open=()=>{$('#collection').classList.add('hidden');$('#finale').classList.remove('hidden');fnStage2();};
@@ -1506,7 +1568,7 @@ async function renderCard(kind,lv){
   g.textAlign='center';g.fillStyle='#fff';g.shadowColor='rgba(0,0,0,.45)';g.shadowBlur=18;g.shadowOffsetY=6;
   if(story){
     g.font='800 44px '+F;g.fillStyle='rgba(255,255,255,.85)';g.fillText(myName.toUpperCase()+' · SWAMP',W/2,190);
-    g.font='900 92px '+F;g.fillStyle='#fff';g.fillText(T.newLv,W/2,300);
+    g.font='900 92px '+F;g.fillStyle='#fff';g.fillText(MT().newLv,W/2,300);
     g.shadowBlur=40;g.shadowOffsetY=20;g.drawImage(frog,W/2-410,380,820,820);g.shadowBlur=18;g.shadowOffsetY=6;
     g.fillStyle='#ffd23f';fitText(g,frogName(lv),W/2,1330,W-120,110,F);
     pill(g,W/2,1420,`Уровень ${lv} из ${LEVELS.length}  ·  редкость ${rarTxt(lv)}`,'800 44px '+F);
@@ -1625,7 +1687,7 @@ function shopHeader(){
 // подсказка ровно в тот момент, когда игрок упёрся — это уместно, а не назойливо
 function contextOffer(){
   const inv=state.inv,full=state.cells.filter(Boolean).length===CELLS;
-  if(full&&!canMergeAny()&&!state.wild)return {id:'wild3',why:T.offerStuck};
+  if(full&&!canMergeAny()&&!state.wild)return {id:'wild3',why:MT().offerStuck};
   if(full&&!inv.bigBoard)return {id:'bigBoard',why:'Поле забито. На 6×6 такое почти не случается'};
   if(!inv.starter&&!inv.autoForever&&state.maxLv>=3)return {id:'starter',why:'Самый выгодный набор на старте'};
   if(!autoOn())return {id:'auto1d',why:'Устал тапать? '+SP.flyName+' сделает это за тебя'};
@@ -1725,6 +1787,32 @@ function renderShop(){
   });
   l.querySelectorAll('[data-theme]').forEach(b=>b.onclick=()=>{state.theme=b.dataset.theme;applyTheme();save();renderShop();S.ui();});
 }
+// проверяем, что купленное реально применилось — нужно, чтобы понять, стоит ли
+// повторить sync и что именно написать игроку в подтверждении
+function purchaseApplied(id){
+  if(id==='auto1d'||id==='autoForever')return autoOn();
+  if(id==='boost1h'||id==='boost1d')return boostMult()>1;
+  if(id==='bigBoard')return !!state.inv.bigBoard;
+  if(id==='starter')return !!state.inv.starter;
+  if(id==='sub')return (state.inv.subUntil||0)>now();
+  if(id.startsWith('bd:'))return (state.inv.themes||[]).includes(id.slice(3));
+  return true;   // wild3/war/donate — расходуемые или мгновенные, отдельно не проверяем
+}
+// конкретное подтверждение вместо общего «Оплачено» — с числами, а не обещаниями.
+// Ускорение ×2 просили объяснить отдельно: значок «×2» и старая цифра тапа рядом
+// выглядели так, будто буст не сработал, хотя реально уже считался с удвоением
+function purchaseConfirmText(id){
+  const half=v=>fmt(Math.max(1,Math.round(v/2)));
+  if(id==='boost1h'||id==='boost1d')return `Ускорение включено: ${fmt(tapValue())} за тап вместо ${half(tapValue())}.`;
+  if(id==='auto1d')return `${SP.flyName} работает сутки — копит монеты, даже если не тапаешь.`;
+  if(id==='autoForever')return `${SP.flyName} теперь навсегда.`;
+  if(id==='bigBoard')return 'Поле теперь 6×6 — забивается заметно реже.';
+  if(id==='starter')return 'Стартовый набор выдан: мушка и ×2 на сутки уже работают, 3 диких — в чипе над кликером.';
+  if(id==='sub')return 'Абонемент активен: мушка, значок в топе и фоны открыты.';
+  if(id==='wild3')return `Дикие в запасе: ×${state.wild}.`;
+  if(id.startsWith('bd:'))return 'Фон применён — виден в самой игре и на карточках.';
+  return 'Активировано.';
+}
 async function buy(id,amount){
   const it=SHOP.find(i=>i.id===id)||(id.startsWith('bd:')?{id,price:BD_PRICE}:null);if(!it)return;
   S.ui();
@@ -1734,7 +1822,17 @@ async function buy(id,amount){
       const r=await api('invoice',{item:id,amount});
       if(!r.link){toast(r.error||'Не удалось создать счёт');return;}
       TG.openInvoice(r.link,async status=>{
-        if(status==='paid'){S.buy();haptic.success();toast('Оплачено');await wait(800);await sync(true);renderShop();}
+        if(status==='paid'){
+          S.buy();haptic.success();
+          toast('Оплачено, применяем…',1500);
+          await wait(900);await sync(true);
+          // бот получает подтверждение оплаты отдельным опросом Telegram и иногда
+          // отстаёт на пару секунд — если эффект ещё не долетел, даём ему время и пробуем снова,
+          // а не молча показываем «Оплачено» поверх старых цифр
+          if(!purchaseApplied(id)){await wait(2500);await sync(true);}
+          renderShop();
+          toast(purchaseApplied(id)?purchaseConfirmText(id):'Оплата прошла, эффект появится в течение минуты — открой магазин ещё раз',3200);
+        }
         else if(status==='failed')toast('Оплата не прошла');
       });
     }catch(e){toast('Ошибка сервера');}
@@ -2104,7 +2202,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){save();syn
 // (maxLv/score/inv напрямую влияют на то, что уходит на сервер при следующей синхронизации).
 // Внутри настоящего Telegram-приложения не подключаем вообще; вне него (локальная разработка,
 // предпросмотр в браузере) оставляем — там это просто мы сами
-if(!inTG)window.__frog={state,spawn,resolve,thumbs,renderWar,showWarResult,isDeadEnd,checkDeadEnd,showRunOver,reviveRun,newRun,ladderAt,ladderLap,revivePrice,renderEndlessTop,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName,save,startGame,applySave,setSpecies,resetState};
+if(!inTG)window.__frog={state,spawn,resolve,thumbs,renderWar,showWarResult,isDeadEnd,checkDeadEnd,showRunOver,reviveRun,newRun,ladderAt,ladderLap,revivePrice,renderEndlessTop,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName,save,startGame,applySave,setSpecies,resetState,updateHud,tapValue,buy,purchaseApplied,purchaseConfirmText,mixedLadder,applyMixLadder,assetRef,mixMode,FROG_LADDER,CAT_LADDER,SPECIES};
 init().catch(e=>{console.error(e);$('#loading h2').textContent='Ошибка загрузки: '+e.message;});
 })();
 </script>

@@ -718,7 +718,15 @@ async function onMessage(m) {
   if (m.successful_payment) await onPayment(m);
 }
 async function onPayment(m) {
-  const sp = m.successful_payment; const [item, uid, priceStr] = String(sp.invoice_payload).split(':');
+  const sp = m.successful_payment;
+  // payload — это "item:userId:price:nonce", но у фонов сам item уже содержит
+  // двоеточие ("bd:НазваниеФона") — наивный split(':') на 4 поля резал его пополам,
+  // grant() получал мусорный item "bd" без содержимого и тихо ничего не делал:
+  // деньги списывались, а фон не выдавался. Разбираем с конца — три служебных
+  // поля всегда фиксированной длины, всё, что осталось спереди, — это item целиком
+  const parts = String(sp.invoice_payload).split(':');
+  const nonce = parts.pop(); const priceStr = parts.pop(); const payloadUid = parts.pop();
+  const item = parts.join(':');
   const stars = +sp.total_amount || +priceStr || 0;
   const a = { id: String(m.from.id), name: m.from.first_name || m.from.username || 'Игрок', username: m.from.username || '', real: true };
   const u = getUser(a); pondCheck();
