@@ -74,6 +74,7 @@ const SHOP = {
   sub: { title: 'Абонемент пруда', desc: 'Мушка, значок и ранний доступ к фонам на 30 дней', price: 199, sub: true },
   donate: { title: 'Покормить пруд', desc: 'Донат в общую цель чата', donate: true },
   war: { title: 'Поддержать сторону', desc: 'Сдвинуть битву видов в свою пользу', warPush: true },
+  revive: { title: 'Вернуть серию', desc: 'Продолжить оборвавшуюся бесконечную серию', revive: true },
 };
 
 /* ---------- ЭМОДЗИ ----------
@@ -112,6 +113,11 @@ function shopItem(id, sp) {
   return it;
 }
 
+// Возврат оборвавшейся серии дорожает с каждым разом внутри одной серии,
+// чтобы бесконечно выкупать один и тот же забег было невыгодно
+const REVIVE_BASE = 50;
+const revivePrice = u => Math.min(500, REVIVE_BASE * Math.pow(2, (((u && u.endless) || {}).cont || 0)));
+
 const BD_PRICE = 59;
 const DAY = 86400e3;
 function grant(user, item, amount) {
@@ -127,6 +133,7 @@ function grant(user, item, amount) {
     case 'starter': inv.starter = true; inv.autoUntil = Math.max(inv.autoUntil || 0, t) + DAY; inv.boostUntil = Math.max(inv.boostUntil || 0, t) + DAY; user.wild = (user.wild || 0) + 3; break;
     case 'sub': inv.subUntil = Math.max(inv.subUntil || 0, t) + 30 * DAY; break;
     case 'donate': inv.donated = (inv.donated || 0) + amount; db.pond.stars += amount; db.pond.count += amount * 10; db.pond.donors[user.id] = (db.pond.donors[user.id] || 0) + amount; break;
+    case 'revive': { const e = user.endless || (user.endless = {}); e.cont = (e.cont || 0) + 1; inv.reviveLeft = (inv.reviveLeft || 0) + 1; break; }
     case 'war': { warCheck(); const side = spOf(user); warPull(user, side, amount * STARS_PER_PULL); db.war.stars += amount; warBucket(user.id).s += amount; inv.warStars = (inv.warStars || 0) + amount; break; }
     default: if (String(item).startsWith('bd:')) { const th = String(item).slice(3); inv.themes = inv.themes || []; if (!inv.themes.includes(th)) inv.themes.push(th); }
   }
@@ -134,7 +141,7 @@ function grant(user, item, amount) {
 
 /* ---------- DB (json-файл) ---------- */
 const DB_FILE = path.join(__dirname, 'data.json');
-let db = { users: {}, payments: [], pond: { week: '', count: 0, stars: 0, donors: {} }, war: { week: '', frog: 0, cat: 0, stars: 0, by: {}, last: null }, digest: { day: '' }, events: [] };
+let db = { users: {}, payments: [], pond: { week: '', count: 0, stars: 0, donors: {} }, war: { week: '', frog: 0, cat: 0, stars: 0, by: {}, last: null }, endless: { record: null }, digest: { day: '' }, events: [] };
 try { if (fs.existsSync(DB_FILE)) db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch (e) { log('db read error', e.message); }
 let saveT = null;
 function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { fs.writeFileSync(DB_FILE + '.tmp', JSON.stringify(db)); fs.renameSync(DB_FILE + '.tmp', DB_FILE); } catch (e) { log('db write', e.message); } }, 1500); }
@@ -318,6 +325,31 @@ function topRows(n = 20) {
     return { rank: i + 1, id: u.id, name: u.name, sp: spOf(u), maxLv: u.maxLv, score: u.score, holder: h ? h.data.model : null, holderSp: h ? h.sp : null, sub: (u.inv && u.inv.subUntil || 0) > Date.now() };
   });
 }
+// топ серий: у кого дальше всех зашла одна серия в бесконечном режиме
+function endlessTop(n = 20) {
+  return Object.values(db.users)
+    .filter(u => isRealPlayer(u) && u.endless && u.endless.best > 1)
+    .sort((a, b) => b.endless.best - a.endless.best || (b.endless.bestScore || 0) - (a.endless.bestScore || 0))
+    .slice(0, n)
+    .map((u, i) => ({ rank: i + 1, id: u.id, name: u.name, sp: u.endless.bestSp || spOf(u), best: u.endless.best, score: u.endless.bestScore || 0 }));
+}
+const endlessState = u => ({
+  record: db.endless.record || null,
+  price: revivePrice(u),
+  mine: u && u.endless ? { best: u.endless.best || 0, score: u.endless.bestScore || 0, runs: u.endless.runs || 0 } : null,
+});
+async function announceRecord(u, best, prev) {
+  if (!CFG.token || !CFG.chatId) return;
+  const who = esc(u.name || 'Игрок');
+  const side = spOf(u) === 'cat' ? 'котами' : 'лягушками';
+  const tail = prev && prev.best ? `\nПрошлый рекорд — ${prev.best} уровень (${esc(prev.name || 'игрок')}).` : '';
+  await tg('sendMessage', {
+    chat_id: CFG.chatId, parse_mode: 'HTML',
+    text: `${em('trophy')} <b>Новый рекорд бесконечной серии!</b>\n` +
+          `${who} дошёл до <b>${best} уровня</b> за ${side}.${tail}`,
+    reply_markup: playKb(), disable_notification: true,
+  });
+}
 function rankOf(id) { const i = leaderboard().findIndex(u => u.id === id); return i < 0 ? null : i + 1; }
 
 /* ---------- RATE LIMIT (простое скользящее окно в памяти, без зависимостей) ---------- */
@@ -390,6 +422,25 @@ const api = {
     // выглядел как «потратил всё» и стирал реально купленный за звёзды запас
     const wildUsed = Math.max(0, Math.min(+body.wildUsed || 0, 1e6));
     u.wild = Math.max(0, (u.wild || 0) - wildUsed);
+    // ---- бесконечный режим: результат серии и общий рекорд ----
+    const e = u.endless || (u.endless = {});
+    if (body.runNew) { e.cont = 0; }   // началась новая серия — счётчик возвратов с нуля
+    if (body.runOver) {
+      // уровень серии ограничен теми же слияниями: без них такого уровня не бывает
+      const best = Math.max(1, Math.min(+body.runBest || 1, rec.merges + 1, 999));
+      // очки серии тоже не с потолка: каждое слияние даёт не больше уровня,
+      // до которого серия дошла, а слияний в серии не больше, чем всего у вида
+      const runScore = Math.max(0, Math.min(+body.runScore || 0, 1e9, rec.merges * best));
+      if (best > (e.best || 0)) { e.best = best; e.bestScore = runScore; e.bestAt = Date.now(); e.bestSp = spOf(u); }
+      e.runs = (e.runs || 0) + 1;
+      const r0 = db.endless.record;
+      if (!r0 || best > r0.best) {
+        db.endless.record = { id: u.id, name: u.name, sp: spOf(u), best, score: runScore, at: Date.now() };
+        if (isRealPlayer(u)) announceRecord(u, best, r0).catch(() => {});
+      }
+    }
+    const reviveUsed = Math.max(0, Math.min(+body.reviveUsed || 0, 100));
+    if (reviveUsed && u.inv) u.inv.reviveLeft = Math.max(0, (u.inv.reviveLeft || 0) - reviveUsed);
     u.syncAt = Date.now();
     await checkHolder(u, a.real);
     const doneKey = 'holderDone_' + spOf(u);
@@ -397,9 +448,9 @@ const api = {
     save();
     // итог прошлого сезона отдаём, пока клиент не подтвердит, что показал его
     if (body.warAck && u.warPending && String(body.warAck) === String(u.warPending.week)) delete u.warPending;
-    return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, war: warState(u), warResult: u.warPending || null, holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
+    return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, war: warState(u), warResult: u.warPending || null, endless: endlessState(u), endlessTop: endlessTop(20), holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
   },
-  async leaderboard() { pondCheck(); warCheck(); return { ok: true, top: topRows(50), pond: { count: db.pond.count, goal: CFG.pondGoal }, war: warState(null) }; },
+  async leaderboard() { pondCheck(); warCheck(); return { ok: true, top: topRows(50), pond: { count: db.pond.count, goal: CFG.pondGoal }, war: warState(null), endlessTop: endlessTop(50), endless: endlessState(null) }; },
   async invoice(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     const u = getUser(a);
@@ -421,6 +472,7 @@ const api = {
     if (lockKey) { const until = pendingInvoices.get(lockKey); if (until && until > Date.now()) return { ok: false, error: 'Счёт уже выставлен — заверши его или подожди пару минут' }; }
     let price = it.price;
     if (it.donate || it.warPush) { price = Math.round(+body.amount || 0); if (price < 1 || price > 500) return { ok: false, error: 'Сумма от 1 до 500 звёзд' }; }
+    if (it.revive) price = revivePrice(u);   // цену возврата считает сервер, а не клиент
     if (!CFG.token) return { ok: false, error: 'Сервер без BOT_TOKEN: платежи недоступны' };
     const nonce = crypto.randomBytes(4).toString('hex');
     const params = { title: it.title.slice(0, 32), description: it.desc.slice(0, 255), payload: `${body.item}:${u.id}:${price}:${nonce}`, provider_token: '', currency: 'XTR', prices: [{ label: it.title.slice(0, 32), amount: price }] };
