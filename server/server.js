@@ -145,7 +145,7 @@ function grant(user, item, amount) {
 
 /* ---------- DB (json-файл) ---------- */
 const DB_FILE = path.join(__dirname, 'data.json');
-let db = { users: {}, payments: [], pond: { week: '', count: 0, stars: 0, donors: {} }, war: { week: '', frog: 0, cat: 0, stars: 0, by: {}, last: null }, endless: { record: null }, digest: { day: '' }, events: [] };
+let db = { users: {}, payments: [], pond: { week: '', count: 0, stars: 0, donors: {} }, war: { week: '', frog: 0, cat: 0, stars: 0, by: {}, last: null }, endless: { record: null }, digest: { day: '' }, events: [], broadcast: null };
 try { if (fs.existsSync(DB_FILE)) db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch (e) { log('db read error', e.message); }
 let saveT = null;
 function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { fs.writeFileSync(DB_FILE + '.tmp', JSON.stringify(db)); fs.renameSync(DB_FILE + '.tmp', DB_FILE); } catch (e) { log('db write', e.message); } }, 1500); }
@@ -554,7 +554,10 @@ const api = {
           stars: paid,
           payments: db.payments.length,
           pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars, week: db.pond.week },
-          war: { frog: db.war.frog || 0, cat: db.war.cat || 0, stars: db.war.stars || 0, week: db.war.week, last: db.war.last || null },
+          war: { frog: db.war.frog || 0, cat: db.war.cat || 0, stars: db.war.stars || 0, week: db.war.week, last: db.war.last || null, top: warTop(8) },
+          endless: { record: db.endless.record || null },
+          broadcast: db.broadcast || null,
+          adminChatId: CFG.adminId || '',
           digestDay: db.digest.day || '—',
           chatId: CFG.chatId || '', botOn: !!CFG.token,
         },
@@ -615,6 +618,57 @@ const api = {
     if (act === 'warReset') {
       db.war = { week: weekKey(), frog: 0, cat: 0, stars: 0, by: {}, last: db.war.last || null }; save();
       return { ok: true, msg: 'Битва недели обнулена' };
+    }
+    if (act === 'warEnd') {
+      // warCheck() сам закрывает сезон и раздаёт награды, если week не совпадает
+      // с текущей неделей — подставляем заведомо несовпадающее значение
+      if (!db.war.frog && !db.war.cat) return { ok: false, error: 'Битва ещё пустая — закрывать нечего' };
+      db.war.week = ''; warCheck(); save();
+      return { ok: true, msg: 'Битва закрыта досрочно, награды выданы' };
+    }
+    if (act === 'warAdjust') {
+      const side = body.side === 'cat' ? 'cat' : 'frog';
+      const amount = Math.round(+body.amount || 0);
+      if (!amount) return { ok: false, error: 'Укажи сумму (можно отрицательную)' };
+      warCheck();
+      db.war[side] = Math.max(0, (db.war[side] || 0) + amount);
+      save();
+      return { ok: true, msg: `${side === 'cat' ? 'Коты' : 'Лягушки'} теперь: ${db.war[side]}` };
+    }
+    if (act === 'endlessReset') {
+      db.endless.record = null; save();
+      return { ok: true, msg: 'Рекорд бесконечной серии сброшен' };
+    }
+    if (act === 'broadcastUploadPhoto') {
+      const png = String(body.photo || ''); if (png.length < 100 || png.length > 6e6) return { ok: false, error: 'Пустая или слишком большая картинка' };
+      const buf = Buffer.from(png, 'base64');
+      const isPng = buf.slice(1, 4).toString() === 'PNG', isJpg = buf[0] === 0xFF && buf[1] === 0xD8;
+      if (!isPng && !isJpg) return { ok: false, error: 'Это не PNG и не JPG' };
+      const id = `bc-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}.${isPng ? 'png' : 'jpg'}`;
+      fs.writeFileSync(path.join(CARDS, id), buf);
+      return { ok: true, url: `${CFG.appUrl}/cards/${id}` };
+    }
+    if (act === 'broadcastTest') {
+      const text = String(body.text || '').trim(); if (!text) return { ok: false, error: 'Пустой текст' };
+      // шлём туда, кем реально авторизован этот запрос: initData — тому же tg-аккаунту,
+      // ключ из .env — на ADMIN_ID; без него тестировать некому
+      const target = (checkInitData(body.initData) || {}).id || CFG.adminId;
+      if (!target) return { ok: false, error: 'Не знаю, кому слать тест — открой админку из Telegram или задай ADMIN_ID' };
+      try { await sendBroadcastOne(target, text, body.photoUrl || null); return { ok: true, msg: 'Тест отправлен себе' }; }
+      catch (e) { return { ok: false, error: 'Telegram отказал: ' + e.message }; }   // сюда же прилетит ошибка битого HTML
+    }
+    if (act === 'broadcastSend') {
+      if (db.broadcast && db.broadcast.sending) return { ok: false, error: 'Рассылка уже идёт' };
+      const text = String(body.text || '').trim(); if (!text) return { ok: false, error: 'Пустой текст' };
+      const ids = all.filter(isRealPlayer).map(u => u.id);
+      if (!ids.length) return { ok: false, error: 'Получателей нет' };
+      runBroadcast(text, body.photoUrl || null, ids).catch(e => log('broadcast', e.message));
+      return { ok: true, total: ids.length };
+    }
+    if (act === 'broadcastStatus') return { ok: true, broadcast: db.broadcast || null };
+    if (act === 'broadcastCancel') {
+      if (db.broadcast) db.broadcast.cancel = true;
+      return { ok: true, msg: 'Останавливаю после текущей пачки' };
     }
     if (act === 'pondReset') {
       db.pond = { week: weekKey(), count: 0, stars: 0, donors: {} }; save();
@@ -742,6 +796,39 @@ async function onPayment(m) {
   log('payment', u.id, item, stars);
   const it = shopItem(item, spOf(u));
   try { await tg('sendMessage', { chat_id: m.chat.id, text: `${em('star')} Спасибо! ${esc(it ? it.title : item)} активировано. Открой игру — всё уже там.`, parse_mode: 'HTML', reply_markup: playKb(true) }); } catch (e) {}
+}
+/* ---------- РАССЫЛКА ----------
+   Админ пишет текст обычными Telegram-HTML тегами (<b>, <i>, <a href>,
+   <tg-emoji emoji-id="…">, ...) — тем же parse_mode:'HTML', которым уже
+   пользуются дайджест и уведомления. Никакой отдельной "конвертации" не
+   нужно: Telegram сам рендерит эти теги получателю, играть роль конвертера
+   тут не требуется, только не сломать то, что админ ввёл, лишним экранированием.
+   Фото грузится один раз (см. broadcastUploadPhoto) и потом переиспользуется
+   и в тестовой, и в боевой отправке — не гонять несколько мегабайт дважды. */
+async function sendBroadcastOne(id, text, photoUrl) {
+  const chat_id = +id;
+  if (photoUrl) return tg('sendPhoto', { chat_id, photo: photoUrl, caption: text, parse_mode: 'HTML' });
+  return tg('sendMessage', { chat_id, text, parse_mode: 'HTML' });
+}
+async function runBroadcast(text, photoUrl, ids) {
+  // 25 сообщений параллельно, затем пауза — эмпирически безопасный темп для
+  // рассылки РАЗНЫМ пользователям (лимит Bot API — это в первую очередь про
+  // спам В ОДИН чат; разным чатам можно заметно чаще, но топить всё разом
+  // в один Promise.all на тысячи получателей всё равно не стоит)
+  const BATCH = 25, PAUSE = 1100;
+  db.broadcast = { sending: true, done: false, total: ids.length, sent: 0, failed: 0, startedAt: Date.now(), text, cancel: false };
+  save();
+  for (let i = 0; i < ids.length; i += BATCH) {
+    if (db.broadcast.cancel) break;
+    const batch = ids.slice(i, i + BATCH);
+    await Promise.all(batch.map(async id => {
+      try { await sendBroadcastOne(id, text, photoUrl); db.broadcast.sent++; }
+      catch (e) { db.broadcast.failed++; }   // чаще всего — бот заблокирован получателем
+    }));
+    if (i + BATCH < ids.length) await new Promise(r => setTimeout(r, PAUSE));
+  }
+  db.broadcast.sending = false; db.broadcast.done = true; save();
+  log('broadcast done', db.broadcast.sent, '/', db.broadcast.total, 'failed', db.broadcast.failed, db.broadcast.cancel ? '(отменена)' : '');
 }
 async function sendDigest(force) {
   pondCheck();

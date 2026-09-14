@@ -83,6 +83,8 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     <button data-tab="stats" class="on">Сводка</button>
     <button data-tab="players">Игроки</button>
     <button data-tab="payments">Платежи</button>
+    <button data-tab="event">Ивент</button>
+    <button data-tab="broadcast">Рассылка</button>
   </div>
 
   <div id="tab-stats">
@@ -120,6 +122,56 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 
   <div id="tab-payments" hidden>
     <div class="tbl"><table id="payments"></table></div>
+  </div>
+
+  <div id="tab-event" hidden>
+    <div class="cards" id="eventCards"></div>
+    <div class="tbl" style="margin-bottom:16px"><table id="warTop"></table></div>
+    <div class="card" style="margin-bottom:16px">
+      <span>Скорректировать очки битвы</span>
+      <div class="tools" style="margin:10px 0 0">
+        <select id="warSide" style="width:auto;flex:0 0 140px">
+          <option value="frog">Лягушки</option>
+          <option value="cat">Коты</option>
+        </select>
+        <input id="warAmount" type="number" placeholder="±очки, напр. 100 или -50" style="flex:1;min-width:160px">
+        <button class="ghost" onclick="warAdjust()">Применить</button>
+      </div>
+    </div>
+    <div class="danger">
+      <h3>Опасная зона</h3>
+      <p>Действия применяются сразу и не отменяются.</p>
+      <div class="row-act">
+        <button class="ghost sm" onclick="confirmAct('Закрыть битву досрочно и раздать награды?',{act:'warEnd'})">Закрыть битву сейчас</button>
+        <button class="ghost sm" onclick="confirmAct('Обнулить счёт битвы недели (без выдачи наград)?',{act:'warReset'})">Обнулить битву</button>
+        <button class="bad sm" onclick="confirmAct('Сбросить общий рекорд бесконечной серии?',{act:'endlessReset'})">Сбросить рекорд серии</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-broadcast" hidden>
+    <div class="card" style="margin-bottom:16px">
+      <span>Текст сообщения (HTML)</span>
+      <textarea id="bcText" rows="7" style="width:100%;margin-top:8px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:11px 13px;color:var(--txt);font:400 14px/1.5 Nunito,sans-serif;resize:vertical" placeholder="&lt;b&gt;Привет!&lt;/b&gt; Текст рассылки. Разрешены теги b, i, u, s, a, code, pre, tg-spoiler, tg-emoji."></textarea>
+      <div class="muted" style="font-size:12px;margin-top:6px">Отправляется как есть через Telegram (parse_mode=HTML) — теги форматирования применятся у всех получателей. Премиум-эмодзи: вставь <code>&lt;tg-emoji emoji-id="ID"&gt;эмодзи&lt;/tg-emoji&gt;</code> вручную.</div>
+      <div class="tools" style="margin-top:12px">
+        <input id="bcPhoto" type="file" accept="image/png,image/jpeg" style="flex:1;min-width:180px">
+        <button class="ghost sm" id="bcPhotoClear" hidden onclick="bcClearPhoto()">Убрать фото</button>
+      </div>
+      <div id="bcPhotoPrev" hidden style="margin-top:10px"><img id="bcPhotoImg" style="max-width:220px;border-radius:10px;display:block"></div>
+      <div class="row-act" style="margin-top:14px">
+        <button class="ghost" onclick="bcTest()">Отправить себе (тест)</button>
+        <button onclick="bcSend()">Отправить всем</button>
+      </div>
+    </div>
+    <div class="card" id="bcStatusCard" hidden>
+      <span id="bcStatusLabel">Рассылка</span>
+      <div class="bar"><i id="bcBar" style="width:0"></i></div>
+      <div class="muted" id="bcStatusTxt" style="margin-top:8px;font-size:13px"></div>
+      <div class="row-act" style="margin-top:10px">
+        <button class="bad sm" id="bcCancelBtn" hidden onclick="confirmAct('Остановить рассылку после текущей пачки?',{act:'broadcastCancel'})">Остановить</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -164,9 +216,10 @@ $('#key').onkeydown=e=>{if(e.key==='Enter')$('#enter').click();};
 (async()=>{ if(INIT&&await tryKey('',true)) return; if(KEY) tryKey(KEY,true); })();
 
 /* ---------- вкладки ---------- */
+const TABS=['stats','players','payments','event','broadcast'];
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
-  ['stats','players','payments'].forEach(t=>$('#tab-'+t).hidden=(t!==b.dataset.tab));
+  TABS.forEach(t=>$('#tab-'+t).hidden=(t!==b.dataset.tab));
   load(b.dataset.tab);
 });
 
@@ -174,6 +227,8 @@ async function load(tab){
   if(tab==='stats'){const r=await api({act:'stats'});if(r.ok)renderStats(r.stats);}
   if(tab==='players'){const r=await api({act:'players'});if(r.ok){PLAYERS=r.players;renderPlayers();}}
   if(tab==='payments'){const r=await api({act:'payments'});if(r.ok)renderPayments(r.payments);}
+  if(tab==='event'){const r=await api({act:'stats'});if(r.ok)renderEvent(r.stats);}
+  if(tab==='broadcast')bcPoll(true);
 }
 
 /* ---------- сводка ---------- */
@@ -256,6 +311,70 @@ function renderPayments(ps){
       <td class="num">${p.stars}</td>
       <td class="num muted" style="font-size:11.5px">${esc(p.charge||'')}</td>
     </tr>`).join('')||'<tr><td class="muted">Платежей пока нет</td></tr>');
+}
+
+/* ---------- ивент ---------- */
+function renderEvent(s){
+  const w=s.war,e=s.endless;
+  const total=w.frog+w.cat,pct=total?Math.round(w.frog/total*100):50;
+  $('#eventCards').innerHTML=[
+    ['Лягушки',fmt(w.frog),`${pct}% битвы`],
+    ['Коты',fmt(w.cat),`${100-pct}% битвы`],
+    ['Звёзд задонатили',fmt(w.stars),''],
+    ['Неделя битвы',w.week||'—',''],
+    ['Рекорд бесконечной',e.record?e.record.best+' ур.':'—',e.record?esc(e.record.name||''):'ещё никем не поставлен'],
+  ].map(([t,v,sub])=>`<div class="card"><span>${t}</span><b>${v}</b><span>${sub}</span></div>`).join('');
+  $('#warTop').innerHTML=`<tr><th>Игрок</th><th>Сторона</th><th>Очки</th></tr>`+
+    (w.top||[]).map(x=>`<tr><td>${esc(x.name)}</td><td>${x.sp==='cat'?'Коты':'Лягушки'}</td><td class="num">${fmt(x.n)}</td></tr>`).join('')
+    ||'<tr><td class="muted">Пока никто не поддержал</td></tr>';
+}
+function warAdjust(){
+  const side=$('#warSide').value,amount=+$('#warAmount').value||0;
+  if(!amount)return toast('Укажи число очков');
+  act({act:'warAdjust',side,amount}).then(()=>load('event'));
+}
+
+/* ---------- рассылка ---------- */
+let bcPhotoUrl=null,bcTimer=null;
+$('#bcPhoto').onchange=async e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f);});
+  toast('Загружаю фото…');
+  const r=await api({act:'broadcastUploadPhoto',photo:b64});
+  if(!r.ok){toast(r.error||'Не вышло');e.target.value='';return;}
+  bcPhotoUrl=r.url;
+  $('#bcPhotoImg').src=r.url;$('#bcPhotoPrev').hidden=false;$('#bcPhotoClear').hidden=false;
+  toast('Фото загружено');
+};
+function bcClearPhoto(){bcPhotoUrl=null;$('#bcPhoto').value='';$('#bcPhotoPrev').hidden=true;$('#bcPhotoClear').hidden=true;}
+async function bcTest(){
+  const text=$('#bcText').value.trim(); if(!text)return toast('Пустой текст');
+  const r=await api({act:'broadcastTest',text,photoUrl:bcPhotoUrl});
+  toast(r.ok?(r.msg||'Тест отправлен'):(r.error||'Ошибка'));
+}
+async function bcSend(){
+  const text=$('#bcText').value.trim(); if(!text)return toast('Пустой текст');
+  const sr=await api({act:'stats'});
+  const n=sr.ok?sr.stats.players:'?';
+  if(!confirm(`Отправить сообщение всем игрокам (${n})? Действие необратимо.`))return;
+  const r=await api({act:'broadcastSend',text,photoUrl:bcPhotoUrl});
+  if(!r.ok)return toast(r.error||'Ошибка');
+  toast(`Рассылка запущена: ${r.total} получателей`);
+  bcPoll();
+}
+async function bcPoll(silent){
+  clearTimeout(bcTimer);
+  const r=await api({act:'broadcastStatus'});
+  if(!r.ok)return;
+  const b=r.broadcast;
+  if(!b){$('#bcStatusCard').hidden=true;return;}
+  $('#bcStatusCard').hidden=false;
+  const done=b.sent+b.failed,pct=b.total?Math.round(done/b.total*100):100;
+  $('#bcStatusLabel').textContent=b.sending?'Рассылка идёт…':(b.cancel?'Остановлена':'Рассылка завершена');
+  $('#bcBar').style.width=pct+'%';
+  $('#bcStatusTxt').textContent=`${done} / ${b.total} · доставлено ${b.sent} · ошибок ${b.failed}`;
+  $('#bcCancelBtn').hidden=!b.sending;
+  if(b.sending)bcTimer=setTimeout(bcPoll,1500);
 }
 
 /* ---------- действия ---------- */
