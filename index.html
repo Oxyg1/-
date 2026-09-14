@@ -1537,7 +1537,7 @@ async function restart(mode){
   if(mode==='endless'||mode==='endless-mix')state.runNew=true;   // серверу: счётчик возвратов с нуля
   if(mode==='endless-mix'){state.mixLadder=null;applyMixLadder(mixedLadder());}
   else{state.mixLadder=null;applyOrder(mode==='random'?shuffledOrder():buildOrder(state.own));}
-  refreshFlyIcon();   // смена режима на лету сюда не проходит через startGame()
+  refreshFlyIcon();refreshSpawnIcon();   // смена режима на лету сюда не проходит через startGame()
   buildBoard();
   try{await setClickerSkin(1);}catch(e){console.error('skin',e);}
   save();updateHud();refreshJunk();sync(true);
@@ -2124,6 +2124,10 @@ function applySpeciesUI(){
 // state.mode уже точно известен), и при смене режима на лету через restart()
 // — тот startGame() вообще не проходит
 function refreshFlyIcon(){$('#fly').innerHTML=ic(SP.fly);}
+// иконка на кнопке «Призвать» — аналогично: зависит от SP, а обновляется
+// только на старте (startGame). restart() вид не меняет, но дёргать эту же
+// функцию оттуда всё равно надёжнее, чем полагаться на то, что она не устареет
+async function refreshSpawnIcon(){$('#spawnIcon').src=await thumb(WILD);}
 
 /* ---------- INIT ---------- */
 function loaderSticker(){
@@ -2139,15 +2143,14 @@ async function startGame(){
   applySpeciesUI();
   resetState();
   await load();
-  // applySpeciesUI() выше отработала ДО load() — тогда state.mode ещё старый.
-  // Автотап в перемешке — всегда мышка, вне зависимости от того, кто сейчас
-  // считается «активным» кликером; теперь режим уже точно известен
+  // applySpeciesUI() выше отработала ДО load() — тогда state.mode ещё старый,
+  // поэтому иконку автотапа выставляем повторно, когда вид уже точно известен
   refreshFlyIcon();
   const need=new Set([WILD,1,...state.cells.filter(v=>v>0),state.maxLv,state.maxLv+1]);
   for(let l=baseSpawnLv();l<=state.maxLv+1;l++)need.add(l);
   const list=[...need].filter(l=>l===WILD||l<=LEVELS.length);let done=0;
   await Promise.all(list.map(l=>thumb(l).then(()=>{done++;$('#loadBar').style.width=(done/list.length*100)+'%';})));
-  $('#spawnIcon').src=thumbs.get(thumbKey(WILD));
+  await refreshSpawnIcon();
   buildBoard();applyTheme();
   await setClickerSkin(state.maxLv);
   updateHud();
