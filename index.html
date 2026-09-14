@@ -870,11 +870,10 @@ const frogName=lv=>{
 function assetRef(lv){
   if(typeof lv==='string')return lv.includes('/')?lv:SP.dir+'/'+lv;
   const L=(lv!==0&&lv!==WILD)?ladderAt(lv):null;
-  // дикая карта в перемешке — всегда кот: единый узнаваемый образ вместо
-  // случайного мигания между видами в зависимости от того, что было активно раньше
-  const dir=(L&&L.sp&&SPECIES[L.sp])?SPECIES[L.sp].dir
-    :(lv===WILD&&mixMode())?SPECIES.cat.dir
-    :SP.dir;
+  // дикая карта вне конкретного слота лестницы (кнопка «Призвать») — по текущему
+  // выбранному виду SP, как и обычные уровни; на самом поле у неё уже свой sp
+  // берётся из L выше, тут это только для кнопки/превью
+  const dir=(L&&L.sp&&SPECIES[L.sp])?SPECIES[L.sp].dir:SP.dir;
   return dir+'/'+frogFile(lv);
 }
 // кэш по слагу лягушки, не по номеру уровня: после перестановки лестницы
@@ -2120,11 +2119,11 @@ function applySpeciesUI(){
   $('#pondLabel').textContent=T.pond;
   $('#fly').innerHTML=ic(SP.fly);   // временная заглушка — refreshFlyIcon() поправит, когда режим уже известен
 }
-// автотап в перемешке — всегда мышка, вне зависимости от вида, который сейчас
-// считается «активным» кликером. Нужна отдельной функцией: применяется и на
-// старте (после load(), когда state.mode уже точно известен), и при смене
-// режима на лету через restart() — тот startGame() вообще не проходит
-function refreshFlyIcon(){$('#fly').innerHTML=ic(mixMode()?'mouse':SP.fly);}
+// иконка автотапа всегда по текущему выбранному виду (SP), в т.ч. в перемешке.
+// Нужна отдельной функцией: применяется и на старте (после load(), когда
+// state.mode уже точно известен), и при смене режима на лету через restart()
+// — тот startGame() вообще не проходит
+function refreshFlyIcon(){$('#fly').innerHTML=ic(SP.fly);}
 
 /* ---------- INIT ---------- */
 function loaderSticker(){
