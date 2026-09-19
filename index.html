@@ -307,11 +307,11 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .hub-jump{border-radius:20px;background:rgba(0,0,0,.3);overflow:hidden;position:relative;box-shadow:inset 0 2px 0 rgba(255,255,255,.08);flex:none}
 .hj-art{position:relative;height:150px;background:linear-gradient(to top,#b25e3c 0%,#e98a4f 28%,#f4b07a 46%,#9fd6f5 72%,#5f9fe0 100%);overflow:hidden}
 .hj-art .cl{position:absolute;height:14px;background:rgba(255,255,255,.6);border-radius:999px;animation:hjCloud 16s linear infinite}
-.hj-art .pd{position:absolute;width:92px;height:28px;left:50%;bottom:12px;margin-left:-46px}
-.hj-art .pd2{position:absolute;width:60px;height:18px}
+.hj-art .pd{position:absolute;width:104px;left:50%;bottom:6px;margin-left:-52px}
+.hj-art .pd2{position:absolute;width:66px}
 .hj-art .fr{position:absolute;width:76px;height:76px;left:50%;bottom:22px;margin-left:-38px;transform-origin:50% 100%;animation:hjJump 1.1s infinite}
-.hj-art .fl{position:absolute;width:20px;height:20px;animation:hjFly 3.2s ease-in-out infinite}
-.hj-art .lt{position:absolute;width:24px;height:24px;color:#ff7eb6;animation:hjBob 2.4s ease-in-out infinite}
+.hj-art .fl{position:absolute;width:26px;animation:hjFly 3.2s ease-in-out infinite}
+.hj-art .lt{position:absolute;width:30px;animation:hjBob 2.4s ease-in-out infinite}
 @keyframes hjJump{0%{transform:translateY(0) scale(1.18,.8);animation-timing-function:cubic-bezier(.2,.7,.4,1)}10%{transform:translateY(-6px) scale(.9,1.12);animation-timing-function:cubic-bezier(.2,.7,.4,1)}50%{transform:translateY(-62px) scale(1,1);animation-timing-function:cubic-bezier(.6,0,.8,.3)}92%{transform:translateY(-4px) scale(.95,1.06)}100%{transform:translateY(0) scale(1.18,.8)}}
 @keyframes hjFly{0%,100%{transform:translate(0,0)}25%{transform:translate(18px,-10px)}50%{transform:translate(4px,-22px)}75%{transform:translate(-14px,-8px)}}
 @keyframes hjBob{50%{transform:translateY(-6px) rotate(12deg)}}
@@ -546,13 +546,13 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
         <div class="hj-art" id="hjArt">
           <i class="cl" style="width:60px;top:16px;animation-delay:-4s"></i>
           <i class="cl" style="width:42px;top:44px;animation-delay:-11s;animation-duration:22s"></i>
-          <svg class="pd2" viewBox="0 0 100 30" style="left:16px;top:64px"><ellipse cx="50" cy="17" rx="48" ry="12" fill="#2c8a49"/><ellipse cx="50" cy="13" rx="48" ry="12" fill="#5cc27a"/></svg>
-          <svg class="pd2" viewBox="0 0 100 30" style="right:18px;top:38px"><ellipse cx="50" cy="17" rx="48" ry="12" fill="#2c8a49"/><ellipse cx="50" cy="13" rx="48" ry="12" fill="#5cc27a"/></svg>
-          <svg class="pd" viewBox="0 0 100 30"><ellipse cx="50" cy="17" rx="48" ry="12" fill="#2c8a49"/><ellipse cx="50" cy="13" rx="48" ry="12" fill="#5cc27a"/><path d="M50 13L97 9l-3-5z" fill="#2c8a49"/></svg>
+          <img class="pd2" src="jump/pad.png" alt="" style="left:14px;top:60px">
+          <img class="pd2" src="jump/pad.png" alt="" style="right:16px;top:34px">
+          <img class="pd" src="jump/pad.png" alt="">
           <img class="fr" id="hjFrog" alt="">
-          <svg class="fl" style="left:62%;top:34px"><use href="#i-fly"></use></svg>
-          <svg class="fl" style="left:24%;top:96px;animation-delay:-1.4s"><use href="#i-fly"></use></svg>
-          <svg class="lt" style="right:26px;top:88px"><use href="#i-lotus"></use></svg>
+          <img class="fl" src="jump/fly_a.png" alt="" style="left:62%;top:30px">
+          <img class="fl" src="jump/fly_a.png" alt="" style="left:24%;top:92px;animation-delay:-1.4s">
+          <img class="lt" src="jump/lotus_pink.png" alt="" style="right:24px;top:84px">
           <span class="hub-new" id="hubNew">Новое</span>
         </div>
         <div class="hj-info">
@@ -567,7 +567,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
         <button data-soon="Block Blast"><svg class="ic "><use href="#i-lock"></use></svg>Block Blast<small>скоро</small></button>
         <button data-soon="Сапёр"><svg class="ic "><use href="#i-lock"></use></svg>Сапёр<small>скоро</small></button>
       </div>
-      <div class="hub-flies"><svg class="ic "><use href="#i-fly"></use></svg><span>Мошки<small>скоро на них — облики лягушки в магазине</small></span><b id="hubFlies">0</b></div>
+      <div class="hub-flies"><img class="ic" src="jump/fly_a.png" alt=""><span>Мошки<small>скоро на них — облики лягушки в магазине</small></span><b id="hubFlies">0</b></div>
     </div>
   </div>
 </div>

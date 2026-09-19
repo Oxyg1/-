@@ -22,6 +22,9 @@ jump=open(os.path.join(here,'jump.js'),encoding='utf-8').read()
 out=out.replace('<script src="jump.js"></script>','<script>\n'+jump+'\n</script>')
 for name,uri in icons.items():
     out=out.replace('icons/'+name,uri)
+# картинки Frog Jump: пути в jump.js и index.html записаны строками целиком
+for f in sorted(glob.glob(os.path.join(here,'jump','*.png'))):
+    out=out.replace('jump/'+os.path.basename(f),'data:image/png;base64,'+base64.b64encode(open(f,'rb').read()).decode())
 os.makedirs(os.path.join(here,'dist'),exist_ok=True)
 open(os.path.join(here,'dist','frog-merge.html'),'w',encoding='utf-8').write(out)
 # artifact variant: strip document wrapper tags

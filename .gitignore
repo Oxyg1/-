@@ -2,3 +2,6 @@ server/.env
 server/data.json
 server/cards/
 dist/
+
+# исходники ассетов Frog Jump (тяжёлые JPEG из Nano Banana) — в репозиторий идут только готовые PNG
+jump/*.jpe

@@ -113,8 +113,9 @@ window.FrogJumpInit=function(B){
 #fj .fj-sub{position:absolute;left:0;right:0;top:calc(var(--tg-safe-area-inset-top,env(safe-area-inset-top,0px)) + var(--tg-content-safe-area-inset-top,0px) + 62px);display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
 #fj .fj-tray{display:flex;gap:6px;background:rgba(0,0,0,.26);border-radius:999px;padding:4px 8px}
 #fj .fj-tray i{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 2px rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;transition:transform .2s}
-#fj .fj-tray i svg{width:22px;height:22px;color:var(--c,#fff);opacity:0;transform:scale(.3);transition:opacity .15s,transform .25s cubic-bezier(.2,.9,.3,1.6)}
-#fj .fj-tray i.on svg{opacity:1;transform:scale(1)}
+#fj .fj-tray i img{width:26px;height:26px;object-fit:contain;opacity:0;transform:scale(.3);transition:opacity .15s,transform .25s cubic-bezier(.2,.9,.3,1.6)}
+#fj .fj-tray i.on img{opacity:1;transform:scale(1)}
+#fj .fj-fimg{width:28px;height:28px;object-fit:contain}
 #fj .fj-tray.merge i{animation:fjMerge .5s cubic-bezier(.5,0,.3,1) forwards}
 #fj .fj-tray.merge i:nth-child(1){--tx:30px}#fj .fj-tray.merge i:nth-child(3){--tx:-30px}
 @keyframes fjMerge{50%{transform:translateX(var(--tx,0)) scale(1.1)}100%{transform:translateX(var(--tx,0)) scale(0);opacity:0}}
@@ -137,7 +138,7 @@ window.FrogJumpInit=function(B){
 @keyframes fjNudge{50%{transform:translateX(-7px)}}
 #fj .fj-hint p{position:absolute;left:50%;bottom:calc(26% + 10px);transform:translateX(-50%);margin:0;background:rgba(8,30,22,.8);border-radius:999px;padding:6px 14px;font-size:14px;white-space:nowrap}
 #fj .fj-lot{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;pointer-events:none;z-index:5;transition:transform .42s cubic-bezier(.5,-.3,.4,1),opacity .42s}
-#fj .fj-lot svg{width:100%;height:100%}
+#fj .fj-lot img{width:100%;height:100%;object-fit:contain}
 #fj .fj-ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(3,25,17,.72);z-index:10}
 #fj .fj-ov .card{max-width:360px}
 #fj .fj-big{font-size:58px;font-weight:900;line-height:1;color:#ffd23f;text-shadow:0 4px 0 rgba(0,0,0,.3);font-variant-numeric:tabular-nums}
@@ -151,7 +152,7 @@ window.FrogJumpInit=function(B){
 `;
   document.head.appendChild(st);
 
-  const FLY='<svg class="ic"><use href="#i-fly"></use></svg>';
+  const FLY='<img class="fj-fimg" src="jump/fly_a.png" alt="">';
   const root=document.createElement('div');root.id='fj';root.hidden=true;
   root.innerHTML=`
 <canvas></canvas>
@@ -161,7 +162,7 @@ window.FrogJumpInit=function(B){
   <div class="fj-fl" id="fjFl">${FLY}<b id="fjFN">0</b></div>
 </div>
 <div class="fj-sub">
-  <div class="fj-tray" id="fjTray"><i><svg><use href="#i-lotus"></use></svg></i><i><svg><use href="#i-lotus"></use></svg></i><i><svg><use href="#i-lotus"></use></svg></i></div>
+  <div class="fj-tray" id="fjTray"><i><img alt=""></i><i><img alt=""></i><i><img alt=""></i></div>
   <div class="fj-combo" id="fjCombo"><img src="icons/fire.png" alt=""><b id="fjComboN">×3</b></div>
 </div>
 <div class="fj-banner" id="fjBanner"></div>
@@ -206,6 +207,37 @@ window.FrogJumpInit=function(B){
     buildSprites();
   }
   window.addEventListener('resize',()=>{if(open)resize();});
+
+  /* ---------- нарисованные ассеты ----------
+     Пути — строками целиком: build.py ищет их в тексте и встраивает картинки
+     в сборку. Если какой-то картинки нет или она не загрузилась, соответствующий
+     объект рисуется прежней векторной графикой — игра не ломается. */
+  const IMG_SRC={
+    pad:'jump/pad.png',pad_sink:'jump/pad_sink.png',pad_rot:'jump/pad_rot.png',
+    spring_low:'jump/spring_low.png',spring_high:'jump/spring_high.png',heron:'jump/heron.png',
+    fly_a:'jump/fly_a.png',fly_b:'jump/fly_b.png',fly_gold_a:'jump/fly_gold_a.png',fly_gold_b:'jump/fly_gold_b.png',
+    dragonfly:'jump/dragonfly.png',bubble:'jump/bubble.png',water:'jump/water.png',
+    lotus_pink:'jump/lotus_pink.png',lotus_gold:'jump/lotus_gold.png',lotus_blue:'jump/lotus_blue.png',
+    cloud_1:'jump/cloud_1.png',cloud_2:'jump/cloud_2.png',cloud_3:'jump/cloud_3.png',
+  };
+  const LOTUS_IMG=['lotus_pink','lotus_gold','lotus_blue'];
+  const IMG={};
+  function loadImgs(){
+    for(const k in IMG_SRC){
+      if(IMG[k])continue;
+      const im=new Image();im.decoding='async';im.onload=()=>{im.ok=true;};im.src=IMG_SRC[k];IMG[k]=im;
+    }
+  }
+  const has=k=>{const im=IMG[k];return !!(im&&im.ok&&im.naturalWidth);};
+  // картинка по ширине (w) с опорной точкой: ax/ay — доля от ширины/высоты
+  function blit(k,x,y,w,ax=.5,ay=.5){
+    const im=IMG[k],h=w*im.naturalHeight/im.naturalWidth;
+    cx.drawImage(im,x-w*ax,y-h*ay,w,h);return h;
+  }
+  // верх кувшинки на картинке снят под углом: центр верхней поверхности — не
+  // середина картинки, а чуть выше (ниже виден обод). Лягушка должна стоять
+  // именно на поверхности, иначе будет казаться, что она проваливается в лист
+  const PAD_AY=.4;
 
   /* ---------- спрайты (рисуются один раз под текущий масштаб) ---------- */
   let sprPad=null,sprRot=null,frogImg=null,frogP=null;
@@ -360,7 +392,7 @@ window.FrogJumpInit=function(B){
   }
   function trayRender(){
     const slots=elTray.children;
-    for(let i=0;i<3;i++){const c=run.tray[i];slots[i].classList.toggle('on',c!=null);if(c!=null)slots[i].style.setProperty('--c',LOTUS[c]);}
+    for(let i=0;i<3;i++){const c=run.tray[i];slots[i].classList.toggle('on',c!=null);if(c!=null)slots[i].firstElementChild.src=IMG_SRC[LOTUS_IMG[c]];}
   }
   function comboRender(){
     const on=run.combo>=3;elCombo.classList.toggle('on',on);elCombo.classList.toggle('hot',run.combo>=5);
@@ -417,7 +449,7 @@ window.FrogJumpInit=function(B){
     const slotIdx=Math.min(r.tray.length,2);
     const slot=elTray.children[slotIdx].getBoundingClientRect();
     const d=document.createElement('div');d.className='fj-lot';d.style.left=s.x+'px';d.style.top=s.y+'px';d.style.color=LOTUS[l.c];
-    d.innerHTML='<svg><use href="#i-lotus"></use></svg>';root.appendChild(d);
+    d.innerHTML=`<img src="${IMG_SRC[LOTUS_IMG[l.c]]}" alt="">`;root.appendChild(d);
     requestAnimationFrame(()=>{d.style.transform=`translate(${slot.left+slot.width/2-s.x}px,${slot.top+slot.height/2-s.y}px) scale(.8)`;});
     setTimeout(()=>d.remove(),450);
     r.tray.push(l.c);if(r.tray.length>3)r.tray.shift();
@@ -638,6 +670,11 @@ window.FrogJumpInit=function(B){
       cx.globalAlpha=alpha;
       if(kind==='firefly'){cx.fillStyle=`rgba(220,255,140,${.12*tw})`;cx.beginPath();cx.arc(x+Math.sin(tGlobal+m.ph)*8,y,7*m.s,0,7);cx.fill();cx.fillStyle=`rgba(240,255,190,${.8*tw})`;cx.beginPath();cx.arc(x+Math.sin(tGlobal+m.ph)*8,y,1.8*m.s,0,7);cx.fill();}
       else if(kind==='pollen'){cx.fillStyle=`rgba(255,235,200,${.35+.3*tw})`;cx.beginPath();cx.arc(x+Math.sin(tGlobal*.7+m.ph)*14,y,1.7*m.s,0,7);cx.fill();}
+      else if(kind==='cloud'&&has('cloud_1')){
+        if(m.s<.9)continue;
+        const k=['cloud_1','cloud_2','cloud_3'][Math.floor(m.ph)%3];
+        cx.globalAlpha=alpha*.8;blit(k,x+Math.sin(tGlobal*.15+m.ph)*20,y,95*m.s);
+      }
       else if(kind==='cloud'){if(m.s<1)continue;cx.fillStyle='rgba(255,255,255,.28)';cx.beginPath();cx.ellipse(x,y,46*m.s,13*m.s,0,0,7);cx.ellipse(x+22*m.s,y-7*m.s,26*m.s,11*m.s,0,0,7);cx.fill();}
       else{cx.fillStyle=`rgba(255,255,255,${.25+.7*tw})`;cx.beginPath();cx.arc(x,y,1.3*m.s,0,7);cx.fill();}
     }
@@ -655,11 +692,15 @@ window.FrogJumpInit=function(B){
   }
   function drawPadObj(p){
     const x=p.x,y=Y(p.y+p.dip)+Math.sin(tGlobal*1.6+p.bob)*.8;
-    const spr=p.type==='r'?sprRot:sprPad;
-    const w=p.w+8,h=w*32/88;
+    const key=p.type==='r'?'pad_rot':p.type==='s'?'pad_sink':'pad';
     cx.save();
-    if(p.type==='s'){cx.globalAlpha=p.sinkT>0?clamp(1-(p.sinkT-.15)/.7,0,1)*.75:.72;}
-    cx.drawImage(spr,x-w/2,y-h/2+2,w,h);
+    if(p.type==='s'&&p.sinkT>0)cx.globalAlpha=clamp(1-(p.sinkT-.15)/.7,0,1);
+    if(has(key))blit(key,x,y,p.w+12,.5,PAD_AY);
+    else{
+      const spr=p.type==='r'?sprRot:sprPad,w=p.w+8,h=w*32/88;
+      if(p.type==='s')cx.globalAlpha*=.72;
+      cx.drawImage(spr,x-w/2,y-h/2+2,w,h);
+    }
     if(p.type==='s'&&!p.sinkT){cx.fillStyle='rgba(255,255,255,.7)';const bt=(tGlobal*1.3+p.bob)%1;cx.beginPath();cx.arc(x-6,y-4-bt*10,1.8,0,7);cx.fill();}
     cx.restore();
     if(p.type==='m'){
@@ -667,7 +708,12 @@ window.FrogJumpInit=function(B){
       const e=p.w/2+10;
       cx.beginPath();cx.moveTo(x-e+4,y-4);cx.lineTo(x-e,y);cx.lineTo(x-e+4,y+4);cx.moveTo(x+e-4,y-4);cx.lineTo(x+e,y);cx.lineTo(x+e-4,y+4);cx.stroke();
     }
-    if(p.spring){
+    if(p.spring&&has('spring_low')){
+      // сжатая пружина стоит, пока не наступили; после прыжка на миг вытягивается
+      const up=p.springT<.45,k=p.springT<1?1+Math.sin(p.springT*Math.PI)*.12:1;
+      const im=IMG[up?'spring_high':'spring_low'],hgt=(up?46:34)*k,w=hgt*im.naturalWidth/im.naturalHeight;
+      cx.drawImage(im,x+p.springX-w/2,y-3-hgt,w,hgt);
+    }else if(p.spring){
       const k=p.springT<1?1-Math.sin(p.springT*Math.PI)*.55:1;
       const sxp=x+p.springX,base=y-3,hgt=18*k;
       cx.strokeStyle='#b6f0a0';cx.lineWidth=3;cx.lineJoin='round';cx.beginPath();cx.moveTo(sxp,base);
@@ -676,6 +722,15 @@ window.FrogJumpInit=function(B){
     }
   }
   function drawHeron(h){
+    if(has('heron')){
+      const x=h.x,y=Y(h.y);
+      cx.save();cx.translate(x,y);if(h.dead)cx.rotate(h.rot);
+      // картинка смотрит вправо; дыхание — лёгкое вытягивание вверх
+      cx.scale(h.face*.98,1+Math.sin(h.t*3)*.02);
+      const im=IMG.heron,hh=78,w=hh*im.naturalWidth/im.naturalHeight;
+      cx.drawImage(im,-w*.42,-hh,w,hh);
+      cx.restore();return;
+    }
     const x=h.x,y=Y(h.y);const bob=Math.sin(h.t*3)*2;
     cx.save();cx.translate(x,y);if(h.dead)cx.rotate(h.rot);cx.scale(h.face,1);
     cx.strokeStyle='#e7a35a';cx.lineWidth=2.5;cx.beginPath();cx.moveTo(-4,0);cx.lineTo(-4,-26);cx.moveTo(4,0);cx.lineTo(4,-26);cx.stroke();
@@ -690,6 +745,14 @@ window.FrogJumpInit=function(B){
   }
   function drawFly(f){
     const x=f.x+Math.sin(f.t*3.1)*5,y=Y(f.y+Math.sin(f.t*4.3)*4);
+    const fa=f.gold?'fly_gold_a':'fly_a';
+    if(has(fa)){
+      if(f.gold){cx.fillStyle='rgba(255,210,63,.28)';cx.beginPath();cx.arc(x,y,18+Math.sin(f.t*6)*2,0,7);cx.fill();}
+      // два кадра крыльев, чередуются часто — на глаз это взмахи
+      const k=Math.floor(f.t*26)%2?fa:(f.gold?'fly_gold_b':'fly_b');
+      blit(has(k)?k:fa,x,y,f.gold?32:27);
+      return;
+    }
     const flap=Math.abs(Math.sin(f.t*38));
     if(f.gold){cx.fillStyle='rgba(255,210,63,.25)';cx.beginPath();cx.arc(x,y,15,0,7);cx.fill();}
     cx.fillStyle='rgba(223,242,255,.85)';
@@ -700,12 +763,18 @@ window.FrogJumpInit=function(B){
   function drawLotus(l){
     const x=l.x,y=Y(l.y+Math.sin(l.t*2)*3),c=LOTUS[l.c];
     cx.fillStyle=c;cx.globalAlpha=.22+.12*Math.sin(l.t*4);cx.beginPath();cx.arc(x,y,20,0,7);cx.fill();cx.globalAlpha=1;
+    const li=LOTUS_IMG[l.c];
+    if(has(li)){cx.save();cx.translate(x,y);cx.rotate(Math.sin(l.t)*.12);blit(li,0,0,34);cx.restore();return;}
     cx.save();cx.translate(x,y);cx.rotate(Math.sin(l.t)*.15);
     for(let i=0;i<6;i++){cx.rotate(Math.PI/3);cx.fillStyle=c;cx.beginPath();cx.ellipse(0,-7,4.6,8,0,0,7);cx.fill();}
     cx.fillStyle='#fff6c9';cx.beginPath();cx.arc(0,0,4,0,7);cx.fill();
     cx.restore();
   }
   function drawDragon(x,y,t,scale=1){
+    if(has('dragonfly')){
+      // крылья нарисованы в картинке; частая дрожь по вертикали читается как взмахи
+      cx.save();cx.translate(x,y);cx.scale(scale,scale*(1+Math.sin(t*46)*.07));blit('dragonfly',0,0,48);cx.restore();return;
+    }
     const flap=Math.sin(t*40);
     cx.save();cx.translate(x,y);cx.scale(scale,scale);
     cx.fillStyle='rgba(210,245,255,.75)';
@@ -716,6 +785,7 @@ window.FrogJumpInit=function(B){
   }
   function drawItem(it){
     const x=it.x,y=Y(it.y+Math.sin(it.t*2.4)*4);
+    if(it.k==='b'&&has('bubble')){blit('bubble',x,y,32+Math.sin(it.t*3)*1.5);return;}
     if(it.k==='b'){
       cx.fillStyle='rgba(191,239,255,.18)';cx.beginPath();cx.arc(x,y,14,0,7);cx.fill();
       cx.strokeStyle='rgba(210,245,255,.9)';cx.lineWidth=2;cx.beginPath();cx.arc(x,y,14,0,7);cx.stroke();
@@ -777,7 +847,13 @@ window.FrogJumpInit=function(B){
     cx.setTransform(dpr*sc,0,0,dpr*sc,(offX*dpr)+shx*dpr,shy*dpr);
     // вода внизу, пока не улетели далеко
     const wy=Y(-6);
-    if(wy<VH+10){
+    if(wy<VH+10&&has('water')){
+      // полоса воды повторяется по горизонтали и медленно течёт
+      const im=IMG.water,tw=170,th=tw*im.naturalHeight/im.naturalWidth,left=-offX/sc,right=W+offX/sc;
+      const off=(tGlobal*9)%tw;
+      cx.fillStyle='#234d5d';cx.fillRect(left,wy+th-2,right-left,VH-wy+60);
+      for(let x=Math.floor((left+off)/tw)*tw-off;x<right;x+=tw)cx.drawImage(im,x,wy-8,tw+1,th);
+    }else if(wy<VH+10){
       cx.fillStyle='rgba(20,90,80,.85)';cx.fillRect(-offX/sc,wy,W+offX*2/sc,VH-wy+40);
       cx.strokeStyle='rgba(190,240,255,.35)';cx.lineWidth=1.4;
       for(let i=0;i<5;i++){const yy=wy+8+i*14;cx.beginPath();for(let x=0;x<=W;x+=12)cx.lineTo(x,yy+Math.sin(x*.05+tGlobal*2+i)*2);cx.stroke();}
@@ -796,7 +872,8 @@ window.FrogJumpInit=function(B){
       if(r.dragon>0)drawDragon(x,Y(r.fy+FROG+8),tGlobal,1.5);
       if(r.invul>0&&r.alive&&!r.rocket&&!r.dragon&&Math.floor(tGlobal*16)%2)cx.globalAlpha=.55;
       drawFrog(r,x);cx.globalAlpha=1;
-      if(r.shield){const yy=Y(r.fy+FROG*.45);cx.strokeStyle='rgba(210,245,255,.85)';cx.lineWidth=2.2;cx.fillStyle='rgba(191,239,255,.13)';cx.beginPath();cx.arc(x,yy,FROG*.58,0,7);cx.fill();cx.stroke();cx.strokeStyle='rgba(255,255,255,.9)';cx.beginPath();cx.arc(x,yy,FROG*.45,-2.5+Math.sin(tGlobal*2)*.2,-1.8);cx.stroke();}
+      if(r.shield&&has('bubble')){cx.globalAlpha=.92;blit('bubble',x,Y(r.fy+FROG*.45),FROG*1.2+Math.sin(tGlobal*3)*2);cx.globalAlpha=1;}
+      else if(r.shield){const yy=Y(r.fy+FROG*.45);cx.strokeStyle='rgba(210,245,255,.85)';cx.lineWidth=2.2;cx.fillStyle='rgba(191,239,255,.13)';cx.beginPath();cx.arc(x,yy,FROG*.58,0,7);cx.fill();cx.stroke();cx.strokeStyle='rgba(255,255,255,.9)';cx.beginPath();cx.arc(x,yy,FROG*.45,-2.5+Math.sin(tGlobal*2)*.2,-1.8);cx.stroke();}
     }
     drawParts(r,true);
     // поля по бокам на широком экране
@@ -982,6 +1059,7 @@ window.FrogJumpInit=function(B){
   }
   async function openGame(){
     if(open)return;
+    loadImgs();
     try{await loadFrog();}catch(e){B.toast('Не удалось загрузить лягушку');return;}
     open=true;root.hidden=false;B.setActive(true);
     resize();applyCtl();start();
@@ -1003,6 +1081,6 @@ window.FrogJumpInit=function(B){
     // а проверять механику надо
     render,zoneBlend,
     sim:(sec,onStep)=>{const n=Math.round(sec*120);for(let i=0;i<n&&run;i++){update(STEP);if(onStep&&i%12===0)onStep(run);}return run;}};
-  return {open:openGame,close,preload:()=>loadFrog().catch(()=>{}),localBest:()=>pref.best||0,localFlies:()=>pref.flies||0};
+  return {open:openGame,close,preload:()=>{loadImgs();return loadFrog().catch(()=>{});},localBest:()=>pref.best||0,localFlies:()=>pref.flies||0};
 };
 })();
