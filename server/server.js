@@ -79,6 +79,7 @@ const SHOP = {
   // в приложение — не нарастающая, как у обычного revive: считаем честным не
   // штрафовать за то, что он не видел стоп-экран вживую и не мог отреагировать раньше
   reviveReturn: { title: 'Вернуть серию (при входе)', desc: 'Разовая скидка — поле стало тупиком, пока приложение было закрыто', price: 15 },
+  jumpRevive: { title: 'Продолжить прыжок', desc: 'Frog Jump: продолжить забег с той же высоты', price: 10 },
 };
 
 /* ---------- ЭМОДЗИ ----------
@@ -137,6 +138,7 @@ function grant(user, item, amount) {
     case 'starter': inv.starter = true; inv.autoUntil = Math.max(inv.autoUntil || 0, t) + DAY; inv.boostUntil = Math.max(inv.boostUntil || 0, t) + DAY; user.wild = (user.wild || 0) + 3; break;
     case 'sub': inv.subUntil = Math.max(inv.subUntil || 0, t) + 30 * DAY; break;
     case 'donate': inv.donated = (inv.donated || 0) + amount; db.pond.stars += amount; db.pond.count += amount * 10; db.pond.donors[user.id] = (db.pond.donors[user.id] || 0) + amount; break;
+    case 'jumpRevive': { const j = jumpRec(user); j.revPaid = (j.revPaid || 0) + 1; break; }
     case 'revive': case 'reviveReturn': { const e = user.endless || (user.endless = {}); e.cont = (e.cont || 0) + 1; inv.reviveLeft = (inv.reviveLeft || 0) + 1; break; }
     case 'war': { warCheck(); const side = spOf(user); warPull(user, side, amount * STARS_PER_PULL); db.war.stars += amount; warBucket(user.id).s += amount; inv.warStars = (inv.warStars || 0) + amount; break; }
     default: if (String(item).startsWith('bd:')) { const th = String(item).slice(3); inv.themes = inv.themes || []; if (!inv.themes.includes(th)) inv.themes.push(th); }
@@ -145,8 +147,11 @@ function grant(user, item, amount) {
 
 /* ---------- DB (json-файл) ---------- */
 const DB_FILE = path.join(__dirname, 'data.json');
-let db = { users: {}, payments: [], pond: { week: '', count: 0, stars: 0, donors: {} }, war: { week: '', frog: 0, cat: 0, stars: 0, by: {}, last: null }, endless: { record: null }, digest: { day: '' }, events: [], broadcast: null };
+let db = { users: {}, payments: [], pond: { week: '', count: 0, stars: 0, donors: {} }, war: { week: '', frog: 0, cat: 0, stars: 0, by: {}, last: null }, endless: { record: null }, jump: { record: null, secret: '' }, digest: { day: '' }, events: [], broadcast: null };
 try { if (fs.existsSync(DB_FILE)) db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch (e) { log('db read error', e.message); }
+if (!db.jump || typeof db.jump !== 'object') db.jump = { record: null, secret: '' };
+// секрет подписи номеров забега: живёт в базе, чтобы пережить перезапуск сервера
+if (!db.jump.secret) db.jump.secret = crypto.randomBytes(24).toString('hex');
 let saveT = null;
 function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { fs.writeFileSync(DB_FILE + '.tmp', JSON.stringify(db)); fs.renameSync(DB_FILE + '.tmp', DB_FILE); } catch (e) { log('db write', e.message); } }, 1500); }
 process.on('SIGINT', () => { clearTimeout(saveT); try { fs.writeFileSync(DB_FILE, JSON.stringify(db)); } catch (e) {} process.exit(0); });
@@ -356,6 +361,44 @@ async function announceRecord(u, best, prev) {
 }
 function rankOf(id) { const i = leaderboard().findIndex(u => u.id === id); return i < 0 ? null : i + 1; }
 
+/* ---------- FROG JUMP ----------
+   Номер забега — подписанный токен {uid, t0, base}, а не запись в памяти: переживает
+   перезапуск сервера. Повтор отсекается тем, что t0 каждого принятого забега строго
+   больше предыдущего (у игрока забеги идут по очереди).
+   base — высота, с которой начат отрезок: после оплаченного продолжения второй отрезок
+   стартует с высоты, где оборвался первый, и лимиты считаются только на прирост. */
+function jumpRec(u) { return u.jump || (u.jump = { best: 0, flies: 0, runs: 0, total: 0, revPaid: 0, revUsed: 0, lastT0: 0, lastH: 0, lastAt: 0 }); }
+const jumpSign = str => crypto.createHmac('sha256', db.jump.secret).update(str).digest('hex').slice(0, 24);
+function jumpToken(uid, t0, base) { const p = `${uid}.${t0}.${base}`; return `${p}.${jumpSign(p)}`; }
+function jumpParse(tok) {
+  const m = String(tok || '').match(/^([^.]+)\.(\d+)\.(\d+)\.([0-9a-f]{24})$/);
+  if (!m) return null;
+  const p = `${m[1]}.${m[2]}.${m[3]}`;
+  const a = Buffer.from(jumpSign(p)), b = Buffer.from(m[4]);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  return { uid: m[1], t0: +m[2], base: +m[3] };
+}
+function jumpTop(n = 20) {
+  return Object.values(db.users)
+    .filter(u => isRealPlayer(u) && u.jump && u.jump.best > 0)
+    .sort((a, b) => b.jump.best - a.jump.best)
+    .slice(0, n)
+    .map((u, i) => ({ rank: i + 1, id: u.id, name: u.name, best: u.jump.best }));
+}
+const jumpState = u => {
+  const j = u ? jumpRec(u) : null;
+  return { record: db.jump.record || null, best: j ? j.best || 0 : 0, flies: j ? j.flies || 0 : 0, runs: j ? j.runs || 0 : 0 };
+};
+async function announceJumpRecord(u, h, prev) {
+  if (!CFG.token || !CFG.chatId) return;
+  const tail = prev && prev.best ? `\nПрошлый рекорд — ${prev.best} м (${esc(prev.name || 'игрок')}).` : '';
+  await tg('sendMessage', {
+    chat_id: CFG.chatId, parse_mode: 'HTML',
+    text: `${em('trophy')} <b>Новый рекорд Frog Jump!</b>\n${esc(u.name || 'Игрок')} допрыгал до <b>${h} м</b>.${tail}`,
+    reply_markup: playKb(), disable_notification: true,
+  });
+}
+
 /* ---------- RATE LIMIT (простое скользящее окно в памяти, без зависимостей) ---------- */
 const rateBuckets = new Map();
 function rateLimited(key, max, windowMs) {
@@ -452,9 +495,71 @@ const api = {
     save();
     // итог прошлого сезона отдаём, пока клиент не подтвердит, что показал его
     if (body.warAck && u.warPending && String(body.warAck) === String(u.warPending.week)) delete u.warPending;
-    return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, war: warState(u), warResult: u.warPending || null, endless: endlessState(u), endlessTop: endlessTop(20), holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
+    return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, war: warState(u), warResult: u.warPending || null, endless: endlessState(u), endlessTop: endlessTop(20), jump: jumpState(u), jumpTop: jumpTop(20), holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
   },
-  async leaderboard() { pondCheck(); warCheck(); return { ok: true, top: topRows(50), pond: { count: db.pond.count, goal: CFG.pondGoal }, war: warState(null), endlessTop: endlessTop(50), endless: endlessState(null) }; },
+  async leaderboard() { pondCheck(); warCheck(); return { ok: true, top: topRows(50), pond: { count: db.pond.count, goal: CFG.pondGoal }, war: warState(null), endlessTop: endlessTop(50), endless: endlessState(null), jumpTop: jumpTop(50), jump: jumpState(null) }; },
+  // старт забега (или его продолжения после оплаты) — выдаём подписанный номер
+  async jumpStart(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    if (rateLimited('jump:' + a.id, 60, 3600e3)) return { ok: false, error: 'Слишком часто' };
+    const u = getUser(a); const j = jumpRec(u);
+    let base = 0;
+    if (body.cont) {
+      // продолжение только за оплату и только сразу после оборвавшегося отрезка
+      if ((j.revPaid || 0) <= (j.revUsed || 0)) return { ok: false, error: 'wait' };
+      if (Date.now() - (j.lastAt || 0) > 15 * 60e3) return { ok: false, error: 'Забег уже закрыт' };
+      j.revUsed = (j.revUsed || 0) + 1;
+      base = j.lastH || 0;
+    }
+    const t0 = Math.max(Date.now(), (j.lastT0 || 0) + 1);
+    save();
+    return { ok: true, run: jumpToken(u.id, t0, base), base, jump: jumpState(u), jumpTop: jumpTop(10) };
+  },
+  // конец отрезка забега: проверяем правдоподобие, начисляем мошек, обновляем рекорды
+  async jumpEnd(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const u = getUser(a); const j = jumpRec(u);
+    const run = jumpParse(body.run);
+    if (!run || run.uid !== u.id) return { ok: false, error: 'run' };
+    if (run.t0 <= (j.lastT0 || 0)) return { ok: false, error: 'Этот забег уже засчитан' };
+    const now = Date.now();
+    const sec = Math.max(0, Math.min(+body.ms || 0, now - run.t0 + 3000)) / 1000;
+    // потолки с большим запасом: пружины, стрекоза и слияния лотосов дают рывки,
+    // но в среднем быстрее ~40 м/с не подняться; мошек на такой высоте тоже конечное число
+    const rawH = Math.max(0, Math.round(+body.height || 0));
+    const gainCap = Math.round(70 * sec + 300);
+    let gain = Math.max(0, rawH - run.base);
+    if (gain > gainCap) { u.flags = (u.flags || 0) + 1; gain = gainCap; }
+    const h = run.base + gain;
+    const fliesCap = Math.round(gain * 0.25 + sec * 2 + 30);
+    let flies = Math.max(0, Math.round(+body.flies || 0));
+    if (flies > fliesCap) { u.flags = (u.flags || 0) + 1; flies = fliesCap; }
+    j.lastT0 = run.t0; j.lastH = h; j.lastAt = now;
+    // потолок начисления в час: даже если крутить «старт-конец» в цикле, каждый
+    // вызов даёт немного мошек, а за час их всё равно не станет больше этого
+    const hour = Math.floor(now / 3600e3);
+    if (j.hour !== hour) { j.hour = hour; j.hourFlies = 0; }
+    const left = Math.max(0, 900 - (j.hourFlies || 0));
+    flies = Math.min(flies, left);
+    j.hourFlies = (j.hourFlies || 0) + flies;
+    j.flies = (j.flies || 0) + flies;
+    j.total = (j.total || 0) + flies;
+    if (!run.base) j.runs = (j.runs || 0) + 1;
+    const prevBest = j.best || 0;
+    const isBest = h > prevBest;
+    if (isBest) { j.best = h; j.bestAt = now; }
+    let isRecord = false;
+    const r0 = db.jump.record;
+    if (isRealPlayer(u) && (!r0 || h > r0.best)) {
+      isRecord = true;
+      db.jump.record = { id: u.id, name: u.name, best: h, at: now };
+      if (h >= 200) announceJumpRecord(u, h, r0).catch(() => {});
+    }
+    save();
+    const top = jumpTop(50);
+    const rank = top.findIndex(r => r.id === u.id) + 1 || null;
+    return { ok: true, height: h, earned: flies, isBest, prevBest, isRecord, rank, jump: jumpState(u), jumpTop: top.slice(0, 20) };
+  },
   async invoice(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     const u = getUser(a);
@@ -502,6 +607,20 @@ const api = {
     const url = `${CFG.appUrl}/cards/${id}`;
     const lv = Math.max(1, Math.min(+body.lv || 1, LEVELS.length)); const L = LEVELS[lv - 1];
     const res = { ok: true, url };
+    // карточка рекорда Frog Jump: своя подпись и ссылка, которая открывает сразу прыжки
+    const jumpH = Math.max(0, Math.round(+body.jump || 0));
+    if (jumpH && body.kind === 'chat' && CFG.token && a.real) {
+      try {
+        const r = await tg('savePreparedInlineMessage', {
+          user_id: +a.id, allow_user_chats: true, allow_group_chats: true, allow_channel_chats: false, allow_bot_chats: false,
+          result: { type: 'photo', id: crypto.randomBytes(6).toString('hex'), photo_url: url, thumbnail_url: url, photo_width: 1200, photo_height: 675,
+            caption: `Я допрыгал до ${jumpH} м в Frog Jump. Побьёшь?`,
+            reply_markup: { inline_keyboard: [[{ text: 'Прыгать в Frog Jump', url: CFG.appLink.replace('startapp=chat', 'startapp=jump') }]] } },
+        });
+        res.prepared_id = r.id;
+      } catch (e) { log('prepared jump', e.message); res.error = e.message; }
+      return res;
+    }
     if (body.kind === 'chat' && CFG.token && a.real) {
       try {
         const story = false;
@@ -795,6 +914,7 @@ async function onPayment(m) {
   save();
   log('payment', u.id, item, stars);
   const it = shopItem(item, spOf(u));
+  if (item === 'jumpRevive') return;   // игрок уже продолжает забег — сообщение в личку только отвлечёт
   try { await tg('sendMessage', { chat_id: m.chat.id, text: `${em('star')} Спасибо! ${esc(it ? it.title : item)} активировано. Открой игру — всё уже там.`, parse_mode: 'HTML', reply_markup: playKb(true) }); } catch (e) {}
 }
 /* ---------- РАССЫЛКА ----------

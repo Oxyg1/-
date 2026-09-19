@@ -12,6 +12,7 @@
 <script src="levels.js"></script>
 <script src="cats.js"></script>
 <script src="backdrops.js"></script>
+<script src="jump.js"></script>
 <!--CONFIG-->
 <style>
 :root{
@@ -293,6 +294,46 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 #loading .bar{width:100%;height:12px;border-radius:8px;background:rgba(0,0,0,.35);overflow:hidden}
 #loading .bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
 @media (prefers-reduced-motion:reduce){.frog.idle img,#fly{animation:none}}
+/* ---------- ХАБ ИГР ---------- */
+.iconbtn .newdot{position:absolute;top:-3px;right:-3px;width:11px;height:11px;border-radius:50%;background:#ff5d7a;box-shadow:0 0 0 2px #0c3a2a;animation:ndPulse 1.4s ease-in-out infinite}
+@keyframes ndPulse{50%{transform:scale(1.3)}}
+#hub .scroll{display:flex;flex-direction:column;gap:10px}
+.hub-main{width:100%;display:flex;align-items:center;gap:10px;border:0;border-radius:18px;background:rgba(0,0,0,.26);padding:8px 12px 8px 8px;color:#fff;font:900 17px Nunito,system-ui;text-align:left;box-shadow:inset 0 2px 0 rgba(255,255,255,.08)}
+.hub-main:active{transform:scale(.98)}
+.hub-main img{width:52px;height:52px;object-fit:contain;flex:none}
+.hub-main div{flex:1;min-width:0;display:flex;flex-direction:column}
+.hub-main small{font-size:12.5px;font-weight:800;opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hub-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.7;margin-top:2px}
+.hub-jump{border-radius:20px;background:rgba(0,0,0,.3);overflow:hidden;position:relative;box-shadow:inset 0 2px 0 rgba(255,255,255,.08);flex:none}
+.hj-art{position:relative;height:150px;background:linear-gradient(to top,#b25e3c 0%,#e98a4f 28%,#f4b07a 46%,#9fd6f5 72%,#5f9fe0 100%);overflow:hidden}
+.hj-art .cl{position:absolute;height:14px;background:rgba(255,255,255,.6);border-radius:999px;animation:hjCloud 16s linear infinite}
+.hj-art .pd{position:absolute;width:92px;height:28px;left:50%;bottom:12px;margin-left:-46px}
+.hj-art .pd2{position:absolute;width:60px;height:18px}
+.hj-art .fr{position:absolute;width:76px;height:76px;left:50%;bottom:22px;margin-left:-38px;transform-origin:50% 100%;animation:hjJump 1.1s infinite}
+.hj-art .fl{position:absolute;width:20px;height:20px;animation:hjFly 3.2s ease-in-out infinite}
+.hj-art .lt{position:absolute;width:24px;height:24px;color:#ff7eb6;animation:hjBob 2.4s ease-in-out infinite}
+@keyframes hjJump{0%{transform:translateY(0) scale(1.18,.8);animation-timing-function:cubic-bezier(.2,.7,.4,1)}10%{transform:translateY(-6px) scale(.9,1.12);animation-timing-function:cubic-bezier(.2,.7,.4,1)}50%{transform:translateY(-62px) scale(1,1);animation-timing-function:cubic-bezier(.6,0,.8,.3)}92%{transform:translateY(-4px) scale(.95,1.06)}100%{transform:translateY(0) scale(1.18,.8)}}
+@keyframes hjFly{0%,100%{transform:translate(0,0)}25%{transform:translate(18px,-10px)}50%{transform:translate(4px,-22px)}75%{transform:translate(-14px,-8px)}}
+@keyframes hjBob{50%{transform:translateY(-6px) rotate(12deg)}}
+@keyframes hjCloud{from{transform:translateX(-90px)}to{transform:translateX(440px)}}
+.hub-new{position:absolute;top:10px;left:10px;background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:900;box-shadow:0 2px 0 var(--acc-dark)}
+.hj-info{padding:10px 14px 14px;display:flex;flex-direction:column;gap:3px}
+.hj-info .t{font-size:21px;font-weight:900}
+.hj-row{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;opacity:.92}
+.hj-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hj-row b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.hj-info .btn{width:100%;margin-top:8px}
+.hub-soon{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;flex:none}
+.hub-soon button{border:0;border-radius:16px;background:rgba(0,0,0,.22);color:#fff;opacity:.62;padding:12px 4px;font:900 13px Nunito,system-ui;display:flex;flex-direction:column;align-items:center;gap:4px}
+.hub-soon button small{font-size:11px;font-weight:800;opacity:.75}
+.hub-soon .ic{width:18px;height:18px}
+.hub-flies{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.26);border-radius:16px;padding:9px 12px;font-size:14px;flex:none}
+.hub-flies .ic{width:28px;height:28px}
+.hub-flies span{flex:1;line-height:1.2}
+.hub-flies small{display:block;font-size:11.5px;opacity:.7;font-weight:800}
+.hub-flies b{font-size:19px;font-variant-numeric:tabular-nums}
+/* карточка для чата открывается и поверх Frog Jump */
+#cardPrev{z-index:160}
 </style>
 </head>
 <body>
@@ -370,6 +411,27 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
   <circle cx="4.6" cy="10.3" r="1.4" fill="#f0a9bd"/>
   <circle cx="6.9" cy="8.4" r="1" fill="#333a45"/>
 </symbol>
+<symbol id="i-games" viewBox="0 0 24 24">
+  <path d="M7.2 7.4h9.6c2.8 0 4.7 2.3 5 5.2l.5 4.2c.3 2.3-2.3 3.6-3.9 2l-2.6-2.6H8.2l-2.6 2.6c-1.6 1.6-4.2.3-3.9-2l.5-4.2c.3-2.9 2.2-5.2 5-5.2z" fill="#eaf6ee"/>
+  <path d="M7.6 10.4v4M5.6 12.4h4" stroke="#2c7a52" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="15.6" cy="11.4" r="1.25" fill="#e0405f"/><circle cx="18" cy="13.6" r="1.25" fill="#ffb400"/>
+</symbol>
+<symbol id="i-lock" viewBox="0 0 24 24">
+  <rect x="5" y="10.5" width="14" height="10" rx="3" fill="#fff"/>
+  <path d="M8.2 10.5V8a3.8 3.8 0 0 1 7.6 0v2.5" fill="none" stroke="#fff" stroke-width="2.2"/>
+</symbol>
+<symbol id="i-pause" viewBox="0 0 24 24">
+  <rect x="6.2" y="5" width="4.2" height="14" rx="1.6" fill="#fff"/><rect x="13.6" y="5" width="4.2" height="14" rx="1.6" fill="#fff"/>
+</symbol>
+<symbol id="i-chev" viewBox="0 0 24 24">
+  <path d="M15 5l-7 7 7 7" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</symbol>
+<symbol id="i-lotus" viewBox="0 0 24 24">
+  <path d="M12 3.2c2 2.2 2.7 5 2 8.6-.6 1-1.3 1.6-2 1.6s-1.4-.6-2-1.6c-.7-3.6 0-6.4 2-8.6z" fill="currentColor"/>
+  <path d="M4 8.4c3 .2 5.3 1.7 6.8 4.6-.1 1.2-.5 2-1.3 2.3-.8.3-1.8 0-2.8-.6C4.9 12.9 4 10.9 4 8.4zM20 8.4c-3 .2-5.3 1.7-6.8 4.6.1 1.2.5 2 1.3 2.3.8.3 1.8 0 2.8-.6 1.8-1.8 2.7-3.8 2.7-6.3z" fill="currentColor" opacity=".85"/>
+  <path d="M3 14.6c2.8-.8 5.7-.2 9 2 3.3-2.2 6.2-2.8 9-2-1.6 3.4-5 5.2-9 5.2s-7.4-1.8-9-5.2z" fill="currentColor" opacity=".7"/>
+  <circle cx="12" cy="15.6" r="1.6" fill="#fff6c9"/>
+</symbol>
 <symbol id="i-frog" viewBox="0 0 24 24">
   <circle cx="7.4" cy="7" r="3.6" fill="#5cbf7d"/>
   <circle cx="16.6" cy="7" r="3.6" fill="#5cbf7d"/>
@@ -385,6 +447,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
   <div class="hud">
     <div class="pill coins" id="coinPill"><img src="icons/coin.png" alt=""><span id="coins">0</span></div>
     <div class="pill lv"><img src="icons/lv.png" alt=""><span id="lv">1</span></div>
+    <button class="iconbtn" id="btnGames" title="Игры"><svg class="ic "><use href="#i-games"></use></svg></button>
     <button class="iconbtn" id="btnTop" title="Лидерборд"><svg class="ic "><use href="#i-trophy"></use></svg></button>
     <button class="iconbtn" id="btnShop" title="Магазин"><img class="ic" src="icons/tgstar.png" alt=""></button>
     <button class="iconbtn" id="btnCol" title="Коллекция"><img src="icons/ticket-green.png" alt=""></button>
@@ -464,11 +527,48 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
     <div class="segbar" id="topTabs">
       <button data-tab="score" class="on">По очкам</button>
       <button data-tab="endless">Бесконечный</button>
+      <button data-tab="jump">Прыжки</button>
     </div>
     <div class="war-note" id="endlessRec" hidden></div>
     <div class="scroll" id="topList"></div>
     <div class="demo" id="topNote"></div>
     <div class="row"><button class="btn ghost sm" id="topShare"><svg class="ic "><use href="#i-send"></use></svg> Поделиться результатом</button></div>
+  </div>
+</div>
+
+<div id="hub" class="overlay hidden">
+  <div class="card" style="max-height:92dvh">
+    <div class="head"><h2><svg class="ic "><use href="#i-games"></use></svg> Игры</h2><button class="iconbtn" id="hubClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
+    <div class="scroll">
+      <button class="hub-main" id="hubMerge"><img id="hubMergeImg" alt=""><div>Слияние<small id="hubMergeSub"></small></div><span class="chip gold">Играть</span></button>
+      <div class="hub-label">Мини-игры</div>
+      <div class="hub-jump">
+        <div class="hj-art" id="hjArt">
+          <i class="cl" style="width:60px;top:16px;animation-delay:-4s"></i>
+          <i class="cl" style="width:42px;top:44px;animation-delay:-11s;animation-duration:22s"></i>
+          <svg class="pd2" viewBox="0 0 100 30" style="left:16px;top:64px"><ellipse cx="50" cy="17" rx="48" ry="12" fill="#2c8a49"/><ellipse cx="50" cy="13" rx="48" ry="12" fill="#5cc27a"/></svg>
+          <svg class="pd2" viewBox="0 0 100 30" style="right:18px;top:38px"><ellipse cx="50" cy="17" rx="48" ry="12" fill="#2c8a49"/><ellipse cx="50" cy="13" rx="48" ry="12" fill="#5cc27a"/></svg>
+          <svg class="pd" viewBox="0 0 100 30"><ellipse cx="50" cy="17" rx="48" ry="12" fill="#2c8a49"/><ellipse cx="50" cy="13" rx="48" ry="12" fill="#5cc27a"/><path d="M50 13L97 9l-3-5z" fill="#2c8a49"/></svg>
+          <img class="fr" id="hjFrog" alt="">
+          <svg class="fl" style="left:62%;top:34px"><use href="#i-fly"></use></svg>
+          <svg class="fl" style="left:24%;top:96px;animation-delay:-1.4s"><use href="#i-fly"></use></svg>
+          <svg class="lt" style="right:26px;top:88px"><use href="#i-lotus"></use></svg>
+          <span class="hub-new" id="hubNew">Новое</span>
+        </div>
+        <div class="hj-info">
+          <div class="t">Frog Jump</div>
+          <div class="hj-row"><span>Твой рекорд</span><b id="hubBest">—</b></div>
+          <div class="hj-row"><span id="hubRecName">Лучший в игре</span><b id="hubRec">—</b></div>
+          <button class="btn" id="hubPlay">Играть</button>
+        </div>
+      </div>
+      <div class="hub-soon">
+        <button data-soon="Flappy Frog"><svg class="ic "><use href="#i-lock"></use></svg>Flappy Frog<small>скоро</small></button>
+        <button data-soon="Block Blast"><svg class="ic "><use href="#i-lock"></use></svg>Block Blast<small>скоро</small></button>
+        <button data-soon="Сапёр"><svg class="ic "><use href="#i-lock"></use></svg>Сапёр<small>скоро</small></button>
+      </div>
+      <div class="hub-flies"><svg class="ic "><use href="#i-fly"></use></svg><span>Мошки<small>скоро на них — облики лягушки в магазине</small></span><b id="hubFlies">0</b></div>
+    </div>
   </div>
 </div>
 
@@ -1022,7 +1122,7 @@ function sparks(x,y,n,colors){
 let toastT=null;function toast(t,ms=1800){const el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('on'),ms);}
 
 /* ---------- NETWORK ---------- */
-const net={online:false,me:null,top:[],pond:{count:0,goal:CFG.pondGoal},war:null,endless:null,endlessTop:[],holder:null,lastSync:0};
+const net={online:false,me:null,top:[],pond:{count:0,goal:CFG.pondGoal},war:null,endless:null,endlessTop:[],jump:null,jumpTop:[],holder:null,lastSync:0};
 async function api(path,body){
   if(!CFG.api)throw new Error('no api');
   const r=await fetch(CFG.api+'/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({initData:TG?TG.initData:'',dev:!inTG},body||{}))});
@@ -1046,6 +1146,7 @@ function applyServer(r){
   if(!r||!r.ok)return;
   net.online=true;net.me=r.me||null;net.top=r.top||[];if(r.pond)net.pond=r.pond;if(r.war)net.war=r.war;net.holder=r.holder||null;net.lastSync=now();
   if(r.endless)net.endless=r.endless;if(r.endlessTop)net.endlessTop=r.endlessTop;
+  if(r.jump)net.jump=r.jump;if(r.jumpTop)net.jumpTop=r.jumpTop;
   // оплаченный возврат серии приходит как предмет в инвентаре — тратим его сразу
   if(((r.inv&&r.inv.reviveLeft)||0)>0&&state.runOver)reviveRun();
   if(r.warResult)showWarResult(r.warResult);
@@ -1436,6 +1537,7 @@ $('#clicker').addEventListener('pointerdown',e=>{e.preventDefault();tap(e);});
 setInterval(()=>{
   if(!autoOn()||document.hidden||!$('#loading').classList.contains('hidden'))return;
   const v=tapValue();state.coins+=v;state.taps++;
+  if(jumpOpen)return;   // монеты идут, но всплывашки поверх Frog Jump не рисуем
   const r=$('#clickerLottie').getBoundingClientRect();
   floatText(r.left+r.width*.75,r.top+r.height*.2,ic(SP.fly)+' +'+fmt(v),'small',true);squash();tapBounce();
   $('#coins').textContent=fmt(state.coins);$('#btnSpawn').classList.toggle('poor',state.coins<spawnCost());
@@ -1873,6 +1975,7 @@ async function openTop(){
   }
   renderTopTabs();
   if(topTab==='endless'){renderEndlessTop();return;}
+  if(topTab==='jump'){renderJumpTop();return;}
   renderWar();
   const pond=net.pond;const pct=Math.min(100,pond.count/pond.goal*100);
   $('#pondTxt').textContent=`${fmt(pond.count)} / ${fmt(pond.goal)} слияний`;$('#pondBar').style.width=pct+'%';
@@ -1900,15 +2003,34 @@ async function openTop(){
 let topTab='score';
 function renderTopTabs(){
   $('#topTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.tab===topTab));
-  const endless=topTab==='endless';
-  $('#warBox').hidden=endless;$('#pondBox').hidden=endless;
-  const recBox=$('#endlessRec');recBox.hidden=!endless;
+  const endless=topTab==='endless',other=topTab!=='score';
+  $('#warBox').hidden=other;$('#pondBox').hidden=other;
+  const recBox=$('#endlessRec');recBox.hidden=!other;
+  if(topTab==='jump'){
+    const j=net.jump||{},rec=j.record||null;
+    recBox.textContent=(rec&&rec.best?`Рекорд: ${fmtM(rec.best)} м — ${rec.name||'игрок'}`:'Рекорд Frog Jump ещё никем не поставлен')
+      +(j.best?` · твой лучший: ${fmtM(j.best)} м`:'');
+  }
   if(endless){
     const rec=(net.endless&&net.endless.record)||null;
     const mine=(net.endless&&net.endless.mine)||null;
     recBox.textContent=(rec&&rec.best?`Общий рекорд: ${rec.best} уровень — ${rec.name||'игрок'}`:'Общий рекорд ещё никем не поставлен')
       +(mine&&mine.best?` · твой лучший: ${mine.best}`:'');
   }
+}
+function renderJumpTop(){
+  const list=$('#topList');list.innerHTML='';
+  const rows=net.jumpTop||[];
+  $('#topNote').textContent='';
+  if(!rows.length){list.innerHTML='<div class="demo">В Frog Jump ещё никто не прыгал. Открой «Игры» — будешь первым в таблице.</div>';return;}
+  const meId=net.me?net.me.id:null;
+  rows.forEach(r=>{
+    const d=document.createElement('div');d.className='lb'+((meId&&r.id===meId)?' me':'');
+    const medal=r.rank<=3?ic('medal','m'+r.rank):r.rank;
+    d.innerHTML=`<div class="rk ${r.rank<=3?'top':''}">${medal}</div><img alt=""><div class="nm">${esc(r.name||'Игрок')}<small>Frog Jump</small></div><div class="sc">${fmtM(r.best)} м</div>`;
+    thumb('frogs/original').then(u=>d.querySelector('img').src=u).catch(()=>{});
+    list.appendChild(d);
+  });
 }
 function renderEndlessTop(){
   const list=$('#topList');list.innerHTML='';
@@ -1928,7 +2050,7 @@ function renderEndlessTop(){
 $('#topTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
   if(topTab===b.dataset.tab)return;
   topTab=b.dataset.tab;S.ui();renderTopTabs();
-  if(topTab==='endless')renderEndlessTop();else openTop();
+  if(topTab==='endless')renderEndlessTop();else if(topTab==='jump')renderJumpTop();else openTop();
 });
 $('#btnTop').onclick=openTop;
 $('#topClose').onclick=()=>{$('#top').classList.add('hidden');S.ui();};
@@ -2210,11 +2332,89 @@ async function showCatsNews(){
   $('#newsLater').onclick=()=>{mark();ov.classList.add('hidden');S.ui();};
 }
 
+/* ---------- ХАБ ИГР И FROG JUMP ----------
+   Сама игра — в jump.js. Сюда передаём только то, что ей нужно: звук, стикер,
+   сервер, покупку и отправку карточки. Остальное состояние слияния она не видит. */
+let jumpOpen=false;
+const HUB_SEEN='swamp.hubSeen';
+const fmtM=n=>Math.floor(n||0).toLocaleString('ru-RU');
+async function buyJumpRevive(cb){
+  if(!(inTG&&CFG.api)){S.buy();haptic.success();cb();return;}   // демо: без оплаты
+  try{
+    const r=await api('invoice',{item:'jumpRevive'});
+    if(!r.link){toast(r.error||'Не удалось создать счёт');return;}
+    TG.openInvoice(r.link,status=>{
+      if(status==='paid'){S.buy();haptic.success();cb();}
+      else if(status==='failed')toast('Оплата не прошла');
+    });
+  }catch(e){toast('Ошибка сервера');}
+}
+async function shareJump(png,h){
+  toast('Рисую карточку…',1200);
+  if(inTG&&CFG.api){
+    try{
+      const r=await api('card',{kind:'chat',png:png.split(',')[1],jump:h});
+      if(!r.ok)throw new Error(r.error||'card');
+      if(tgv('8.0')&&r.prepared_id){TG.shareMessage(r.prepared_id,ok=>{if(ok)toast('Отправлено в чат');});return;}
+      showCard(png,'chat',r.url);return;
+    }catch(e){toast('Сервер не принял карточку: '+e.message,3000);}
+  }
+  showCard(png,'chat',null);
+}
+const JUMP=window.FrogJumpInit?window.FrogJumpInit({
+  bake:(ref,size)=>bake(ref,size),
+  api:(p,b)=>api(p,b),
+  hasApi:()=>!!CFG.api,
+  net:()=>net,
+  myId:()=>net.me?net.me.id:null,
+  applyJump:r=>{if(r.jump)net.jump=r.jump;if(r.jumpTop)net.jumpTop=r.jumpTop;},
+  TG,tgv,inTG,haptic,myName,toast,
+  sfx:{voice,thud,note,audio,out:()=>{audio();return dry;}},
+  soundOn:()=>state.sound,
+  setSound:v=>{state.sound=!!v;save();updateHud();},
+  setActive:v=>{jumpOpen=!!v;},
+  onClose:()=>openHub(),
+  buyJumpRevive,shareJump,
+}):null;
+function renderHub(){
+  const lv=Math.max(1,state.maxLv|0);
+  $('#hubMergeSub').textContent=`ур. ${lv} · ${frogName(lv)}`;
+  thumb(lv).then(u=>{$('#hubMergeImg').src=u;}).catch(()=>{});
+  thumb('frogs/original').then(u=>{$('#hjFrog').src=u;}).catch(()=>{});
+  const j=net.jump||{};
+  const best=Math.max(j.best||0,JUMP?JUMP.localBest():0);
+  $('#hubBest').textContent=best?fmtM(best)+' м':'ещё не прыгал';
+  const rec=j.record;
+  $('#hubRecName').textContent=rec?`Лучший · ${rec.name||'игрок'}`:'Лучший в игре';
+  $('#hubRec').textContent=rec?fmtM(rec.best)+' м':'—';
+  $('#hubFlies').textContent=fmtM(CFG.api?(j.flies||0):(JUMP?JUMP.localFlies():0));
+  $('#hubNew').hidden=!!best;
+}
+function openHub(){
+  try{localStorage.setItem(HUB_SEEN,'1');}catch(e){}
+  const dot=$('#btnGames .newdot');if(dot)dot.remove();
+  renderHub();$('#hub').classList.remove('hidden');
+  if(JUMP)JUMP.preload();
+  sync(true).then(renderHub).catch(()=>{});
+}
+const closeHub=()=>$('#hub').classList.add('hidden');
+$('#btnGames').onclick=()=>{S.ui();haptic.light();openHub();};
+$('#hubClose').onclick=()=>{S.ui();closeHub();};
+$('#hubMerge').onclick=()=>{S.ui();closeHub();};
+$('#hubPlay').onclick=()=>{
+  if(!JUMP){toast('Игра не загрузилась — обнови приложение');return;}
+  S.ui();haptic.medium();closeHub();JUMP.open();
+};
+$('#hub').querySelectorAll('[data-soon]').forEach(b=>b.onclick=()=>{S.ui();haptic.select();toast(`${b.dataset.soon} готовим — следи за новостями в чате`);});
+try{if(!localStorage.getItem(HUB_SEEN))$('#btnGames').insertAdjacentHTML('beforeend','<i class="newdot"></i>');}catch(e){}
+
 async function init(){
   const fresh=await resolveSpecies();
   loaderSticker();
   await startGame();
-  if(TG&&TG.initDataUnsafe&&TG.initDataUnsafe.start_param==='shop')openShop();
+  const startParam=TG&&TG.initDataUnsafe&&TG.initDataUnsafe.start_param;
+  if(startParam==='shop')openShop();
+  else if(startParam==='jump'&&JUMP)JUMP.open();
   sync(true).then(r=>{
     const frogs=(r&&r.holder&&r.holder.frogs)||[];
     // тихое уведомление без модалки и без намёка на то, что ждёт в конце игры —
@@ -2236,7 +2436,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){save();syn
 // (maxLv/score/inv напрямую влияют на то, что уходит на сервер при следующей синхронизации).
 // Внутри настоящего Telegram-приложения не подключаем вообще; вне него (локальная разработка,
 // предпросмотр в браузере) оставляем — там это просто мы сами
-if(!inTG)window.__frog={state,spawn,resolve,thumbs,renderWar,showWarResult,isDeadEnd,checkDeadEnd,showRunOver,reviveRun,newRun,ladderAt,ladderLap,revivePrice,renderEndlessTop,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName,save,startGame,applySave,setSpecies,resetState,updateHud,tapValue,buy,purchaseApplied,purchaseConfirmText,mixedLadder,applyMixLadder,assetRef,mixMode,FROG_LADDER,CAT_LADDER,SPECIES,refreshFlyIcon};
+if(!inTG)window.__frog={state,spawn,resolve,thumbs,renderWar,showWarResult,isDeadEnd,checkDeadEnd,showRunOver,reviveRun,newRun,ladderAt,ladderLap,revivePrice,renderEndlessTop,thumbPromises,dataCache,thumbKey,loadFrogData,thumb,showFinale,fnStage2,restart,shuffledOrder,levelUp,grantLocal,net,renderCard,placeWild,share,openTop,openShop,applyOwnership,buildOrder,applyOrder,ownsLevel,rowFrogSlug,rowFrogName,LEVELS,BASE,renderShop,ask,buildBoard,frogFile,frogName,save,startGame,applySave,setSpecies,resetState,updateHud,tapValue,buy,purchaseApplied,purchaseConfirmText,mixedLadder,applyMixLadder,assetRef,mixMode,FROG_LADDER,CAT_LADDER,SPECIES,refreshFlyIcon,openHub,renderHub,renderJumpTop,JUMP};
 init().catch(e=>{console.error(e);$('#loading h2').textContent='Ошибка загрузки: '+e.message;});
 })();
 </script>

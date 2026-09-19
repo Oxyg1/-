@@ -18,6 +18,8 @@ embed_js='window.EMBED='+'{'+','.join(f'"{k}":"{v}"' for k,v in embed.items())+'
 out=src.replace('<script src="levels.js"></script>','<script>\n'+levels+cats+backdrops+'\n'+embed_js+'\n</script>')
 out=out.replace('<script src="cats.js"></script>','')
 out=out.replace('<script src="backdrops.js"></script>','')
+jump=open(os.path.join(here,'jump.js'),encoding='utf-8').read()
+out=out.replace('<script src="jump.js"></script>','<script>\n'+jump+'\n</script>')
 for name,uri in icons.items():
     out=out.replace('icons/'+name,uri)
 os.makedirs(os.path.join(here,'dist'),exist_ok=True)
