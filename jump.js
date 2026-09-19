@@ -618,10 +618,16 @@ window.FrogJumpInit=function(B){
 
   /* ---------- отрисовка ---------- */
   const motes=Array.from({length:44},()=>({x:Math.random(),y:Math.random(),d:rnd(.12,.5),s:rnd(.6,1.4),ph:rnd(0,6)}));
+  // Небо перетекает непрерывно. Раньше цвет стоял на месте и перекрашивался
+  // только у самой границы зоны — это читалось как резкое переключение.
+  // Теперь доля следующей зоны считается по всей дистанции между зонами и
+  // сглаживается на входе и выходе, так что момента смены не видно.
+  // Светлячки/пыльца/облака/звёзды меняются позже цвета (mt) и с перекрытием.
   function zoneBlend(m){
-    let i=0;while(i<ZONES.length-1&&m>=ZONES[i+1].h-150)i++;
-    if(i>=ZONES.length-1)return {a:ZONES[i],b:ZONES[i],t:0};
-    const b=ZONES[i+1];return {a:ZONES[i],b,t:clamp((m-(b.h-150))/150,0,1)};
+    let i=0;while(i<ZONES.length-1&&m>=ZONES[i+1].h)i++;
+    if(i>=ZONES.length-1)return {a:ZONES[i],b:ZONES[i],t:0,mt:0};
+    const b=ZONES[i+1],k=clamp((m-ZONES[i].h)/(b.h-ZONES[i].h),0,1);
+    return {a:ZONES[i],b,t:k*k*(3-2*k),mt:clamp((k-.5)/.4,0,1)};
   }
   function drawMotes(kind,alpha,camPx){
     if(alpha<=.01)return;
@@ -766,7 +772,7 @@ window.FrogJumpInit=function(B){
     gr.addColorStop(0,mixc(z.a.top,z.b.top,z.t));gr.addColorStop(1,mixc(z.a.bot,z.b.bot,z.t));
     cx.fillStyle=gr;cx.fillRect(0,0,cssW,cssH);
     const camPx=r.camY*sc;
-    drawMotes(z.a.mote,1-z.t,camPx);if(z.t>0)drawMotes(z.b.mote,z.t,camPx);
+    drawMotes(z.a.mote,1-z.mt,camPx);if(z.mt>0)drawMotes(z.b.mote,z.mt,camPx);
     const shx=r.shake?rnd(-r.shake,r.shake)*sc:0,shy=r.shake?rnd(-r.shake,r.shake)*sc:0;
     cx.setTransform(dpr*sc,0,0,dpr*sc,(offX*dpr)+shx*dpr,shy*dpr);
     // вода внизу, пока не улетели далеко
@@ -995,6 +1001,7 @@ window.FrogJumpInit=function(B){
     dir:d=>{touchDir=d;},banner,SND,
     // прогон физики без кадров: в фоновой вкладке requestAnimationFrame не идёт,
     // а проверять механику надо
+    render,zoneBlend,
     sim:(sec,onStep)=>{const n=Math.round(sec*120);for(let i=0;i<n&&run;i++){update(STEP);if(onStep&&i%12===0)onStep(run);}return run;}};
   return {open:openGame,close,preload:()=>loadFrog().catch(()=>{}),localBest:()=>pref.best||0,localFlies:()=>pref.flies||0};
 };
