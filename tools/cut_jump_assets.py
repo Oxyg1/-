@@ -113,22 +113,34 @@ def water(name, target_h=200, overlap=0.18):
     im.save(p, optimize=True)
     print(f'{name:12} {im.size[0]}x{im.size[1]}  {os.path.getsize(p) // 1024} КБ')
 
+def exists(name):
+    return os.path.exists(os.path.join(SRC, name + '.jpe'))
+
 if __name__ == '__main__':
+    # обрабатываем только то, для чего рядом лежит исходник: набор ассетов
+    # меняется, и отсутствие файла не должно ронять всю обработку
     for n in ('pad', 'pad_sink', 'pad_rot'):
+        if not exists(n): continue
         img = load(n); a, bg = key_magenta(img); finish(n, img, a, bg, 256)
     for n in ('spring_low', 'spring_high'):
-        green_body(n, 120)
-    img = load('heron'); a, bg = key_magenta(img); finish('heron', img, a, bg, 240, box='h')
+        if exists(n): green_body(n, 120)
+    if exists('heron'):
+        img = load('heron'); a, bg = key_magenta(img); finish('heron', img, a, bg, 240, box='h')
     for n in ('fly_a', 'fly_b'):
+        if not exists(n): continue
         img = load(n); a, bg = key_magenta(img); finish(n, img, a, bg, 112)
     # золотое свечение смешано с фоном в оранжево-розовую кляксу — её убираем,
     # свечение в игре рисуется отдельно и честно прозрачным
     for n in ('fly_gold_a', 'fly_gold_b'):
-        gold_fly(n, 112)
-    img = load('dragonfly'); a, bg = key_magenta(img); finish('dragonfly', img, a, bg, 200)
+        if exists(n): gold_fly(n, 112)
+    if exists('dragonfly'):
+        img = load('dragonfly'); a, bg = key_magenta(img); finish('dragonfly', img, a, bg, 200)
     for n in ('lotus_pink', 'lotus_gold', 'lotus_blue'):
+        if not exists(n): continue
         img = load(n); a, bg = key_green(img); finish(n, img, a, bg, 112)
-    img = load('bubble'); a, bg = key_black(img, 6, 160); finish('bubble', img, a, bg, 128)
+    if exists('bubble'):
+        img = load('bubble'); a, bg = key_black(img, 6, 160); finish('bubble', img, a, bg, 128)
     for n in ('cloud_1', 'cloud_2', 'cloud_3'):
+        if not exists(n): continue
         img = load(n); a, bg = key_black(img, 8, 235); finish(n, img, a, bg, 320)
-    water('water')
+    if exists('water'): water('water')

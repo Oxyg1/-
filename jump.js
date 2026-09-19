@@ -115,7 +115,6 @@ window.FrogJumpInit=function(B){
 #fj .fj-tray i{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 2px rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;transition:transform .2s}
 #fj .fj-tray i img{width:26px;height:26px;object-fit:contain;opacity:0;transform:scale(.3);transition:opacity .15s,transform .25s cubic-bezier(.2,.9,.3,1.6)}
 #fj .fj-tray i.on img{opacity:1;transform:scale(1)}
-#fj .fj-fimg{width:28px;height:28px;object-fit:contain}
 #fj .fj-tray.merge i{animation:fjMerge .5s cubic-bezier(.5,0,.3,1) forwards}
 #fj .fj-tray.merge i:nth-child(1){--tx:30px}#fj .fj-tray.merge i:nth-child(3){--tx:-30px}
 @keyframes fjMerge{50%{transform:translateX(var(--tx,0)) scale(1.1)}100%{transform:translateX(var(--tx,0)) scale(0);opacity:0}}
@@ -152,7 +151,7 @@ window.FrogJumpInit=function(B){
 `;
   document.head.appendChild(st);
 
-  const FLY='<img class="fj-fimg" src="jump/fly_a.png" alt="">';
+  const FLY='<svg class="ic"><use href="#i-fly"></use></svg>';
   const root=document.createElement('div');root.id='fj';root.hidden=true;
   root.innerHTML=`
 <canvas></canvas>
@@ -213,9 +212,7 @@ window.FrogJumpInit=function(B){
      в сборку. Если какой-то картинки нет или она не загрузилась, соответствующий
      объект рисуется прежней векторной графикой — игра не ломается. */
   const IMG_SRC={
-    pad:'jump/pad.png',pad_sink:'jump/pad_sink.png',pad_rot:'jump/pad_rot.png',
-    spring_low:'jump/spring_low.png',spring_high:'jump/spring_high.png',heron:'jump/heron.png',
-    fly_a:'jump/fly_a.png',fly_b:'jump/fly_b.png',fly_gold_a:'jump/fly_gold_a.png',fly_gold_b:'jump/fly_gold_b.png',
+    spring_low:'jump/spring_low.png',spring_high:'jump/spring_high.png',
     dragonfly:'jump/dragonfly.png',bubble:'jump/bubble.png',water:'jump/water.png',
     lotus_pink:'jump/lotus_pink.png',lotus_gold:'jump/lotus_gold.png',lotus_blue:'jump/lotus_blue.png',
     cloud_1:'jump/cloud_1.png',cloud_2:'jump/cloud_2.png',cloud_3:'jump/cloud_3.png',
