@@ -212,6 +212,7 @@ window.FrogJumpInit=function(B){
      в сборку. Если какой-то картинки нет или она не загрузилась, соответствующий
      объект рисуется прежней векторной графикой — игра не ломается. */
   const IMG_SRC={
+    pad:'jump/pad.png',pad_sink:'jump/pad_sink.png',pad_rot:'jump/pad_rot.png',
     spring_low:'jump/spring_low.png',spring_high:'jump/spring_high.png',
     dragonfly:'jump/dragonfly.png',bubble:'jump/bubble.png',water:'jump/water.png',
     lotus_pink:'jump/lotus_pink.png',lotus_gold:'jump/lotus_gold.png',lotus_blue:'jump/lotus_blue.png',
@@ -231,10 +232,9 @@ window.FrogJumpInit=function(B){
     const im=IMG[k],h=w*im.naturalHeight/im.naturalWidth;
     cx.drawImage(im,x-w*ax,y-h*ay,w,h);return h;
   }
-  // верх кувшинки на картинке снят под углом: центр верхней поверхности — не
-  // середина картинки, а чуть выше (ниже виден обод). Лягушка должна стоять
-  // именно на поверхности, иначе будет казаться, что она проваливается в лист
-  const PAD_AY=.4;
+  // Лягушка стоит на верхней поверхности листа, а не на его нижнем крае: точка
+  // опоры — центр видимого эллипса. У гнилушки обод толще, поэтому центр выше
+  const PAD_AY={pad:.44,pad_sink:.44,pad_rot:.4};
 
   /* ---------- спрайты (рисуются один раз под текущий масштаб) ---------- */
   let sprPad=null,sprRot=null,frogImg=null,frogP=null;
@@ -692,7 +692,7 @@ window.FrogJumpInit=function(B){
     const key=p.type==='r'?'pad_rot':p.type==='s'?'pad_sink':'pad';
     cx.save();
     if(p.type==='s'&&p.sinkT>0)cx.globalAlpha=clamp(1-(p.sinkT-.15)/.7,0,1);
-    if(has(key))blit(key,x,y,p.w+12,.5,PAD_AY);
+    if(has(key))blit(key,x,y,p.w+12,.5,PAD_AY[key]);
     else{
       const spr=p.type==='r'?sprRot:sprPad,w=p.w+8,h=w*32/88;
       if(p.type==='s')cx.globalAlpha*=.72;
