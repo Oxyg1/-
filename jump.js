@@ -1098,7 +1098,18 @@ window.FrogJumpInit=function(B){
     const r=run;if(!r||(!byInsurance&&r.reviveN>=REVIVE_PRICES.length))return;
     if(!byInsurance)r.reviveN++;
     r.alive=true;r.over=false;r.dyingT=0;r.spin=0;r.lean=0;
-    r.fx=W/2;r.fy=r.camY+VH*.2;r.vx=0;r.vy=VDRAGON;r.dragon=2.6;r.invul=3.2;r.shield=false;
+    // Возвращаем на настоящую кувшинку, а не в пустоту: заплатил — стой на
+    // твёрдом. Кладём широкий лист под лягушку и пару обычных выше, чтобы было
+    // куда прыгать, даже если в этом месте поле оказалось пустым
+    const y=r.camY+VH*.3;
+    r.pads=r.pads.filter(p=>p.y<y-46||p.y>y+46||Math.abs(wdx(p.x,W/2))>100);
+    const land=mkPad(W/2,y,120,'n');
+    r.pads.push(land);
+    for(let i=1;i<=2;i++)r.pads.push(mkPad(clamp(W/2+rnd(-90,90),46,W-46),y+i*JUMP_H*.6,82,'n'));
+    r.pads.sort((a,b)=>a.y-b.y);
+    r.fx=W/2;r.fy=y;r.vx=0;r.vy=V0;r.sq=-.34;r.sqV=0;land.dipV=-150;
+    r.dragon=0;r.rocket=0;r.invul=2.6;r.shield=false;
+    splash(r.fx,y,10);
     // все цапли рядом улетают — начинать с удара было бы нечестно
     for(const h of r.herons)if(!h.dead&&h.y<r.camY+VH*1.2){h.dead=true;h.vy=200;h.vx=rnd(-120,120);if(h.pad)h.pad.heron=null;}
     // продолжение запрашиваем только после того, как сервер принял первую часть:
@@ -1106,8 +1117,8 @@ window.FrogJumpInit=function(B){
     const prev=overRes||Promise.resolve();
     r.seg={base:Math.floor(r.maxY/UNIT),t0:r.t,f0:r.flies_n,tokenP:prev.catch(()=>{}).then(()=>startToken(true,byInsurance))};
     $('#fjOver').hidden=true;
-    if(!byInsurance)banner('Продолжаем!','стрекоза подхватила',true);
-    SND.dragon();B.haptic.success();
+    if(!byInsurance)banner('Продолжаем!','лягушка снова на кувшинке',true);
+    SND.spring();B.haptic.success();
     last=0;
   }
   // первое продолжение — 10 звёзд, второе — 25, больше двух за забег не даём
