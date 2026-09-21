@@ -362,7 +362,9 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .skin .buy[disabled]{opacity:.45}
 .skin .buy img{width:13px;height:13px}
 .skin .tag{font-size:10px;font-weight:900;border-radius:99px;padding:1px 7px;background:rgba(255,210,63,.2);color:var(--acc)}
-.skin .disc{font-size:10.5px;font-weight:800;color:#9dffb0;display:flex;align-items:center;gap:3px}
+.skin .disc{border:0;font:800 10.5px Nunito,system-ui;color:#cfe8d6;background:rgba(0,0,0,.3);border-radius:99px;padding:3px 8px;display:flex;align-items:center;gap:3px;white-space:nowrap;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.skin .disc.on{color:#9dffb0;background:rgba(157,255,176,.16);box-shadow:inset 0 0 0 1px #9dffb0}
+.skin .disc img,.skin .disc .ic{width:11px;height:11px}
 .btn .newdot{position:absolute;top:-4px;right:-4px;width:11px;height:11px;border-radius:50%;background:#ff5d7a;box-shadow:0 0 0 2px #14513a;animation:ndPulse 1.4s ease-in-out infinite}
 /* рейтинг открывается поверх хаба, а карточка для чата — поверх всего */
 #top{z-index:110}
@@ -613,6 +615,10 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
             <button class="btn" id="hubPlay" style="flex:2;margin:0">Играть</button>
             <button class="btn ghost" id="hubSkins" style="flex:1;margin:0;position:relative">Наряды<i class="newdot" id="skinsDot" hidden></i></button>
           </div>
+          <div class="row" style="gap:6px;margin-top:6px">
+            <button class="chip" id="hubShield"></button>
+            <button class="chip" id="hubBoost" hidden></button>
+          </div>
         </div>
       </div>
       <div class="hub-soon">
@@ -629,6 +635,11 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
   <div class="card" style="height:92dvh">
     <div class="head"><h2>Наряды прыгуна</h2><button class="iconbtn" id="skinsClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
     <div class="hub-flies"><svg class="ic "><use href="#i-fly"></use></svg><span>Мошки<small>зарабатываются в Frog Jump</small></span><b id="skinsFlies">0</b></div>
+    <div class="segbar" id="skinTabs">
+      <button data-st="mine" class="on">Мои</button>
+      <button data-st="flies">За мошек</button>
+      <button data-st="stars">За звёзды</button>
+    </div>
     <div class="scroll"><div id="skinsGrid"></div></div>
     <div class="demo" id="skinsNote">Наряд меняет лягушку в Frog Jump. Свой подарок открыт бесплатно.</div>
   </div>
@@ -2464,28 +2475,39 @@ async function openSkins(){
     skinsDot();renderSkins();
   }catch(e){grid.innerHTML='<div class="demo">Сервер не отвечает</div>';}
 }
+let skinTab='mine';
 function renderSkins(){
   const j=net.jump||{},grid=$('#skinsGrid');
   $('#skinsFlies').textContent=fmtM(j.flies||0);
+  $('#skinTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.st===skinTab));
   grid.innerHTML='';
-  SKINS.forEach(s=>{
+  // «Мои» — гардероб: только то, что уже можно надеть, и надетое первым
+  const list=skinTab==='mine'?SKINS.filter(s=>s.owned).sort((a,b)=>((j.skin||'original')===b.slug)-((j.skin||'original')===a.slug))
+    :skinTab==='flies'?SKINS.filter(s=>!s.owned&&s.flies)
+    :SKINS.filter(s=>!s.owned&&s.stars);
+  if(!list.length){grid.innerHTML='<div class="demo">'+(skinTab==='mine'?'Пока только обычная лягушка. Наряды — на соседних вкладках.':'Здесь всё уже твоё.')+'</div>';return;}
+  list.forEach(s=>{
     const active=(j.skin||'original')===s.slug;
     const useF=skinDisc.has(s.slug)&&s.disc>0;
     const price=s.stars?Math.max(1,s.stars-(useF?s.disc:0)):0;
     const el=document.createElement('div');el.className='skin'+(active?' on':'');
     el.innerHTML=`<img alt="">
-      <b>${esc(s.name)}</b><small>${String(s.r).replace('.',',')}%</small>
+      <b>${esc(s.name)}</b><small>${s.r?String(s.r).replace('.',',')+'%':'у всех'}</small>
       ${s.holder?'<span class="tag">твой подарок</span>':''}
       ${s.owned
         ? `<button class="buy ghost" data-set="${s.slug}"${active?' disabled':''}>${active?'Надет':'Надеть'}</button>`
         : s.flies
           ? `<button class="buy" data-fly="${s.slug}"${(j.flies||0)<s.flies?' disabled':''}>${fmtM(s.flies)} <svg class="ic" style="width:13px;height:13px"><use href="#i-fly"></use></svg></button>`
-          : `${s.disc?`<label class="disc"><input type="checkbox" data-disc="${s.slug}"${useF?' checked':''}> −${s.disc} <img src="icons/tgstar.png" style="width:11px;height:11px" alt=""> за ${fmtM(s.discFlies)} мошек</label>`:''}
+          : `${s.disc?`<button class="disc${useF?' on':''}" data-disc="${s.slug}">−${s.disc}<img src="icons/tgstar.png" alt=""> за ${fmtM(s.discFlies)}<svg class="ic"><use href="#i-fly"></use></svg></button>`:''}
              <button class="buy" data-star="${s.slug}">${price} <img src="icons/tgstar.png" alt=""></button>`}`;
     thumb('frogs/'+s.slug).then(u=>{const i=el.querySelector('img');if(i)i.src=u;}).catch(()=>{});
     grid.appendChild(el);
   });
 }
+$('#skinTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+  if(skinTab===b.dataset.st)return;
+  skinTab=b.dataset.st;S.ui();haptic.select();renderSkins();
+});
 $('#skinsGrid').onclick=async e=>{
   const set=e.target.closest('[data-set]'),fly=e.target.closest('[data-fly]'),star=e.target.closest('[data-star]'),disc=e.target.closest('[data-disc]');
   if(disc){const s=disc.dataset.disc;skinDisc.has(s)?skinDisc.delete(s):skinDisc.add(s);renderSkins();return;}
@@ -2504,11 +2526,25 @@ $('#skinsGrid').onclick=async e=>{
   }
   if(star){
     const slug=star.dataset.star;
-    buyJumpItem('skin:'+slug,async()=>{await sync(true);const r=await api('jumpSkins',{});if(r.ok){SKINS=r.skins;net.jump=r.jump;renderSkins();renderHub();}toast('Наряд твой');},{useFlies:skinDisc.has(slug)});
+    buyJumpItem('skin:'+slug,async()=>{
+      // бот узнаёт об оплате отдельным опросом Telegram и отстаёт на пару секунд:
+      // ждём, пока наряд действительно появится, иначе он так и останется «купить»
+      toast('Оплачено, применяем…',2000);
+      for(let i=0;i<8;i++){
+        const r=await api('jumpSkins',{});
+        if(r.ok){SKINS=r.skins;net.jump=r.jump;skinTab='mine';renderSkins();renderHub();
+          if(r.skins.find(x=>x.slug===slug&&x.owned)){toast('Наряд твой — надет');return;}}
+        await wait(1500);
+      }
+      toast('Оплата прошла, наряд появится в «Моих» в течение минуты',3500);
+    },{useFlies:skinDisc.has(slug)});
   }
 };
 $('#skinsClose').onclick=()=>{S.ui();$('#skins').classList.add('hidden');};
 $('#hubSkins').onclick=()=>{S.ui();haptic.light();openSkins();};
+// страховка спасает от первого падения, разгон начинает забег с половины рекорда
+$('#hubShield').onclick=()=>{S.ui();buyJumpItem('jumpShield',async()=>{await wait(1200);await sync(true);renderHub();toast('Страховка куплена — сработает при первом падении');});};
+$('#hubBoost').onclick=()=>{S.ui();buyJumpItem('jumpBoost',async()=>{await wait(1200);await sync(true);renderHub();toast('Разгон куплен — сработает на следующем забеге');});};
 
 function renderHub(){
   const lv=Math.max(1,state.maxLv|0);
@@ -2525,6 +2561,12 @@ function renderHub(){
   $('#hubRecName').textContent=rec?`Лучший · ${rec.name||'игрок'}`:'Лучший в игре';
   $('#hubRec').textContent=rec?fmtM(rec.best)+' м':'—';
   $('#hubFlies').textContent=fmtM(CFG.api?(j.flies||0):(JUMP?JUMP.localFlies():0));
+  // страховка и разгон — прямо в карточке игры, иначе их негде найти
+  const star='<img class="ic" src="icons/tgstar.png" alt="">';
+  $('#hubShield').innerHTML=(j.shield>0?`Страховка: ${j.shield}`:`Страховка · 15 ${star}`);
+  const boostOn=(j.best||0)>=6000;
+  $('#hubBoost').hidden=!boostOn;
+  if(boostOn)$('#hubBoost').innerHTML=(j.boost>0?`Разгон: ${j.boost}`:`Разгон · 20 ${star}`);
   skinsDot();
   $('#hubNew').hidden=!!best;
 }

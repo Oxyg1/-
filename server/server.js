@@ -151,6 +151,7 @@ function grant(user, item, amount) {
       const j = jumpRec(user), slug = String(item).slice(5);
       if (!j.skins) j.skins = [];
       if (!j.skins.includes(slug)) j.skins.push(slug);
+      pendingInvoices.delete(`${user.id}:skin:${slug}`);
       // мошки, которыми сбивали цену, списываем только по факту оплаты
       const d = j.pendDisc;
       if (d && d.slug === slug && Date.now() - d.at < 30 * 60e3) { j.flies = Math.max(0, (j.flies || 0) - d.flies); }
@@ -400,20 +401,25 @@ function jumpParse(tok) {
    наряда, но не больше чем на 60%: иначе звёзды перестают что-то значить.
    Свой подарок холдера открыт бесплатно — он и так его владелец. */
 const SKIN_FLIES_MAX_R = 2;         // редкость, до которой наряд стоит мошек
-const FLIES_PER_STAR = 25;          // курс мошек при скидке
+const FLIES_PER_STAR = 50;          // курс мошек при скидке
 const SKIN_DISC_MAX = 0.6;          // больше 60% цены мошками не сбить
 function skinAt(i) {
   const L = LADDER.frog[i], lv = i + 1, last = LADDER.frog.length;
   const o = { lv, slug: L.f, name: L.n, r: L.r, flies: 0, stars: 0 };
   if (L.r >= SKIN_FLIES_MAX_R) {
-    o.flies = Math.round((150 + (1200 - 150) * ((lv - 1) / 24)) / 10) * 10;
+    // Мошек падает много (потолок 900 в час), поэтому наряд должен стоить
+    // десятков забегов, иначе половина витрины скупается за вечер и копить
+    // становится незачем
+    o.flies = Math.round((400 + (6000 - 400) * ((lv - 1) / 24)) / 50) * 50;
   } else {
     // Happy Pepe — вершина лестницы и самый дорогой наряд игры
-    o.stars = lv === last ? 199 : Math.round(25 + (150 - 25) * ((lv - 26) / (last - 27)));
+    o.stars = lv === last ? 499 : Math.round(40 + (350 - 40) * ((lv - 26) / (last - 27)));
   }
   return o;
 }
-const SKINS = LADDER.frog.map((_, i) => skinAt(i));
+// «Обычная» лягушка есть у всех и всегда: к ней можно вернуться в любой момент
+const SKINS = [{ lv: 0, slug: 'original', name: 'Обычная', r: 0, flies: 0, stars: 0, free: true }]
+  .concat(LADDER.frog.map((_, i) => skinAt(i)));
 const skinBySlug = slug => SKINS.find(s => s.slug === slug) || null;
 function holderModels(u) {
   const h = (u.holderBySp && u.holderBySp.frog && u.holderBySp.frog.data) || (spOf(u) === 'frog' ? u.holder : null);
@@ -677,6 +683,12 @@ const api = {
       const j = jumpRec(u), s = skinBySlug(String(body.item).slice(5));
       if (!s || !s.stars) return { ok: false, error: 'Нет такого наряда' };
       if ((j.skins || []).includes(s.slug)) return { ok: false, error: 'Уже куплено' };
+      // пока висит неоплаченный счёт на этот наряд, второй не выставляем:
+      // иначе можно оплатить оба и получить один наряд за двойную цену
+      const lock = `${u.id}:skin:${s.slug}`;
+      const until = pendingInvoices.get(lock);
+      if (until && until > Date.now()) return { ok: false, error: 'Счёт уже выставлен — заверши его или подожди пару минут' };
+      pendingInvoices.set(lock, Date.now() + 5 * 60e3);
       const maxDisc = Math.min(Math.floor(s.stars * SKIN_DISC_MAX), Math.floor((j.flies || 0) / FLIES_PER_STAR));
       const disc = body.useFlies ? maxDisc : 0;
       j.pendDisc = disc ? { slug: s.slug, flies: disc * FLIES_PER_STAR, at: Date.now() } : null;
@@ -834,7 +846,7 @@ const api = {
     if (act === 'grant') {
       if (!u) return { ok: false, error: 'Игрок не найден' };
       const item = String(body.item || '');
-      if (!SHOP[item] && !item.startsWith('bd:')) return { ok: false, error: 'Нет такого товара' };
+      if (!SHOP[item] && !item.startsWith('bd:') && !item.startsWith('skin:')) return { ok: false, error: 'Нет такого товара' };
       grant(u, item, +body.amount || 0); save();
       return { ok: true, msg: 'Выдано: ' + ((SHOP[item] || {}).title || item) };
     }

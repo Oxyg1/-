@@ -105,11 +105,12 @@ window.FrogJumpInit=function(B){
 #fj .fj-ib{pointer-events:auto;width:40px;height:40px;border:0;border-radius:13px;background:rgba(0,0,0,.32);display:flex;align-items:center;justify-content:center;padding:0;box-shadow:inset 0 2px 0 rgba(255,255,255,.1),0 3px 8px rgba(0,0,0,.25)}
 #fj .fj-ib:active{transform:scale(.9)}
 #fj .fj-ib svg{width:22px;height:22px}
-#fj .fj-h{display:flex;align-items:baseline;gap:3px;font-weight:900;text-shadow:0 3px 0 rgba(0,0,0,.28),0 0 16px rgba(0,0,0,.25);transform-origin:50% 60%}
+/* счётчик — ровно по центру экрана, а не по остатку места между кнопками */
+#fj .fj-h{position:absolute;left:50%;top:0;transform:translateX(-50%);display:flex;align-items:baseline;gap:3px;font-weight:900;text-shadow:0 3px 0 rgba(0,0,0,.28),0 0 16px rgba(0,0,0,.25);transform-origin:50% 60%}
 #fj .fj-h b{font-size:40px;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 #fj .fj-h span{font-size:18px;opacity:.85}
 #fj .fj-h.pulse{animation:fjPulse .45s cubic-bezier(.2,.9,.3,1.4)}
-@keyframes fjPulse{35%{transform:scale(1.28)}}
+@keyframes fjPulse{0%,100%{transform:translateX(-50%) scale(1)}35%{transform:translateX(-50%) scale(1.28)}}
 #fj .fj-fl{display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.32);border-radius:999px;padding:4px 12px 4px 5px;font-size:17px;font-weight:900;min-width:64px;box-shadow:inset 0 2px 0 rgba(255,255,255,.1)}
 #fj .fj-fl svg{width:26px;height:26px}
 #fj .fj-fl.bump{animation:fjBump .25s}
