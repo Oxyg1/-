@@ -351,6 +351,19 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 @keyframes hmC{0%,44%{transform:scale(0);opacity:0}54%{transform:scale(1.25);opacity:1}62%{transform:scale(1)}84%{transform:scale(1);opacity:1}92%,100%{transform:scale(.85);opacity:0}}
 @keyframes hmCoin{0%,48%{opacity:0;transform:translate(14px,0) scale(.5)}58%{opacity:1;transform:translate(22px,-16px) scale(1)}80%,100%{opacity:0;transform:translate(26px,-38px) scale(1)}}
 @keyframes hmCell{0%,44%{background:rgba(255,255,255,.09)}52%{background:rgba(255,210,63,.4)}72%,100%{background:rgba(255,255,255,.09)}}
+#skinsGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;padding:2px}
+.skin{background:rgba(0,0,0,.24);border-radius:16px;padding:9px 6px 7px;display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;box-shadow:inset 0 2px 0 rgba(255,255,255,.06)}
+.skin.on{box-shadow:inset 0 0 0 2px var(--acc)}
+.skin img{width:62px;height:62px;object-fit:contain}
+.skin b{font-size:12.5px;line-height:1.15}
+.skin small{font-size:11px;opacity:.72;font-weight:800}
+.skin .buy{border:0;border-radius:11px;padding:6px 8px;font:900 12px Nunito,system-ui;background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00;box-shadow:0 2px 0 var(--acc-dark);width:100%;display:flex;align-items:center;justify-content:center;gap:3px}
+.skin .buy.ghost{background:rgba(0,0,0,.3);color:#fff;box-shadow:0 2px 0 rgba(0,0,0,.4)}
+.skin .buy[disabled]{opacity:.45}
+.skin .buy img{width:13px;height:13px}
+.skin .tag{font-size:10px;font-weight:900;border-radius:99px;padding:1px 7px;background:rgba(255,210,63,.2);color:var(--acc)}
+.skin .disc{font-size:10.5px;font-weight:800;color:#9dffb0;display:flex;align-items:center;gap:3px}
+.btn .newdot{position:absolute;top:-4px;right:-4px;width:11px;height:11px;border-radius:50%;background:#ff5d7a;box-shadow:0 0 0 2px #14513a;animation:ndPulse 1.4s ease-in-out infinite}
 /* рейтинг открывается поверх хаба, а карточка для чата — поверх всего */
 #top{z-index:110}
 #cardPrev{z-index:160}
@@ -596,7 +609,10 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
           <div class="t">Frog Jump</div>
           <div class="hj-row"><span>Твой рекорд</span><b id="hubBest">—</b></div>
           <div class="hj-row"><span id="hubRecName">Лучший в игре</span><b id="hubRec">—</b></div>
-          <button class="btn" id="hubPlay">Играть</button>
+          <div class="row" style="gap:6px;margin-top:8px">
+            <button class="btn" id="hubPlay" style="flex:2;margin:0">Играть</button>
+            <button class="btn ghost" id="hubSkins" style="flex:1;margin:0;position:relative">Наряды<i class="newdot" id="skinsDot" hidden></i></button>
+          </div>
         </div>
       </div>
       <div class="hub-soon">
@@ -606,6 +622,15 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
       </div>
         <div class="hub-flies"><svg class="ic "><use href="#i-fly"></use></svg><span>Мошки<small>копятся в Frog Jump — потратишь на наряды лягушки</small></span><b id="hubFlies">0</b></div>
     </div>
+  </div>
+</div>
+
+<div id="skins" class="overlay hidden">
+  <div class="card" style="height:92dvh">
+    <div class="head"><h2>Наряды прыгуна</h2><button class="iconbtn" id="skinsClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
+    <div class="hub-flies"><svg class="ic "><use href="#i-fly"></use></svg><span>Мошки<small>зарабатываются в Frog Jump</small></span><b id="skinsFlies">0</b></div>
+    <div class="scroll"><div id="skinsGrid"></div></div>
+    <div class="demo" id="skinsNote">Наряд меняет лягушку в Frog Jump. Свой подарок открыт бесплатно.</div>
   </div>
 </div>
 
@@ -802,7 +827,9 @@ if(TG){
   try{if(tgv('7.7'))TG.disableVerticalSwipes();}catch(e){}
   // полноэкранный режим: Telegram сам скрывает свою шапку, наш отступ сверху — единственное,
   // что защищает интерфейс от чёлки/статус-бара, поэтому safe-area-инсеты здесь особенно важны
-  try{if(tgv('8.0')&&typeof TG.requestFullscreen==='function')TG.requestFullscreen();}catch(e){}
+  // на компьютере полноэкранный режим только мешает: окно Telegram и так большое,
+  // а игра растягивается на весь монитор. Просим его только на телефонах
+  try{if(['android','ios'].includes(TG.platform)&&tgv('8.0')&&typeof TG.requestFullscreen==='function')TG.requestFullscreen();}catch(e){}
 }
 const haptic={
   light:()=>{try{TG?TG.HapticFeedback.impactOccurred('light'):navigator.vibrate&&navigator.vibrate(8);}catch(e){}},
@@ -2375,10 +2402,10 @@ async function showCatsNews(){
 let jumpOpen=false;
 const HUB_SEEN='swamp.hubSeen';
 const fmtM=n=>Math.floor(n||0).toLocaleString('ru-RU');
-async function buyJumpRevive(cb){
+async function buyJumpItem(item,cb,extra){
   if(!(inTG&&CFG.api)){S.buy();haptic.success();cb();return;}   // демо: без оплаты
   try{
-    const r=await api('invoice',{item:'jumpRevive'});
+    const r=await api('invoice',Object.assign({item},extra||{}));
     if(!r.link){toast(r.error||'Не удалось создать счёт');return;}
     TG.openInvoice(r.link,status=>{
       if(status==='paid'){S.buy();haptic.success();cb();}
@@ -2386,6 +2413,7 @@ async function buyJumpRevive(cb){
     });
   }catch(e){toast('Ошибка сервера');}
 }
+const buyJumpRevive=(item,cb)=>buyJumpItem(item||'jumpRevive',cb);
 async function shareJump(png,h){
   toast('Рисую карточку…',1200);
   if(inTG&&CFG.api){
@@ -2411,8 +2439,77 @@ const JUMP=window.FrogJumpInit?window.FrogJumpInit({
   setSound:v=>{state.sound=!!v;save();updateHud();},
   setActive:v=>{jumpOpen=!!v;},
   onClose:()=>openHub(),
-  buyJumpRevive,shareJump,
+  buyJumpRevive,buyJumpItem,shareJump,
 }):null;
+/* ---------- НАРЯДЫ ПРЫГУНА ----------
+   Витрина живёт отдельным экраном и сама о себе не напоминает: точка на кнопке
+   загорается только когда на новый наряд реально хватило мошек, и гаснет,
+   как только игрок заглянул внутрь */
+const SKIN_SEEN='swamp.skinsSeen';
+let SKINS=[],skinDisc=new Set();
+function skinsDot(){
+  const can=(net.jump||{}).canBuy||0;let seen=0;
+  try{seen=+localStorage.getItem(SKIN_SEEN)||0;}catch(e){}
+  $('#skinsDot').hidden=!(can>seen);
+}
+async function openSkins(){
+  $('#skins').classList.remove('hidden');S.ui();
+  const grid=$('#skinsGrid');grid.innerHTML='<div class="demo">Загрузка…</div>';
+  if(!CFG.api){grid.innerHTML='<div class="demo">Наряды доступны только в Telegram с сервером</div>';return;}
+  try{
+    const r=await api('jumpSkins',{});
+    if(!r.ok){grid.innerHTML=`<div class="demo">${esc(r.error||'Не вышло')}</div>`;return;}
+    SKINS=r.skins;net.jump=r.jump;
+    try{localStorage.setItem(SKIN_SEEN,String(r.jump.canBuy||0));}catch(e){}
+    skinsDot();renderSkins();
+  }catch(e){grid.innerHTML='<div class="demo">Сервер не отвечает</div>';}
+}
+function renderSkins(){
+  const j=net.jump||{},grid=$('#skinsGrid');
+  $('#skinsFlies').textContent=fmtM(j.flies||0);
+  grid.innerHTML='';
+  SKINS.forEach(s=>{
+    const active=(j.skin||'original')===s.slug;
+    const useF=skinDisc.has(s.slug)&&s.disc>0;
+    const price=s.stars?Math.max(1,s.stars-(useF?s.disc:0)):0;
+    const el=document.createElement('div');el.className='skin'+(active?' on':'');
+    el.innerHTML=`<img alt="">
+      <b>${esc(s.name)}</b><small>${String(s.r).replace('.',',')}%</small>
+      ${s.holder?'<span class="tag">твой подарок</span>':''}
+      ${s.owned
+        ? `<button class="buy ghost" data-set="${s.slug}"${active?' disabled':''}>${active?'Надет':'Надеть'}</button>`
+        : s.flies
+          ? `<button class="buy" data-fly="${s.slug}"${(j.flies||0)<s.flies?' disabled':''}>${fmtM(s.flies)} <svg class="ic" style="width:13px;height:13px"><use href="#i-fly"></use></svg></button>`
+          : `${s.disc?`<label class="disc"><input type="checkbox" data-disc="${s.slug}"${useF?' checked':''}> −${s.disc} <img src="icons/tgstar.png" style="width:11px;height:11px" alt=""> за ${fmtM(s.discFlies)} мошек</label>`:''}
+             <button class="buy" data-star="${s.slug}">${price} <img src="icons/tgstar.png" alt=""></button>`}`;
+    thumb('frogs/'+s.slug).then(u=>{const i=el.querySelector('img');if(i)i.src=u;}).catch(()=>{});
+    grid.appendChild(el);
+  });
+}
+$('#skinsGrid').onclick=async e=>{
+  const set=e.target.closest('[data-set]'),fly=e.target.closest('[data-fly]'),star=e.target.closest('[data-star]'),disc=e.target.closest('[data-disc]');
+  if(disc){const s=disc.dataset.disc;skinDisc.has(s)?skinDisc.delete(s):skinDisc.add(s);renderSkins();return;}
+  if(set){
+    S.ui();haptic.select();
+    const r=await api('jumpSetSkin',{slug:set.dataset.set});
+    if(r.ok){net.jump=r.jump;renderSkins();renderHub();toast('Наряд надет');}else toast(r.error||'Не вышло');
+    return;
+  }
+  if(fly){
+    S.ui();
+    const r=await api('jumpBuySkin',{slug:fly.dataset.fly});
+    if(r.ok){net.jump=r.jump;SKINS=r.skins;S.buy();haptic.success();skinsDot();renderSkins();renderHub();toast('Наряд твой');}
+    else toast(r.error||'Не вышло');
+    return;
+  }
+  if(star){
+    const slug=star.dataset.star;
+    buyJumpItem('skin:'+slug,async()=>{await sync(true);const r=await api('jumpSkins',{});if(r.ok){SKINS=r.skins;net.jump=r.jump;renderSkins();renderHub();}toast('Наряд твой');},{useFlies:skinDisc.has(slug)});
+  }
+};
+$('#skinsClose').onclick=()=>{S.ui();$('#skins').classList.add('hidden');};
+$('#hubSkins').onclick=()=>{S.ui();haptic.light();openSkins();};
+
 function renderHub(){
   const lv=Math.max(1,state.maxLv|0);
   $('#hubMergeLv').textContent=`${lv} · ${frogName(lv)}`;
@@ -2428,6 +2525,7 @@ function renderHub(){
   $('#hubRecName').textContent=rec?`Лучший · ${rec.name||'игрок'}`:'Лучший в игре';
   $('#hubRec').textContent=rec?fmtM(rec.best)+' м':'—';
   $('#hubFlies').textContent=fmtM(CFG.api?(j.flies||0):(JUMP?JUMP.localFlies():0));
+  skinsDot();
   $('#hubNew').hidden=!!best;
 }
 function openHub(){

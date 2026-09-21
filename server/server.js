@@ -41,7 +41,7 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 /* ---------- LEVELS (из game/levels.js и game/cats.js) ---------- */
 function readLadder(file) {
   const out = [];
-  for (const m of fs.readFileSync(path.join(ROOT, file), 'utf8').matchAll(/\{n:"([^"]+)",f:"[^"]+",r:([\d.]+)\}/g)) out.push({ n: m[1], r: +m[2] });
+  for (const m of fs.readFileSync(path.join(ROOT, file), 'utf8').matchAll(/\{n:"([^"]+)",f:"([^"]+)",r:([\d.]+)\}/g)) out.push({ n: m[1], f: m[2], r: +m[3] });
   return out;
 }
 // у каждого вида своя лестница и свой подарок в Telegram
@@ -80,6 +80,9 @@ const SHOP = {
   // штрафовать за то, что он не видел стоп-экран вживую и не мог отреагировать раньше
   reviveReturn: { title: 'Вернуть серию (при входе)', desc: 'Разовая скидка — поле стало тупиком, пока приложение было закрыто', price: 15 },
   jumpRevive: { title: 'Продолжить прыжок', desc: 'Frog Jump: продолжить забег с той же высоты', price: 10 },
+  jumpRevive2: { title: 'Продолжить ещё раз', desc: 'Frog Jump: второе продолжение в этом забеге', price: 25 },
+  jumpShield: { title: 'Страховка прыгуна', desc: 'Frog Jump: первое падение не оборвёт забег', price: 15 },
+  jumpBoost: { title: 'Разгон', desc: 'Frog Jump: начать забег с половины своего рекорда', price: 20 },
 };
 
 /* ---------- ЭМОДЗИ ----------
@@ -138,10 +141,22 @@ function grant(user, item, amount) {
     case 'starter': inv.starter = true; inv.autoUntil = Math.max(inv.autoUntil || 0, t) + DAY; inv.boostUntil = Math.max(inv.boostUntil || 0, t) + DAY; user.wild = (user.wild || 0) + 3; break;
     case 'sub': inv.subUntil = Math.max(inv.subUntil || 0, t) + 30 * DAY; break;
     case 'donate': inv.donated = (inv.donated || 0) + amount; db.pond.stars += amount; db.pond.count += amount * 10; db.pond.donors[user.id] = (db.pond.donors[user.id] || 0) + amount; break;
-    case 'jumpRevive': { const j = jumpRec(user); j.revPaid = (j.revPaid || 0) + 1; break; }
+    case 'jumpRevive': case 'jumpRevive2': { const j = jumpRec(user); j.revPaid = (j.revPaid || 0) + 1; break; }
+    case 'jumpShield': { const j = jumpRec(user); j.shield = (j.shield || 0) + 1; break; }
+    case 'jumpBoost': { const j = jumpRec(user); j.boost = (j.boost || 0) + 1; break; }
     case 'revive': case 'reviveReturn': { const e = user.endless || (user.endless = {}); e.cont = (e.cont || 0) + 1; inv.reviveLeft = (inv.reviveLeft || 0) + 1; break; }
     case 'war': { warCheck(); const side = spOf(user); warPull(user, side, amount * STARS_PER_PULL); db.war.stars += amount; warBucket(user.id).s += amount; inv.warStars = (inv.warStars || 0) + amount; break; }
-    default: if (String(item).startsWith('bd:')) { const th = String(item).slice(3); inv.themes = inv.themes || []; if (!inv.themes.includes(th)) inv.themes.push(th); }
+    case 'skin': break;   // недостижимо: наряды приходят как 'skin:<слаг>' (см. ниже)
+    default: if (String(item).startsWith('skin:')) {
+      const j = jumpRec(user), slug = String(item).slice(5);
+      if (!j.skins) j.skins = [];
+      if (!j.skins.includes(slug)) j.skins.push(slug);
+      // мошки, которыми сбивали цену, списываем только по факту оплаты
+      const d = j.pendDisc;
+      if (d && d.slug === slug && Date.now() - d.at < 30 * 60e3) { j.flies = Math.max(0, (j.flies || 0) - d.flies); }
+      j.pendDisc = null;
+      j.skin = slug;
+    } else if (String(item).startsWith('bd:')) { const th = String(item).slice(3); inv.themes = inv.themes || []; if (!inv.themes.includes(th)) inv.themes.push(th); }
   }
 }
 
@@ -378,6 +393,41 @@ function jumpParse(tok) {
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   return { uid: m[1], t0: +m[2], base: +m[3] };
 }
+/* ---------- НАРЯДЫ ПРЫГУНА ----------
+   Наряд — это модель Kissed Frog: та же лягушка, которой играют в слиянии.
+   До 2% редкости включительно продаются за мошек (их зарабатывают в самих
+   прыжках), всё, что реже, — за звёзды. Мошками можно сбить цену звёздного
+   наряда, но не больше чем на 60%: иначе звёзды перестают что-то значить.
+   Свой подарок холдера открыт бесплатно — он и так его владелец. */
+const SKIN_FLIES_MAX_R = 2;         // редкость, до которой наряд стоит мошек
+const FLIES_PER_STAR = 25;          // курс мошек при скидке
+const SKIN_DISC_MAX = 0.6;          // больше 60% цены мошками не сбить
+function skinAt(i) {
+  const L = LADDER.frog[i], lv = i + 1, last = LADDER.frog.length;
+  const o = { lv, slug: L.f, name: L.n, r: L.r, flies: 0, stars: 0 };
+  if (L.r >= SKIN_FLIES_MAX_R) {
+    o.flies = Math.round((150 + (1200 - 150) * ((lv - 1) / 24)) / 10) * 10;
+  } else {
+    // Happy Pepe — вершина лестницы и самый дорогой наряд игры
+    o.stars = lv === last ? 199 : Math.round(25 + (150 - 25) * ((lv - 26) / (last - 27)));
+  }
+  return o;
+}
+const SKINS = LADDER.frog.map((_, i) => skinAt(i));
+const skinBySlug = slug => SKINS.find(s => s.slug === slug) || null;
+function holderModels(u) {
+  const h = (u.holderBySp && u.holderBySp.frog && u.holderBySp.frog.data) || (spOf(u) === 'frog' ? u.holder : null);
+  return ((h && h.frogs) || []).map(f => String(f.model || '').toLowerCase());
+}
+function skinsFor(u) {
+  const j = jumpRec(u), own = j.skins || [], hold = holderModels(u);
+  return SKINS.map(s => {
+    const holder = hold.includes(s.name.toLowerCase());
+    const owned = holder || own.includes(s.slug) || s.slug === 'original';
+    const disc = s.stars ? Math.min(Math.floor(s.stars * SKIN_DISC_MAX), Math.floor((j.flies || 0) / FLIES_PER_STAR)) : 0;
+    return { ...s, owned, holder, disc, discFlies: disc * FLIES_PER_STAR };
+  });
+}
 function jumpTop(n = 20) {
   return Object.values(db.users)
     .filter(u => isRealPlayer(u) && u.jump && u.jump.best > 0)
@@ -387,7 +437,14 @@ function jumpTop(n = 20) {
 }
 const jumpState = u => {
   const j = u ? jumpRec(u) : null;
-  return { record: db.jump.record || null, best: j ? j.best || 0 : 0, flies: j ? j.flies || 0 : 0, runs: j ? j.runs || 0 : 0 };
+  return {
+    record: db.jump.record || null, best: j ? j.best || 0 : 0, flies: j ? j.flies || 0 : 0, runs: j ? j.runs || 0 : 0,
+    skin: j ? (j.skin || 'original') : 'original', skins: j ? (j.skins || []) : [],
+    shield: j ? (j.shield || 0) : 0, boost: j ? (j.boost || 0) : 0,
+    // сколько нарядов игрок может позволить себе прямо сейчас — по этому числу
+    // хаб зажигает ненавязчивую точку «появилось что-то новое»
+    canBuy: u ? skinsFor(u).filter(s => !s.owned && s.flies && s.flies <= (j.flies || 0)).length : 0,
+  };
 };
 async function announceJumpRecord(u, h, prev) {
   if (!CFG.token || !CFG.chatId) return;
@@ -505,15 +562,58 @@ const api = {
     const u = getUser(a); const j = jumpRec(u);
     let base = 0;
     if (body.cont) {
-      // продолжение только за оплату и только сразу после оборвавшегося отрезка
-      if ((j.revPaid || 0) <= (j.revUsed || 0)) return { ok: false, error: 'wait' };
+      // продолжение — за оплату или за страховку, и только сразу после обрыва
       if (Date.now() - (j.lastAt || 0) > 15 * 60e3) return { ok: false, error: 'Забег уже закрыт' };
-      j.revUsed = (j.revUsed || 0) + 1;
+      if (body.insurance) {
+        if (!(j.shield > 0)) return { ok: false, error: 'wait' };
+        j.shield--;
+      } else {
+        if ((j.revPaid || 0) <= (j.revUsed || 0)) return { ok: false, error: 'wait' };
+        j.revUsed = (j.revUsed || 0) + 1;
+      }
       base = j.lastH || 0;
+    } else if (body.boost) {
+      // разгон: начинаем сразу с половины личного рекорда
+      if (!(j.boost > 0)) return { ok: false, error: 'wait' };
+      j.boost--;
+      base = Math.floor((j.best || 0) / 2);
     }
     const t0 = Math.max(Date.now(), (j.lastT0 || 0) + 1);
     save();
     return { ok: true, run: jumpToken(u.id, t0, base), base, jump: jumpState(u), jumpTop: jumpTop(10) };
+  },
+  // каталог нарядов прыгуна
+  async jumpSkins(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const u = getUser(a);
+    await checkHolder(u, a.real);
+    return { ok: true, skins: skinsFor(u), jump: jumpState(u), perStar: FLIES_PER_STAR };
+  },
+  // наряд за мошек (звёздные идут обычным счётом через invoice)
+  async jumpBuySkin(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const u = getUser(a); const j = jumpRec(u);
+    const s = skinBySlug(String(body.slug || ''));
+    if (!s || !s.flies) return { ok: false, error: 'Этот наряд за звёзды' };
+    if ((j.skins || []).includes(s.slug)) return { ok: false, error: 'Уже есть' };
+    if ((j.flies || 0) < s.flies) return { ok: false, error: `Не хватает мошек: нужно ${s.flies}` };
+    j.flies -= s.flies;
+    (j.skins || (j.skins = [])).push(s.slug);
+    j.skin = s.slug;
+    save();
+    return { ok: true, jump: jumpState(u), skins: skinsFor(u) };
+  },
+  async jumpSetSkin(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const u = getUser(a); const j = jumpRec(u);
+    const slug = String(body.slug || 'original');
+    if (slug !== 'original') {
+      await checkHolder(u, a.real);
+      const s = skinsFor(u).find(x => x.slug === slug);
+      if (!s || !s.owned) return { ok: false, error: 'Наряд ещё не твой' };
+    }
+    j.skin = slug; save();
+    return { ok: true, jump: jumpState(u) };
   },
   // конец отрезка забега: проверяем правдоподобие, начисляем мошек, обновляем рекорды
   async jumpEnd(body, req) {
@@ -571,6 +671,16 @@ const api = {
       const owns = ((u.holder && u.holder.frogs) || []).some(f => f.backdrop === bd);
       if (!owns) return { ok: false, error: 'Этот фон не с твоего подарка' };
       it = { title: `Фон «${bd}»`, desc: `Бэкдроп твоего подарка ${GIFT[spOf(u)]}`, price: BD_PRICE, backdrop: bd };
+    }
+    // наряд прыгуна: цена по редкости, мошками можно сбить максимум 60%
+    if (!it && String(body.item).startsWith('skin:')) {
+      const j = jumpRec(u), s = skinBySlug(String(body.item).slice(5));
+      if (!s || !s.stars) return { ok: false, error: 'Нет такого наряда' };
+      if ((j.skins || []).includes(s.slug)) return { ok: false, error: 'Уже куплено' };
+      const maxDisc = Math.min(Math.floor(s.stars * SKIN_DISC_MAX), Math.floor((j.flies || 0) / FLIES_PER_STAR));
+      const disc = body.useFlies ? maxDisc : 0;
+      j.pendDisc = disc ? { slug: s.slug, flies: disc * FLIES_PER_STAR, at: Date.now() } : null;
+      it = { title: `Наряд «${s.name}»`, desc: `Frog Jump: облик ${s.name}, редкость ${String(s.r).replace('.', ',')}%`, price: Math.max(1, s.stars - disc) };
     }
     if (!it) return { ok: false, error: 'Нет такого товара' };
     if (it.once && u.inv && u.inv[it.once]) return { ok: false, error: 'Уже куплено' };

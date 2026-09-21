@@ -177,6 +177,13 @@ window.FrogJumpInit=function(B){
   <button class="btn" id="fjResume">Продолжить</button>
   <div class="row"><button class="btn ghost sm" id="fjSnd"></button><button class="btn ghost sm" id="fjQuit">Выйти</button></div>
 </div></div>
+<div class="fj-ov" id="fjBoostOv" hidden><div class="card">
+  <h2>Начать с половины?</h2>
+  <div class="fj-big" id="fjBoostH">0 м</div>
+  <div class="fj-note" id="fjBoostSub"></div>
+  <button class="btn" id="fjBoostGo">Разогнаться · 20 <img class="ic" src="icons/tgstar.png" alt=""></button>
+  <button class="btn ghost sm" id="fjBoostSkip">Обычный старт</button>
+</div></div>
 <div class="fj-ov" id="fjOver" hidden><div class="card">
   <div class="fj-newrec" id="fjNewRec" hidden>Новый рекорд!</div>
   <h2 id="fjOverT">Забег окончен</h2>
@@ -285,8 +292,15 @@ window.FrogJumpInit=function(B){
     let g;[sprPad,g]=mkCanvas(88,32);drawPad(g,false);
     [sprRot,g]=mkCanvas(88,32);drawPad(g,true);
   }
-  function loadFrog(){
-    if(!frogP)frogP=B.bake('frogs/original',256).then(c=>{frogImg=c;return c;}).catch(e=>{frogP=null;throw e;});
+  let frogSlug='original';
+  function loadFrog(slug){
+    slug=slug||'original';
+    if(slug!==frogSlug){frogSlug=slug;frogP=null;frogImg=null;}   // наряд сменили — печём заново
+    if(!frogP)frogP=B.bake('frogs/'+slug,256).then(c=>{frogImg=c;return c;}).catch(e=>{
+      frogP=null;
+      if(slug!=='original')return loadFrog('original');           // нет такого файла — не падаем
+      throw e;
+    });
     return frogP;
   }
 
@@ -347,7 +361,7 @@ window.FrogJumpInit=function(B){
       flies_n:0,combo:0,comboT:-9,perfect:0,
       tray:[],lastLot:-1,rocket:0,dragon:0,shield:false,invul:0,tongue:null,
       nextEvent:rnd(7,10),lastEvent:'',mile:100,zone:0,bestCrossed:false,passed:new Set(),
-      revived:false,seg:{base:0,t0:0,f0:0,tokenP:null},
+      reviveN:0,insUsed:false,seg:{base:0,t0:0,f0:0,tokenP:null},
     };
     // стартовая кувшинка — широкая, чтобы первый отскок был гарантирован
     r.pads.push(mkPad(W/2,0,150,'n'));r.pads[0].big=true;
@@ -665,7 +679,8 @@ window.FrogJumpInit=function(B){
       if(r.cause==='heron')r.lean+=r.spin*dt;
       if(!r.over&&(r.fy<r.camY-FROG*1.5||r.dyingT>1.6)){
         r.over=true;SND.splash();splash(clamp(r.fx,20,W-20),r.camY+4,16);r.shake=Math.max(r.shake,6);
-        setTimeout(()=>{if(run===r)gameOver();},650);
+        // страховка срабатывает сама и без экрана итогов — за это её и покупают
+        setTimeout(()=>{if(run!==r)return;if(useInsurance())return;gameOver();},650);
       }
     }
     // --- частицы ---
@@ -961,25 +976,27 @@ window.FrogJumpInit=function(B){
 
   /* ---------- сервер ---------- */
   const hasApi=()=>B.hasApi();
-  function startToken(cont){
+  function startToken(cont,insurance,boost){
     if(!hasApi())return Promise.resolve(null);
-    const tries=cont?10:2;
+    const tries=(cont&&!insurance)||boost?10:2;   // оплата доходит до бота с задержкой
     return (async()=>{
       for(let i=0;i<tries;i++){
         try{
-          const res=await B.api('jumpStart',{cont:!!cont});
+          const res=await B.api('jumpStart',{cont:!!cont,insurance:!!insurance,boost:!!boost});
           if(res&&res.ok){
             if(res.jumpTop)B.applyJump({jumpTop:res.jumpTop,jump:res.jump});
             if(!cont)setRivals();
+            lastBase=res.base||0;
             return res.run;
           }
-          if(!cont||(res&&res.error!=='wait'))return null;
+          if((!cont&&!boost)||(res&&res.error!=='wait'))return null;
         }catch(e){if(!cont)return null;}
         await new Promise(ok=>setTimeout(ok,1500));   // оплата доходит до бота с задержкой
       }
       return null;
     })();
   }
+  let lastBase=0;
   function setRivals(){
     const n=B.net();const me=B.myId();
     best=Math.max(pref.best||0,(n.jump&&n.jump.best)||0);
@@ -1017,7 +1034,9 @@ window.FrogJumpInit=function(B){
     $('#fjNewRec').hidden=!isBest;
     $('#fjOverBest').textContent=isBest?(bestBefore?`Прошлый рекорд — ${fmtM(bestBefore)} м`:'Это твой первый забег'):`Твой рекорд — ${fmtM(Math.max(bestBefore,h))} м`;
     $('#fjOverNote').textContent='';
-    $('#fjRevive').hidden=r.revived||h<20;
+    const rn=r.reviveN;
+    $('#fjRevive').hidden=rn>=REVIVE_PRICES.length||h<20;
+    $('#fjRevive').innerHTML=`Продолжить · ${REVIVE_PRICES[rn]} <img class="ic" src="icons/tgstar.png" alt="">`;
     $('#fjAgain').className=$('#fjRevive').hidden?'btn':'btn ghost';
     $('#fjOver').hidden=false;SND.card();
     countUp($('#fjOverH'),h,.9,true);countUp($('#fjOverF'),earnedNow,.7,false);
@@ -1028,6 +1047,10 @@ window.FrogJumpInit=function(B){
       if(!res||!res.ok){note.textContent=res&&res.error==='offline'?'Нет связи с сервером — результат не засчитан':'';return res;}
       const total=res.jump?res.jump.flies:null;
       note.textContent=(total!=null?`Мошек всего: ${fmtM(total)}`:'')+(res.rank?` · место в рейтинге: ${res.rank}`:'');
+      // про наряды напоминаем только в момент, когда на новый реально хватило
+      const can=res.jump?res.jump.canBuy||0:0;
+      if(can>(pref.canBuy||0)){note.textContent+=' · хватает на новый наряд';}
+      if(can!==pref.canBuy){pref.canBuy=can;savePref();}
       if(res.isRecord&&!res.local){note.textContent='Лучший результат игры! '+note.textContent;}
       return res;
     });
@@ -1043,22 +1066,38 @@ window.FrogJumpInit=function(B){
       if(k<1)requestAnimationFrame(step);
     };requestAnimationFrame(step);
   }
-  function revive(){
-    const r=run;if(!r||r.revived)return;
-    r.revived=true;r.alive=true;r.over=false;r.dyingT=0;r.spin=0;r.lean=0;
+  // забег продолжается: за звёзды (paid) или по страховке
+  function useInsurance(){
+    const r=run,j=B.net().jump||{};
+    if(!r||r.insUsed||!(j.shield>0))return false;
+    r.insUsed=true;j.shield=Math.max(0,(j.shield||0)-1);
+    revive(true);
+    banner('Страховка сработала','забег продолжается',true);
+    return true;
+  }
+  function revive(byInsurance){
+    const r=run;if(!r||(!byInsurance&&r.reviveN>=REVIVE_PRICES.length))return;
+    if(!byInsurance)r.reviveN++;
+    r.alive=true;r.over=false;r.dyingT=0;r.spin=0;r.lean=0;
     r.fx=W/2;r.fy=r.camY+VH*.2;r.vx=0;r.vy=VDRAGON;r.dragon=2.6;r.invul=3.2;r.shield=false;
     // все цапли рядом улетают — начинать с удара было бы нечестно
     for(const h of r.herons)if(!h.dead&&h.y<r.camY+VH*1.2){h.dead=true;h.vy=200;h.vx=rnd(-120,120);if(h.pad)h.pad.heron=null;}
     // продолжение запрашиваем только после того, как сервер принял первую часть:
     // иначе он возьмёт за основу высоту прошлого забега
     const prev=overRes||Promise.resolve();
-    r.seg={base:Math.floor(r.maxY/UNIT),t0:r.t,f0:r.flies_n,tokenP:prev.catch(()=>{}).then(()=>startToken(true))};
+    r.seg={base:Math.floor(r.maxY/UNIT),t0:r.t,f0:r.flies_n,tokenP:prev.catch(()=>{}).then(()=>startToken(true,byInsurance))};
     $('#fjOver').hidden=true;
-    banner('Продолжаем!','стрекоза подхватила',true);SND.dragon();B.haptic.success();
+    if(!byInsurance)banner('Продолжаем!','стрекоза подхватила',true);
+    SND.dragon();B.haptic.success();
     last=0;
   }
-  $('#fjRevive').onclick=()=>{SND.ui();B.buyJumpRevive(()=>revive());};
-  $('#fjAgain').onclick=()=>{SND.ui();B.haptic.light();start();};
+  // первое продолжение — 10 звёзд, второе — 25, больше двух за забег не даём
+  const REVIVE_PRICES=[10,25];
+  $('#fjRevive').onclick=()=>{
+    const n=run?run.reviveN:0;
+    SND.ui();B.buyJumpRevive(n?'jumpRevive2':'jumpRevive',()=>revive());
+  };
+  $('#fjAgain').onclick=()=>{SND.ui();B.haptic.light();beginRun();};
   $('#fjExit').onclick=()=>{SND.ui();close();};
   $('#fjShare').onclick=async()=>{SND.ui();const h=Math.floor(run.maxY/UNIT);B.shareJump(await shareCard(h),h);};
 
@@ -1107,12 +1146,21 @@ window.FrogJumpInit=function(B){
   }
 
   /* ---------- открыть / закрыть ---------- */
-  function start(){
-    $('#fjOver').hidden=true;$('#fjPauseOv').hidden=true;paused=false;
+  function start(boostBase){
+    $('#fjOver').hidden=true;$('#fjPauseOv').hidden=true;$('#fjBoostOv').hidden=true;paused=false;
     bestBefore=Math.max(pref.best||0,((B.net().jump||{}).best)||0);
     setRivals();
     run=newRun();
-    run.seg.tokenP=startToken(false);
+    if(boostBase>0){
+      // разгон: поле, камера и счётчик высоты сразу на половине рекорда
+      const y=boostBase*UNIT;
+      run.fy=y;run.maxY=y;run.camY=y-VH*.2;run.genY=y;run.mile=Math.ceil(boostBase/100)*100;
+      run.seg.base=boostBase;
+      for(const p of run.pads)p.y=y;
+      let zi=0;for(let i=0;i<ZONES.length;i++)if(boostBase>=ZONES[i].h)zi=i;
+      run.zone=zi;
+    }
+    run.seg.tokenP=boostBase>0?Promise.resolve(boostToken):startToken(false);
     elTray.classList.remove('merge');trayRender();comboRender();hudH(0);elFN.textContent='0';
     ptrs.clear();touchDir=0;acc=0;last=0;
     gen(run);
@@ -1120,12 +1168,37 @@ window.FrogJumpInit=function(B){
     else $('#fjHint').hidden=true;
     SND.jump(0);
   }
+  // Разгон предлагаем только тем, кому надоело каждый раз проходить знакомое
+  // начало, и только один раз за сеанс — иначе это назойливая реклама
+  let boostOffered=false,boostToken=null;
+  function boostReady(){const j=B.net().jump||{};return (j.best||0)>=6000;}
+  function offerBoost(){
+    const j=B.net().jump||{},half=Math.floor((j.best||0)/2);
+    $('#fjBoostH').textContent=fmtM(half)+' м';
+    $('#fjBoostSub').innerHTML=`Забег начнётся сразу с ${fmtM(half)} м — это половина твоего рекорда ${fmtM(j.best||0)} м.<br>Мошки, рекорд и место в рейтинге считаются как обычно.`;
+    $('#fjBoostOv').hidden=false;SND.card();
+  }
+  async function beginRun(){
+    const j=B.net().jump||{};
+    if(j.boost>0){   // разгон уже оплачен — забираем и стартуем выше
+      $('#fjBoostOv').hidden=false;$('#fjBoostGo').disabled=true;$('#fjBoostGo').textContent='Разгоняемся…';
+      boostToken=await startToken(false,false,true);
+      $('#fjBoostGo').disabled=false;$('#fjBoostGo').innerHTML=`Разогнаться · 20 <img class="ic" src="icons/tgstar.png" alt="">`;
+      $('#fjBoostOv').hidden=true;
+      if(boostToken){start(lastBase);return;}
+    }
+    if(!boostOffered&&boostReady()&&hasApi()){boostOffered=true;offerBoost();run=null;render0();return;}
+    start();
+  }
+  function render0(){cx.setTransform(dpr,0,0,dpr,0,0);cx.fillStyle='#0c3a2a';cx.fillRect(0,0,cssW,cssH);}
+  $('#fjBoostGo').onclick=()=>{SND.ui();B.buyJumpItem('jumpBoost',async()=>{await beginRun();});};
+  $('#fjBoostSkip').onclick=()=>{SND.ui();$('#fjBoostOv').hidden=true;start();};
   async function openGame(){
     if(open)return;
     loadImgs();
-    try{await loadFrog();}catch(e){B.toast('Не удалось загрузить лягушку');return;}
+    try{await loadFrog((B.net().jump||{}).skin);}catch(e){B.toast('Не удалось загрузить лягушку');return;}
     open=true;root.hidden=false;B.setActive(true);
-    resize();applyCtl();start();
+    resize();applyCtl();await beginRun();
     last=0;cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);
     try{if(B.TG&&B.tgv('6.1')){B.TG.BackButton.onClick(onBack);B.TG.BackButton.show();}}catch(e){}
   }
@@ -1144,6 +1217,6 @@ window.FrogJumpInit=function(B){
     // а проверять механику надо
     render,zoneBlend,
     sim:(sec,onStep)=>{const n=Math.round(sec*120);for(let i=0;i<n&&run;i++){update(STEP);if(onStep&&i%12===0)onStep(run);}return run;}};
-  return {open:openGame,close,preload:()=>{loadImgs();return loadFrog().catch(()=>{});},localBest:()=>pref.best||0,localFlies:()=>pref.flies||0};
+  return {open:openGame,close,preload:()=>{loadImgs();return loadFrog((B.net().jump||{}).skin).catch(()=>{});},localBest:()=>pref.best||0,localFlies:()=>pref.flies||0};
 };
 })();
