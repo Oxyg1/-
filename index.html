@@ -332,7 +332,27 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .hub-flies span{flex:1;line-height:1.2}
 .hub-flies small{display:block;font-size:11.5px;opacity:.7;font-weight:800}
 .hub-flies b{font-size:19px;font-variant-numeric:tabular-nums}
-/* карточка для чата открывается и поверх Frog Jump */
+/* хаб — стартовый экран: не полупрозрачная шторка, а сам экран */
+#hub{background:radial-gradient(130% 70% at 50% -10%,var(--bg1) 0%,var(--bg2) 40%,var(--bg3) 100%)}
+#hub .card{background:none;box-shadow:none;animation:none;padding:0 2px;height:100%;max-height:100%}
+#hub .head h2{font-size:26px;letter-spacing:.02em}
+/* живое превью слияния: две лягушки съезжаются и превращаются в одну */
+.hm-art{height:132px;background:radial-gradient(130% 80% at 50% -10%,#3aa373 0%,#1b6b4a 45%,#0c3a2a 100%)}
+.hm-board{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:172px;height:62px;border-radius:18px;background:rgba(0,0,0,.25);box-shadow:inset 0 4px 12px rgba(0,0,0,.35),0 2px 0 rgba(255,255,255,.05)}
+.hm-cell{position:absolute;left:50%;top:50%;width:46px;height:46px;margin-top:-23px;border-radius:13px;background:rgba(255,255,255,.09);box-shadow:inset 0 2px 0 rgba(255,255,255,.06)}
+.hm-mid{animation:hmCell 3.4s infinite}
+.hm-f{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;object-fit:contain;filter:drop-shadow(0 3px 2px rgba(0,0,0,.35))}
+.hm-a{animation:hmA 3.4s infinite}
+.hm-b{animation:hmB 3.4s infinite}
+.hm-c{animation:hmC 3.4s infinite}
+.hm-coin{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;animation:hmCoin 3.4s infinite}
+@keyframes hmA{0%{transform:translateX(-52px) scale(1);opacity:0}6%{opacity:1}30%,38%{transform:translateX(0) scale(1);opacity:1}46%,100%{transform:translateX(0) scale(0);opacity:0}}
+@keyframes hmB{0%{transform:translateX(52px) scale(1);opacity:0}6%{opacity:1}30%,38%{transform:translateX(0) scale(1);opacity:1}46%,100%{transform:translateX(0) scale(0);opacity:0}}
+@keyframes hmC{0%,44%{transform:scale(0);opacity:0}54%{transform:scale(1.25);opacity:1}62%{transform:scale(1)}84%{transform:scale(1);opacity:1}92%,100%{transform:scale(.85);opacity:0}}
+@keyframes hmCoin{0%,48%{opacity:0;transform:translate(14px,0) scale(.5)}58%{opacity:1;transform:translate(22px,-16px) scale(1)}80%,100%{opacity:0;transform:translate(26px,-38px) scale(1)}}
+@keyframes hmCell{0%,44%{background:rgba(255,255,255,.09)}52%{background:rgba(255,210,63,.4)}72%,100%{background:rgba(255,255,255,.09)}}
+/* рейтинг открывается поверх хаба, а карточка для чата — поверх всего */
+#top{z-index:110}
 #cardPrev{z-index:160}
 </style>
 </head>
@@ -539,10 +559,26 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 
 <div id="hub" class="overlay hidden">
   <div class="card" style="max-height:92dvh">
-    <div class="head"><h2><svg class="ic "><use href="#i-games"></use></svg> Игры</h2><button class="iconbtn" id="hubClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
+    <div class="head"><h2>SWAMP</h2><div class="row" style="width:auto">
+      <button class="iconbtn" id="hubTop" title="Рейтинг"><svg class="ic "><use href="#i-trophy"></use></svg></button>
+      <button class="iconbtn" id="hubChat" title="Чат"><svg class="ic "><use href="#i-chat"></use></svg></button>
+      <button class="iconbtn" id="hubClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button>
+    </div></div>
     <div class="scroll">
-      <button class="hub-main" id="hubMerge"><img id="hubMergeImg" alt=""><div>Слияние<small id="hubMergeSub"></small></div><span class="chip gold">Играть</span></button>
-      <div class="hub-label">Мини-игры</div>
+      <div class="hub-jump">
+        <div class="hj-art hm-art">
+          <i class="hm-board"></i>
+          <i class="hm-cell" style="margin-left:-75px"></i><i class="hm-cell hm-mid" style="margin-left:-23px"></i><i class="hm-cell" style="margin-left:29px"></i>
+          <img class="hm-f hm-a" id="hmA" alt=""><img class="hm-f hm-b" id="hmB" alt=""><img class="hm-f hm-c" id="hmC" alt="">
+          <img class="hm-coin" src="icons/coin.png" alt="">
+        </div>
+        <div class="hj-info">
+          <div class="t">Слияние</div>
+          <div class="hj-row"><span id="hubMergeName">Твой уровень</span><b id="hubMergeLv">—</b></div>
+          <div class="hj-row"><span>Очки</span><b id="hubMergeScore">—</b></div>
+          <button class="btn" id="hubMerge">Играть</button>
+        </div>
+      </div>
       <div class="hub-jump">
         <div class="hj-art" id="hjArt">
           <i class="cl" style="width:60px;top:16px;animation-delay:-4s"></i>
@@ -568,7 +604,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
         <button data-soon="Block Blast"><svg class="ic "><use href="#i-lock"></use></svg>Block Blast<small>скоро</small></button>
         <button data-soon="Сапёр"><svg class="ic "><use href="#i-lock"></use></svg>Сапёр<small>скоро</small></button>
       </div>
-      <div class="hub-flies"><svg class="ic "><use href="#i-fly"></use></svg><span>Мошки<small>скоро на них — облики лягушки в магазине</small></span><b id="hubFlies">0</b></div>
+        <div class="hub-flies"><svg class="ic "><use href="#i-fly"></use></svg><span>Мошки<small>копятся в Frog Jump — потратишь на наряды лягушки</small></span><b id="hubFlies">0</b></div>
     </div>
   </div>
 </div>
@@ -2023,7 +2059,7 @@ function renderJumpTop(){
   const list=$('#topList');list.innerHTML='';
   const rows=net.jumpTop||[];
   $('#topNote').textContent='';
-  if(!rows.length){list.innerHTML='<div class="demo">В Frog Jump ещё никто не прыгал. Открой «Игры» — будешь первым в таблице.</div>';return;}
+  if(!rows.length){list.innerHTML='<div class="demo">В Frog Jump ещё никто не прыгал. Сыграй — и будешь первым в таблице.</div>';return;}
   const meId=net.me?net.me.id:null;
   rows.forEach(r=>{
     const d=document.createElement('div');d.className='lb'+((meId&&r.id===meId)?' me':'');
@@ -2379,8 +2415,11 @@ const JUMP=window.FrogJumpInit?window.FrogJumpInit({
 }):null;
 function renderHub(){
   const lv=Math.max(1,state.maxLv|0);
-  $('#hubMergeSub').textContent=`ур. ${lv} · ${frogName(lv)}`;
-  thumb(lv).then(u=>{$('#hubMergeImg').src=u;}).catch(()=>{});
+  $('#hubMergeLv').textContent=`${lv} · ${frogName(lv)}`;
+  $('#hubMergeScore').textContent=fmt(state.score||0);
+  // в превью — то, что игрок уже вырастил, и следующий за ним уровень
+  thumb(lv).then(u=>{$('#hmA').src=u;$('#hmB').src=u;}).catch(()=>{});
+  thumb(Math.min(lv+1,LEVELS.length)).then(u=>{$('#hmC').src=u;}).catch(()=>{});
   thumb('frogs/original').then(u=>{$('#hjFrog').src=u;}).catch(()=>{});
   const j=net.jump||{};
   const best=Math.max(j.best||0,JUMP?JUMP.localBest():0);
@@ -2401,12 +2440,14 @@ function openHub(){
 const closeHub=()=>$('#hub').classList.add('hidden');
 $('#btnGames').onclick=()=>{S.ui();haptic.light();openHub();};
 $('#hubClose').onclick=()=>{S.ui();closeHub();};
-$('#hubMerge').onclick=()=>{S.ui();closeHub();};
+$('#hubMerge').onclick=()=>{S.ui();haptic.light();closeHub();};
+$('#hubTop').onclick=()=>{S.ui();openTop();};
+$('#hubChat').onclick=()=>{S.ui();openTg(CFG.chat);};
 $('#hubPlay').onclick=()=>{
   if(!JUMP){toast('Игра не загрузилась — обнови приложение');return;}
   S.ui();haptic.medium();closeHub();JUMP.open();
 };
-$('#hub').querySelectorAll('[data-soon]').forEach(b=>b.onclick=()=>{S.ui();haptic.select();toast(`${b.dataset.soon} готовим — следи за новостями в чате`);});
+$('#hub').querySelectorAll('[data-soon]').forEach(b=>b.onclick=()=>{S.ui();haptic.select();toast(`Готовим ${b.dataset.soon} — следи за новостями в чате`);});
 try{if(!localStorage.getItem(HUB_SEEN))$('#btnGames').insertAdjacentHTML('beforeend','<i class="newdot"></i>');}catch(e){}
 
 async function init(){
@@ -2414,8 +2455,11 @@ async function init(){
   loaderSticker();
   await startGame();
   const startParam=TG&&TG.initDataUnsafe&&TG.initDataUnsafe.start_param;
-  if(startParam==='shop')openShop();
-  else if(startParam==='jump'&&JUMP)JUMP.open();
+  // приложение открывается в хабе: оттуда выбирают слияние или Frog Jump.
+  // По прямой ссылке сразу открываем нужное, хаб остаётся под ним
+  if(startParam==='shop'){openHub();openShop();}
+  else if(startParam==='jump'&&JUMP){openHub();JUMP.open();}
+  else openHub();
   sync(true).then(r=>{
     const frogs=(r&&r.holder&&r.holder.frogs)||[];
     // тихое уведомление без модалки и без намёка на то, что ждёт в конце игры —

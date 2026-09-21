@@ -20,10 +20,11 @@ window.FrogJumpInit=function(B){
 
   /* ---------- мир ---------- */
   const W=360, UNIT=10;                      // ширина мира; 10 единиц = 1 метр
-  // Темп: высота прыжка = V0²/2G ≈ 212 единиц. Замедлено на ~8% относительно
-  // первой версии (жаловались, что игра частит): высота та же, но полёт дольше
-  const G=1290, V0=740, VSPRING=1310, VSTOMP=870, VROCKET=1060, VDRAGON=885;
-  const MAXVX=320, FROG=64, FOOT=17, STEP=1/120;
+  // Темп полёта — исходный. Жалоба «слишком быстро» была не про него, а про то,
+  // что дальше 3 км не пускали разрывы между кувшинками: это чинится генерацией
+  // (см. gen), а не замедлением
+  const G=1500, V0=800, VSPRING=1420, VSTOMP=940, VROCKET=1150, VDRAGON=960;
+  const MAXVX=340, FROG=64, FOOT=17, STEP=1/120;
   const JUMP_H=V0*V0/(2*G);
   const ZONES=[
     {h:0,    top:'#3aa373', bot:'#0c3a2a', mote:'firefly', name:'Болото'},
@@ -432,7 +433,7 @@ window.FrogJumpInit=function(B){
   }
   function comboRender(){
     const on=run.combo>=3;elCombo.classList.toggle('on',on);elCombo.classList.toggle('hot',run.combo>=5);
-    if(on){elComboN.textContent=run.combo>=5?`×${run.combo} · мошки ×2`:`×${run.combo}`;kick(elCombo,'kick');}
+    if(on){elComboN.textContent=run.combo>=5?`×${run.combo} · вдвойне`:`×${run.combo}`;kick(elCombo,'kick');}
   }
   // экранные координаты точки мира (для DOM-эффектов поверх канваса)
   const toScreen=(x,y)=>({x:offX+x*sc,y:(run.camY+VH-y)*sc});
@@ -474,7 +475,7 @@ window.FrogJumpInit=function(B){
     SND.gulp(r.combo);B.haptic.select();
     txt(f.x,f.y+8,'+'+val,{c:f.gold?'#ffd23f':(r.combo>=5?'#ffe36b':'#fff'),s:f.gold?24:16,life:.7});
     if(f.gold){burst(f.x,f.y,14,['#ffd23f','#fff2b8','#ffffff'],180);SND.pass();}
-    if(r.combo===5){banner('Мошки ×2','серия поймана',true);SND.event();}
+    if(r.combo===5){banner('Серия!','мошки идут вдвойне',true);SND.event();}
     comboRender();
   }
   function collectLotus(l){
@@ -539,14 +540,14 @@ window.FrogJumpInit=function(B){
     if(ev==='swarm'){
       const cxx=rnd(70,W-70),cy=top+rnd(80,160);
       for(let i=0;i<10;i++){const a=i/10*Math.PI*2;r.flies.push(mkFly(cxx+Math.cos(a)*56,cy+Math.sin(a)*46));}
-      banner('Рой мошек!','лови языком — серия ×2');
+      banner('Рой мошек!','лови подряд — пойдут вдвойне');
     }else if(ev==='gold'){
       r.flies.push(mkFly(rnd(40,W-40),top+120,{gold:true,vx:(Math.random()<.5?-1:1)*90}));
       banner('Золотая мошка!','+5 мошек',true);
     }else if(ev==='lotus'){
       const c=Math.floor(Math.random()*3),x=rnd(60,W-60);
       for(let i=0;i<3;i++)r.lots.push(mkLot(clamp(x+rnd(-40,40),30,W-30),top+90+i*150,c));
-      banner('Три лотоса','собери подряд — будет слияние');
+      banner('Три лотоса','собери все — будет слияние');
     }else{
       r.springRun=5;banner('Пружинный участок!','');
     }
@@ -1014,7 +1015,7 @@ window.FrogJumpInit=function(B){
     const isBest=h>bestBefore&&h>0;
     $('#fjOverT').textContent=r.cause==='heron'?'Цапля поймала':'Забег окончен';
     $('#fjNewRec').hidden=!isBest;
-    $('#fjOverBest').textContent=isBest?(bestBefore?`Прошлый рекорд — ${fmtM(bestBefore)} м`:'Первый результат в таблице'):`Твой рекорд — ${fmtM(Math.max(bestBefore,h))} м`;
+    $('#fjOverBest').textContent=isBest?(bestBefore?`Прошлый рекорд — ${fmtM(bestBefore)} м`:'Это твой первый забег'):`Твой рекорд — ${fmtM(Math.max(bestBefore,h))} м`;
     $('#fjOverNote').textContent='';
     $('#fjRevive').hidden=r.revived||h<20;
     $('#fjAgain').className=$('#fjRevive').hidden?'btn':'btn ghost';
@@ -1026,8 +1027,8 @@ window.FrogJumpInit=function(B){
       const note=$('#fjOverNote');
       if(!res||!res.ok){note.textContent=res&&res.error==='offline'?'Нет связи с сервером — результат не засчитан':'';return res;}
       const total=res.jump?res.jump.flies:null;
-      note.textContent=(total!=null?`Всего мошек: ${fmtM(total)} · скоро на них облики лягушки`:'')+(res.rank?` · место ${res.rank}`:'');
-      if(res.isRecord&&!res.local){note.textContent='Рекорд всей игры! '+note.textContent;}
+      note.textContent=(total!=null?`Мошек всего: ${fmtM(total)}`:'')+(res.rank?` · место в рейтинге: ${res.rank}`:'');
+      if(res.isRecord&&!res.local){note.textContent='Лучший результат игры! '+note.textContent;}
       return res;
     });
   }
@@ -1053,7 +1054,7 @@ window.FrogJumpInit=function(B){
     const prev=overRes||Promise.resolve();
     r.seg={base:Math.floor(r.maxY/UNIT),t0:r.t,f0:r.flies_n,tokenP:prev.catch(()=>{}).then(()=>startToken(true))};
     $('#fjOver').hidden=true;
-    banner('Продолжаем!','стрекоза поднимет',true);SND.dragon();B.haptic.success();
+    banner('Продолжаем!','стрекоза подхватила',true);SND.dragon();B.haptic.success();
     last=0;
   }
   $('#fjRevive').onclick=()=>{SND.ui();B.buyJumpRevive(()=>revive());};
