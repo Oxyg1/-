@@ -600,7 +600,9 @@ const api = {
     save();
     // итог прошлого сезона отдаём, пока клиент не подтвердит, что показал его
     if (body.warAck && u.warPending && String(body.warAck) === String(u.warPending.week)) delete u.warPending;
-    return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, war: warState(u), warResult: u.warPending || null, endless: endlessState(u), endlessTop: endlessTop(20), jump: jumpState(u), jumpTop: jumpTop(20), holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
+    // maxLv/merges текущего вида нужны клиенту как подстраховка: если у него
+    // пустой сейв (новое устройство, облако недоступно), он восстановит уровень
+    return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score, maxLv: rec.maxLv || 1, merges: rec.merges || 0, spScore: rec.score || 0 }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, war: warState(u), warResult: u.warPending || null, endless: endlessState(u), endlessTop: endlessTop(20), jump: jumpState(u), jumpTop: jumpTop(20), holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
   },
   async leaderboard() { pondCheck(); warCheck(); return { ok: true, top: topRows(50), pond: { count: db.pond.count, goal: CFG.pondGoal }, war: warState(null), endlessTop: endlessTop(50), endless: endlessState(null), jumpTop: jumpTop(50), jump: jumpState(null) }; },
   // старт забега (или его продолжения после оплаты) — выдаём подписанный номер
@@ -840,6 +842,7 @@ const api = {
           pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars, week: db.pond.week },
           war: { frog: db.war.frog || 0, cat: db.war.cat || 0, stars: db.war.stars || 0, week: db.war.week, last: db.war.last || null, top: warTop(8) },
           endless: { record: db.endless.record || null },
+          jump: { record: db.jump.record || null, top: jumpTop(5) },
           broadcast: db.broadcast || null,
           adminChatId: CFG.adminId || '',
           digestDay: db.digest.day || '—',

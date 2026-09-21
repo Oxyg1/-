@@ -151,6 +151,12 @@ window.FrogJumpInit=function(B){
 #fj .fj-earn{display:flex;align-items:center;justify-content:center;gap:8px;font-size:18px;font-weight:900;background:rgba(0,0,0,.22);border-radius:14px;padding:6px 14px}
 #fj .fj-earn svg{width:28px;height:28px}
 #fj .fj-note{font-size:13px;opacity:.75;text-align:center;line-height:1.3}
+#fj .fj-sens{display:flex;justify-content:space-between;width:100%;font-size:14px;opacity:.85;margin-top:2px}
+#fj input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:26px;background:none;margin:0}
+#fj input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:99px;background:rgba(0,0,0,.35);box-shadow:inset 0 2px 0 rgba(0,0,0,.25)}
+#fj input[type=range]::-moz-range-track{height:8px;border-radius:99px;background:rgba(0,0,0,.35)}
+#fj input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-8px;border-radius:50%;background:linear-gradient(#ffe36b,#f7b500);box-shadow:0 2px 0 var(--acc-dark)}
+#fj input[type=range]::-moz-range-thumb{width:24px;height:24px;border:0;border-radius:50%;background:#f7b500}
 #fj .card .btn{width:100%}
 #fj .card .row .btn{width:auto;flex:1}
 `;
@@ -175,6 +181,8 @@ window.FrogJumpInit=function(B){
   <h2>Пауза</h2>
   <div class="sub">Управление</div>
   <div class="segbar" id="fjCtl"><button data-c="touch">Касания</button><button data-c="tilt">Наклон</button></div>
+  <div class="fj-sens"><span>Чувствительность</span><b id="fjSensV">100%</b></div>
+  <input type="range" id="fjSens" min="60" max="180" step="5" value="100">
   <button class="btn" id="fjResume">Продолжить</button>
   <div class="row"><button class="btn ghost sm" id="fjSnd"></button><button class="btn ghost sm" id="fjQuit">Выйти</button></div>
 </div></div>
@@ -202,7 +210,7 @@ window.FrogJumpInit=function(B){
 
   /* ---------- настройки игрока ---------- */
   const PREF_KEY='fj.v1';
-  let pref={ctl:'touch',hinted:false,best:0,flies:0};
+  let pref={ctl:'touch',hinted:false,best:0,flies:0,sens:100};
   try{Object.assign(pref,JSON.parse(localStorage.getItem(PREF_KEY)||'{}'));}catch(e){}
   const savePref=()=>{try{localStorage.setItem(PREF_KEY,JSON.stringify(pref));}catch(e){}};
 
@@ -344,8 +352,18 @@ window.FrogJumpInit=function(B){
   }
   function applyCtl(){
     root.querySelectorAll('#fjCtl button').forEach(b=>b.classList.toggle('on',b.dataset.c===pref.ctl));
+    $('#fjSens').value=pref.sens||100;$('#fjSensV').textContent=(pref.sens||100)+'%';
     if(pref.ctl==='tilt'&&open)startTilt();else stopTilt();
   }
+  // Скорость ухода вбок у всех «дудлов» своя, и привыкшим к другой игре наша
+  // кажется то вязкой, то резкой. Значение по умолчанию не трогаем, но даём
+  // подогнать под себя — настройка живёт вместе с выбором управления
+  const sens=()=>(pref.sens||100)/100;
+  $('#fjSens').oninput=e=>{
+    pref.sens=Math.max(60,Math.min(180,+e.target.value||100));
+    $('#fjSensV').textContent=pref.sens+'%';
+  };
+  $('#fjSens').onchange=()=>{savePref();B.haptic.select();};
   root.querySelectorAll('#fjCtl button').forEach(b=>b.onclick=()=>{pref.ctl=b.dataset.c;savePref();SND.ui();B.haptic.select();applyCtl();});
 
   /* ---------- состояние забега ---------- */
@@ -577,7 +595,7 @@ window.FrogJumpInit=function(B){
     // --- управление и движение ---
     if(r.alive){
       const dir=keyDir||(pref.ctl==='tilt'&&tiltOn?tilt:touchDir);
-      r.vx+=(dir*MAXVX-r.vx)*Math.min(1,dt*(dir?13:7));
+      r.vx+=(clamp(dir*sens(),-1.4,1.4)*MAXVX-r.vx)*Math.min(1,dt*(dir?13:7));
     }
     const prevB=r.fy;
     if(r.rocket>0){r.rocket-=dt;r.vy=VROCKET;if(Math.random()<.6)P({k:'petal',x:r.fx+rnd(-12,12),y:r.fy,vx:rnd(-40,40),vy:-rnd(80,200),g:0,life:.6,s:rnd(3,5),c:pick(LOTUS.concat(['#fff'])),r:0,vr:rnd(-6,6)});}

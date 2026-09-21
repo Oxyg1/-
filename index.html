@@ -335,6 +335,10 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 /* хаб — стартовый экран: не полупрозрачная шторка, а сам экран */
 #hub{background:radial-gradient(130% 70% at 50% -10%,var(--bg1) 0%,var(--bg2) 40%,var(--bg3) 100%)}
 #hub .card{background:none;box-shadow:none;animation:none;padding:0 2px;height:100%;max-height:100%}
+/* на коротких экранах последняя карточка упиралась в край и обрезалась без
+   всякого намёка, что дальше что-то есть */
+#hub .scroll{padding-bottom:18px}
+#hub .hub-jump{flex:none}
 #hub .head h2{font-size:26px;letter-spacing:.02em}
 /* живое превью слияния: две лягушки съезжаются и превращаются в одну */
 .hm-art{height:132px;background:radial-gradient(130% 80% at 50% -10%,#3aa373 0%,#1b6b4a 45%,#0c3a2a 100%)}
@@ -983,10 +987,31 @@ function applySave(s){
   if(state.cells.length!==CELLS){const old=state.cells,on=Math.round(Math.sqrt(old.length));const nc=Array(CELLS).fill(0);for(let r=0;r<Math.min(on,N);r++)for(let c=0;c<Math.min(on,N);c++)nc[r*N+c]=old[r*on+c]||0;state.cells=nc;}
 }
 const cloudOk=()=>TG&&tgv('6.9')&&TG.CloudStorage;
+/* Сейв лежит и локально, и в облаке Telegram (чтобы прогресс переезжал между
+   устройствами). Раньше облако применялось ПОВЕРХ локального всегда, а его
+   чтение висело на таймауте: если оно не успевало (медленный ПК, первый запуск
+   на другом устройстве), игра стартовала с нуля и через секунду записывала этот
+   ноль в облако — прогресс пропадал сразу на всех устройствах, а от склейки
+   по полям оставалась каша. Теперь: применяем тот сейв, который СВЕЖЕЕ, и
+   никогда не пишем в облако, пока не прочитали его успешно. */
+let cloudLoaded=false;
 async function load(){
-  try{applySave(JSON.parse(localStorage.getItem(SAVE_KEY)));}catch(e){}
-  if(!state.t){try{const o=JSON.parse(localStorage.getItem('frogmerge.v1'));if(o){o.t=1;applySave(o);}}catch(e){}}
-  if(cloudOk()){try{const v=await Promise.race([new Promise((res,rej)=>TG.CloudStorage.getItem(SAVE_KEY,(err,val)=>err?rej(err):res(val))),wait(2500).then(()=>null)]);if(v)applySave(JSON.parse(v));}catch(e){}}
+  let local=null,cloud=null;
+  try{local=JSON.parse(localStorage.getItem(SAVE_KEY));}catch(e){}
+  if(!local||!local.t){try{const o=JSON.parse(localStorage.getItem('frogmerge.v1'));if(o){o.t=1;local=o;}}catch(e){}}
+  cloudLoaded=false;
+  if(cloudOk()){
+    try{
+      const v=await Promise.race([
+        new Promise((res,rej)=>TG.CloudStorage.getItem(SAVE_KEY,(err,val)=>err?rej(err):res(val))),
+        wait(5000).then(()=>'timeout'),
+      ]);
+      if(v!=='timeout'){cloudLoaded=true;if(v)try{cloud=JSON.parse(v);}catch(e){}}
+    }catch(e){}
+  }
+  // при равной свежести берём локальный: он точно принадлежит этому устройству
+  const pick=!cloud?local:!local?cloud:((cloud.t||0)>(local.t||0)?cloud:local);
+  if(pick)applySave(pick);
 }
 let saveT=null,resetting=false;
 function save(){
@@ -994,7 +1019,7 @@ function save(){
   state.t=now();
   const json=JSON.stringify(state);
   try{localStorage.setItem(SAVE_KEY,json);}catch(e){}
-  if(cloudOk()){clearTimeout(saveT);saveT=setTimeout(()=>{try{TG.CloudStorage.setItem(SAVE_KEY,json,()=>{});}catch(e){}},800);}
+  if(cloudOk()&&cloudLoaded){clearTimeout(saveT);saveT=setTimeout(()=>{try{TG.CloudStorage.setItem(SAVE_KEY,json,()=>{});}catch(e){}},800);}
 }
 
 /* ---------- ECONOMY ---------- */
@@ -1205,6 +1230,22 @@ async function api(path,body){
   if(!r.ok)throw new Error('api '+r.status);
   return r.json();
 }
+/* Последняя страховка от потери прогресса: сейв пустой, а на сервере у этого
+   аккаунта есть уровень и слияния — значит игрок заходит с нового устройства и
+   локального сейва просто нет. Поле восстановить нечем, но уровень, очки и
+   открытую коллекцию возвращаем, чтобы игра не начиналась заново. */
+function restoreFromServer(me){
+  if(!me||!me.maxLv||me.maxLv<=1)return;
+  const fresh=(state.merges|0)===0&&(state.maxLv|0)<=1&&!state.cells.some(v=>v>0);
+  if(!fresh)return;
+  state.maxLv=Math.min(me.maxLv,LEVELS.length);
+  state.merges=me.merges||0;
+  state.score=Math.max(state.score||0,me.spScore||0);
+  state.disc=Array.from({length:state.maxLv},(_,i)=>i+1);
+  save();updateHud();refreshJunk();
+  setClickerSkin(state.maxLv).catch(()=>{});
+  toast('Прогресс восстановлен с сервера: уровень '+state.maxLv,3500);
+}
 function applyOwnership(){
   const frogs=(net.holder&&net.holder.frogs)||[];
   const models=frogs.map(f=>f.model).filter(Boolean);
@@ -1220,6 +1261,7 @@ function applyOwnership(){
 }
 function applyServer(r){
   if(!r||!r.ok)return;
+  restoreFromServer(r.me);
   net.online=true;net.me=r.me||null;net.top=r.top||[];if(r.pond)net.pond=r.pond;if(r.war)net.war=r.war;net.holder=r.holder||null;net.lastSync=now();
   if(r.endless)net.endless=r.endless;if(r.endlessTop)net.endlessTop=r.endlessTop;
   if(r.jump)net.jump=r.jump;if(r.jumpTop)net.jumpTop=r.jumpTop;
@@ -2586,7 +2628,9 @@ function renderHub(){
   const j=net.jump||{};
   const best=Math.max(j.best||0,JUMP?JUMP.localBest():0);
   $('#hubBest').textContent=best?fmtM(best)+' м':'ещё не прыгал';
-  const rec=j.record;
+  // если общий рекорд ещё не проставлен (например, все рекордсмены скрыты из
+  // рейтинга), показываем лидера таблицы — пустой прочерк выглядит как поломка
+  const rec=j.record||((net.jumpTop||[])[0]?{name:net.jumpTop[0].name,best:net.jumpTop[0].best}:null);
   $('#hubRecName').textContent=rec?`Лучший · ${rec.name||'игрок'}`:'Лучший в игре';
   $('#hubRec').textContent=rec?fmtM(rec.best)+' м':'—';
   $('#hubFlies').textContent=fmtM(CFG.api?(j.flies||0):(JUMP?JUMP.localFlies():0));
