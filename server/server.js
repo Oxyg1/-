@@ -425,6 +425,48 @@ function holderModels(u) {
   const h = (u.holderBySp && u.holderBySp.frog && u.holderBySp.frog.data) || (spOf(u) === 'frog' ? u.holder : null);
   return ((h && h.frogs) || []).map(f => String(f.model || '').toLowerCase());
 }
+/* Оплата приходит боту отдельным обновлением Telegram, и это обновление можно
+   потерять: сервер перезапускали, бот лежал, сеть моргнула. Тогда звёзды
+   списаны, запись о платеже есть, а наряда у игрока нет. Поэтому при открытии
+   гардероба сверяем историю платежей с тем, что выдано, и доводим до конца. */
+function reconcileSkins(u) {
+  const j = jumpRec(u), own = j.skins || (j.skins = []);
+  let fixed = 0;
+  for (let i = db.payments.length - 1, seen = 0; i >= 0 && seen < 500; i--) {
+    const p = db.payments[i];
+    if (String(p.id) !== String(u.id)) continue;
+    seen++;
+    if (!String(p.item).startsWith('skin:')) continue;
+    const slug = String(p.item).slice(5);
+    if (!own.includes(slug)) { own.push(slug); fixed++; }
+  }
+  if (fixed) { if (!j.skin || j.skin === 'original') j.skin = own[own.length - 1]; save(); log('skins reconciled', u.id, fixed); }
+  return fixed;
+}
+/* Последний рубеж: если обновление об оплате не дошло до бота вообще, записи о
+   платеже у нас нет — но она есть у Telegram. Спрашиваем реестр звёзд и выдаём
+   всё, за что игрок заплатил. Не чаще раза в минуту на игрока. */
+async function reconcileFromTelegram(u) {
+  if (!CFG.token) return 0;
+  const j = jumpRec(u);
+  if (Date.now() - (j.tgCheckAt || 0) < 60e3) return 0;
+  j.tgCheckAt = Date.now();
+  try {
+    const r = await tg('getStarTransactions', { offset: 0, limit: 100 });
+    const own = j.skins || (j.skins = []);
+    let fixed = 0;
+    for (const t of (r && r.transactions) || []) {
+      const src = t.source || {};
+      if (!src.user || String(src.user.id) !== String(u.id)) continue;
+      const pl = String(src.invoice_payload || '');
+      if (!pl.startsWith('skin:')) continue;
+      const slug = pl.split(':')[1];
+      if (slug && !own.includes(slug)) { own.push(slug); fixed++; }
+    }
+    if (fixed) { save(); log('skins from telegram', u.id, fixed); }
+    return fixed;
+  } catch (e) { log('getStarTransactions', e.message); return 0; }
+}
 function skinsFor(u) {
   const j = jumpRec(u), own = j.skins || [], hold = holderModels(u);
   return SKINS.map(s => {
@@ -593,7 +635,8 @@ const api = {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     const u = getUser(a);
     await checkHolder(u, a.real);
-    return { ok: true, skins: skinsFor(u), jump: jumpState(u), perStar: FLIES_PER_STAR };
+    const fixed = reconcileSkins(u) + await reconcileFromTelegram(u);
+    return { ok: true, skins: skinsFor(u), jump: jumpState(u), perStar: FLIES_PER_STAR, fixed };
   },
   // наряд за мошек (звёздные идут обычным счётом через invoice)
   async jumpBuySkin(body, req) {
