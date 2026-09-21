@@ -20,8 +20,11 @@ window.FrogJumpInit=function(B){
 
   /* ---------- мир ---------- */
   const W=360, UNIT=10;                      // ширина мира; 10 единиц = 1 метр
-  const G=1500, V0=800, VSPRING=1420, VSTOMP=940, VROCKET=1150, VDRAGON=960;
-  const MAXVX=340, FROG=64, FOOT=17, STEP=1/120;
+  // Темп: высота прыжка = V0²/2G ≈ 212 единиц. Замедлено на ~8% относительно
+  // первой версии (жаловались, что игра частит): высота та же, но полёт дольше
+  const G=1290, V0=740, VSPRING=1310, VSTOMP=870, VROCKET=1060, VDRAGON=885;
+  const MAXVX=320, FROG=64, FOOT=17, STEP=1/120;
+  const JUMP_H=V0*V0/(2*G);
   const ZONES=[
     {h:0,    top:'#3aa373', bot:'#0c3a2a', mote:'firefly', name:'Болото'},
     {h:300,  top:'#f6b27a', bot:'#8e3f3a', mote:'pollen',  name:'Камыши на закате'},
@@ -195,10 +198,15 @@ window.FrogJumpInit=function(B){
   const savePref=()=>{try{localStorage.setItem(PREF_KEY,JSON.stringify(pref));}catch(e){}};
 
   /* ---------- экран ---------- */
+  // quality=1 — как задумано; 0 — облегчённый режим для слабых телефонов:
+  // меньше пикселей, меньше фоновых точек, меньше частиц, без картинок облаков.
+  // Переключается сам по времени кадра, см. frame()
+  let quality=1;
   let dpr=1,sc=1,VH=640,cssW=360,cssH=640,offX=0,fieldW=360;
   function resize(){
     cssW=root.clientWidth||window.innerWidth;cssH=root.clientHeight||window.innerHeight;
-    dpr=Math.min(2,window.devicePixelRatio||1);
+    dpr=Math.min(quality?2:1.25,window.devicePixelRatio||1);
+    SCALED.clear();
     cv.width=Math.round(cssW*dpr);cv.height=Math.round(cssH*dpr);
     // на широком экране (планшет, десктоп) поле не растягиваем — держим пропорции телефона
     fieldW=Math.min(cssW,cssH*.62);offX=(cssW-fieldW)/2;
@@ -227,10 +235,27 @@ window.FrogJumpInit=function(B){
     }
   }
   const has=k=>{const im=IMG[k];return !!(im&&im.ok&&im.naturalWidth);};
+  // Каждый кадр ужимать большой PNG дорого — держим уменьшенные копии под тот
+  // размер, которым реально рисуем. Сбрасывается при смене размера экрана
+  const SCALED=new Map();
+  function scaled(k,w){
+    const im=IMG[k];
+    const q=Math.max(8,Math.round(w*sc*dpr/8)*8);
+    if(q>=im.naturalWidth)return im;
+    const id=k+'@'+q;let c=SCALED.get(id);
+    if(!c){
+      c=document.createElement('canvas');
+      c.width=q;c.height=Math.max(1,Math.round(q*im.naturalHeight/im.naturalWidth));
+      c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+      SCALED.set(id,c);
+      if(SCALED.size>40)SCALED.delete(SCALED.keys().next().value);
+    }
+    return c;
+  }
   // картинка по ширине (w) с опорной точкой: ax/ay — доля от ширины/высоты
   function blit(k,x,y,w,ax=.5,ay=.5){
     const im=IMG[k],h=w*im.naturalHeight/im.naturalWidth;
-    cx.drawImage(im,x-w*ax,y-h*ay,w,h);return h;
+    cx.drawImage(scaled(k,w),x-w*ax,y-h*ay,w,h);return h;
   }
   // Лягушка стоит на верхней поверхности листа, а не на его нижнем крае: точка
   // опоры — центр видимого эллипса. У гнилушки обод толще, поэтому центр выше
@@ -317,7 +342,7 @@ window.FrogJumpInit=function(B){
       fx:W/2,fy:0,vx:0,vy:V0,sq:-.2,sqV:0,lean:0,spin:0,
       maxY:0,camY:-VH*.2,shake:0,hitstop:0,slow:0,
       pads:[],flies:[],lots:[],items:[],herons:[],parts:[],
-      genY:0,lastHeron:-9999,springRun:0,
+      genY:0,lastHeron:-9999,springRun:0,lastRisk:false,cullT:0,
       flies_n:0,combo:0,comboT:-9,perfect:0,
       tray:[],lastLot:-1,rocket:0,dragon:0,shield:false,invul:0,tongue:null,
       nextEvent:rnd(7,10),lastEvent:'',mile:100,zone:0,bestCrossed:false,passed:new Set(),
@@ -336,26 +361,40 @@ window.FrogJumpInit=function(B){
   /* ---------- генерация уровня ---------- */
   function gen(r){
     while(r.genY<r.camY+VH+300){
-      const m=r.genY/UNIT,d=Math.min(1,m/2500);
-      const gap=lerp(64,172,d)*rnd(.85,1.15);
+      // Сложность растёт медленнее и упирается в потолок: раньше к 2500 м разрыв
+      // доходил до 172 при высоте прыжка 212 — с учётом разбега вбок это было
+      // почти невозможно, и дальше 3000 м игра превращалась в лотерею
+      const m=r.genY/UNIT,d=Math.min(1,m/4200);
+      const gap=lerp(62,JUMP_H*.68,d)*rnd(.88,1.12);
       r.genY+=gap;
-      const y=r.genY,w=lerp(80,58,d);
-      const pm=m<150?0:Math.min(.38,.12+(m-150)/2600);
-      const ps=m<300?0:Math.min(.22,.07+(m-300)/4000);
+      const y=r.genY,w=lerp(84,64,d);
+      const pm=m<150?0:Math.min(.3,.1+(m-150)/3200);
+      const ps=m<300?0:Math.min(.16,.05+(m-300)/5200);
       const q=Math.random();
-      const type=q<pm?'m':q<pm+ps?'s':'n';
+      let type=q<pm?'m':q<pm+ps?'s':'n';
+      // две рискованные кувшинки подряд запрещены: связка «под тобой тонущая,
+      // над тобой гнилая, следующая с цаплей» не должна складываться
+      if(type!=='n'&&r.lastRisk)type='n';
+      r.lastRisk=type!=='n';
       const pad=mkPad(rnd(w/2+4,W-w/2-4),y,w,type);
       r.pads.push(pad);
       if(type!=='s'&&(r.springRun>0||(m>=100&&Math.random()<.075))){
         pad.spring=1;pad.springX=rnd(-w*.22,w*.22);if(r.springRun>0)r.springRun--;
-      }else if(m>=400&&type==='n'&&y-r.lastHeron>720&&Math.random()<.08){
+      }else if(m>=400&&type==='n'&&y-r.lastHeron>1000&&Math.random()<.06){
         const h={pad,dead:false,x:pad.x,y:pad.y,vx:0,vy:0,rot:0,face:pad.x<W/2?1:-1,t:Math.random()*5};
         pad.heron=h;r.herons.push(h);r.lastHeron=y;
+        // рядом с цаплей всегда есть куда сесть без боя
+        const ww=w*.9,fx=clamp(pad.x+(pad.x<W/2?1:-1)*rnd(110,150),ww/2+4,W-ww/2-4);
+        r.pads.push(mkPad(fx,y+rnd(-14,14),ww,'n'));
       }
       // в начале кувшинки гуще — учиться прыгать приятно, а не страшно
       if(m<300&&Math.random()<.45){const ww=w*.9;r.pads.push(mkPad(clamp(W-pad.x+rnd(-40,40),ww/2+4,W-ww/2-4),y-gap*.5,ww,'n'));}
       // гнилушка-обманка: никогда не единственная дорога наверх
-      if(m>=600&&Math.random()<.22)r.pads.push(mkPad(clamp(W-pad.x+rnd(-60,60),30,W-30),y-gap*.45,w,'r'));
+      // гнилушка — приманка сбоку от настоящего пути, а не на нём
+      if(m>=600&&Math.random()<.15){
+        const rx=clamp(pad.x+(pad.x<W/2?1:-1)*rnd(90,150),30,W-30);
+        r.pads.push(mkPad(rx,y-gap*.45,w,'r'));
+      }
       if(Math.random()<.5)r.flies.push(mkFly(rnd(18,W-18),y-gap*rnd(.2,.8)));
       if(m>=40&&Math.random()<.11)r.lots.push(mkLot(rnd(24,W-24),y+rnd(40,90),lotusColor(r)));
       if(m>=400&&Math.random()<.03)r.items.push({k:'b',x:pad.x,y:y+62,t:Math.random()*5});
@@ -368,7 +407,7 @@ window.FrogJumpInit=function(B){
   function lotusColor(r){return (r.lastLot>=0&&Math.random()<.55)?r.lastLot:Math.floor(Math.random()*3);}
 
   /* ---------- частицы и тексты ---------- */
-  function P(o){if(run.parts.length>340)run.parts.splice(0,20);o.t=0;run.parts.push(o);}
+  function P(o){if(run.parts.length>(quality?340:140))run.parts.splice(0,20);o.t=0;run.parts.push(o);}
   function splash(x,y,n=8,col='#bfefff'){
     for(let i=0;i<n;i++){const a=rnd(.2,Math.PI-.2);P({k:'drop',x:x+rnd(-14,14),y,vx:Math.cos(a)*rnd(40,150),vy:Math.sin(a)*rnd(120,260),g:900,life:rnd(.35,.6),s:rnd(2,3.6),c:col});}
     P({k:'ring',x,y:y-2,life:.55,s:10,c:'rgba(210,245,255,'});
@@ -635,13 +674,20 @@ window.FrogJumpInit=function(B){
       p.x+=(p.vx||0)*dt;p.y+=(p.vy||0)*dt;if(p.g)p.vy-=p.g*dt;if(p.vr)p.r+=p.vr*dt;
     }
     // --- уборка всего, что ушло вниз ---
-    const floor=r.camY-140;
-    if(r.pads.length&&r.pads[0].y<floor)r.pads=r.pads.filter(p=>p.y>=floor);
-    if(r.flies.length>60||(r.flies[0]&&r.flies[0].y<floor))r.flies=r.flies.filter(f=>f.y>=floor&&!(f.taken&&(!r.tongue||r.tongue.f!==f)));
-    if(r.lots.length&&r.lots[0].y<floor)r.lots=r.lots.filter(l=>l.y>=floor);
-    r.lots=r.lots.filter(l=>!l.taken);
-    r.items=r.items.filter(it=>it.y>=floor&&!it.taken);
-    r.herons=r.herons.filter(h=>h.y>=floor-200);
+    // Раньше это крутилось на каждом шаге физики (120 раз в секунду) и создавало
+    // по четыре новых массива за шаг — на слабых телефонах это ощутимый мусор.
+    // Четыре раза в секунду более чем достаточно
+    r.cullT+=dt;
+    if(r.cullT>=.25){
+      r.cullT=0;
+      const floor=r.camY-140;
+      const keepFly=f=>f.y>=floor&&!(f.taken&&(!r.tongue||r.tongue.f!==f));
+      if(r.pads.length&&r.pads[0].y<floor)r.pads=r.pads.filter(p=>p.y>=floor);
+      r.flies=r.flies.filter(keepFly);
+      r.lots=r.lots.filter(l=>!l.taken&&l.y>=floor);
+      r.items=r.items.filter(it=>it.y>=floor&&!it.taken);
+      r.herons=r.herons.filter(h=>h.y>=floor-200);
+    }
     if(r.shake>0)r.shake=Math.max(0,r.shake-dt*28);
   }
 
@@ -660,17 +706,20 @@ window.FrogJumpInit=function(B){
   }
   function drawMotes(kind,alpha,camPx){
     if(alpha<=.01)return;
-    const h=cssH+120;
-    for(const m of motes){
+    const h=cssH+120,n=quality?motes.length:Math.round(motes.length*.45);
+    for(let i=0;i<n;i++){
+      const m=motes[i];
       const x=m.x*cssW,y=((m.y*h+camPx*m.d)%h+h)%h-60;
       const tw=.5+.5*Math.sin(tGlobal*2+m.ph);
       cx.globalAlpha=alpha;
       if(kind==='firefly'){cx.fillStyle=`rgba(220,255,140,${.12*tw})`;cx.beginPath();cx.arc(x+Math.sin(tGlobal+m.ph)*8,y,7*m.s,0,7);cx.fill();cx.fillStyle=`rgba(240,255,190,${.8*tw})`;cx.beginPath();cx.arc(x+Math.sin(tGlobal+m.ph)*8,y,1.8*m.s,0,7);cx.fill();}
       else if(kind==='pollen'){cx.fillStyle=`rgba(255,235,200,${.35+.3*tw})`;cx.beginPath();cx.arc(x+Math.sin(tGlobal*.7+m.ph)*14,y,1.7*m.s,0,7);cx.fill();}
-      else if(kind==='cloud'&&has('cloud_1')){
-        if(m.s<.9)continue;
+      else if(kind==='cloud'&&has('cloud_1')&&quality){
+        // облаков заметно меньше и они бледнее: раньше лезли в глаза и мешали
+        // разглядеть кувшинки
+        if(m.s<1.15)continue;
         const k=['cloud_1','cloud_2','cloud_3'][Math.floor(m.ph)%3];
-        cx.globalAlpha=alpha*.8;blit(k,x+Math.sin(tGlobal*.15+m.ph)*20,y,95*m.s);
+        cx.globalAlpha=alpha*.32;blit(k,x+Math.sin(tGlobal*.15+m.ph)*20,y,78*m.s);
       }
       else if(kind==='cloud'){if(m.s<1)continue;cx.fillStyle='rgba(255,255,255,.28)';cx.beginPath();cx.ellipse(x,y,46*m.s,13*m.s,0,0,7);cx.ellipse(x+22*m.s,y-7*m.s,26*m.s,11*m.s,0,0,7);cx.fill();}
       else{cx.fillStyle=`rgba(255,255,255,${.25+.7*tw})`;cx.beginPath();cx.arc(x,y,1.3*m.s,0,7);cx.fill();}
@@ -752,10 +801,15 @@ window.FrogJumpInit=function(B){
     }
     const flap=Math.abs(Math.sin(f.t*38));
     if(f.gold){cx.fillStyle='rgba(255,210,63,.25)';cx.beginPath();cx.arc(x,y,15,0,7);cx.fill();}
+    // крылья растут из спинки и уходят назад-вверх, голова — отдельно сверху
     cx.fillStyle='rgba(223,242,255,.85)';
-    cx.beginPath();cx.ellipse(x-5,y-4,6,2.6*flap+.6,-.5,0,7);cx.ellipse(x+5,y-4,6,2.6*flap+.6,.5,0,7);cx.fill();
-    cx.fillStyle=f.gold?'#f5b400':'#333a45';cx.beginPath();cx.ellipse(x,y+1,3.6,5,0,0,7);cx.fill();
-    cx.fillStyle=f.gold?'#ffe680':'#e0405f';cx.beginPath();cx.arc(x-1.6,y-3.4,1.3,0,7);cx.arc(x+1.6,y-3.4,1.3,0,7);cx.fill();
+    cx.beginPath();cx.ellipse(x-6,y-.5,7,2.4*flap+.7,-.95,0,7);cx.fill();
+    cx.beginPath();cx.ellipse(x+6,y-.5,7,2.4*flap+.7,.95,0,7);cx.fill();
+    cx.fillStyle=f.gold?'#f5b400':'#333a45';
+    cx.beginPath();cx.ellipse(x,y+2.6,3.4,4.6,0,0,7);cx.fill();
+    cx.beginPath();cx.ellipse(x,y-2,3,2.7,0,0,7);cx.fill();
+    cx.fillStyle=f.gold?'#ffd97a':'#414b5c';cx.beginPath();cx.arc(x,y-5.6,2.5,0,7);cx.fill();
+    cx.fillStyle=f.gold?'#ffe680':'#e0405f';cx.beginPath();cx.arc(x-1.5,y-6.2,1.2,0,7);cx.arc(x+1.5,y-6.2,1.2,0,7);cx.fill();
   }
   function drawLotus(l){
     const x=l.x,y=Y(l.y+Math.sin(l.t*2)*3),c=LOTUS[l.c];
@@ -878,11 +932,22 @@ window.FrogJumpInit=function(B){
   }
 
   /* ---------- цикл ---------- */
+  let fAcc=0,fN=0;
   function frame(ts){
     rafId=requestAnimationFrame(frame);
     const dt=Math.min(.05,last?(ts-last)/1000:0);last=ts;
     if(!run)return;
-    if(!paused){
+    // если кадры стабильно не укладываются в ~45 в секунду — переходим в
+    // облегчённый режим (и обратно, когда снова летает)
+    if(dt>0){
+      fAcc+=dt;fN++;
+      if(fN>=45){
+        const avg=fAcc/fN;fAcc=0;fN=0;
+        if(quality&&avg>.028){quality=0;resize();}
+        else if(!quality&&avg<.017){quality=1;resize();}
+      }
+    }
+    if(!paused&&!(run.over&&!$('#fjOver').hidden)){
       let sdt=dt;
       if(run.hitstop>0){run.hitstop-=dt;sdt=0;}
       if(run.slow>0){run.slow-=dt;sdt*=.35;}
