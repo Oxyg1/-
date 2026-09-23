@@ -157,6 +157,8 @@ function grant(user, item, amount) {
       if (d && d.slug === slug && Date.now() - d.at < 30 * 60e3) { j.flies = Math.max(0, (j.flies || 0) - d.flies); }
       j.pendDisc = null;
       j.skin = slug;
+    } else if (String(item).startsWith('tour:')) {
+      tourActivate(String(item).slice(5));
     } else if (String(item).startsWith('bd:')) { const th = String(item).slice(3); inv.themes = inv.themes || []; if (!inv.themes.includes(th)) inv.themes.push(th); }
   }
 }
@@ -166,6 +168,8 @@ const DB_FILE = path.join(__dirname, 'data.json');
 let db = { users: {}, payments: [], pond: { week: '', count: 0, stars: 0, donors: {} }, war: { week: '', frog: 0, cat: 0, stars: 0, by: {}, last: null }, endless: { record: null }, jump: { record: null, secret: '' }, digest: { day: '' }, events: [], broadcast: null };
 try { if (fs.existsSync(DB_FILE)) db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch (e) { log('db read error', e.message); }
 if (!db.jump || typeof db.jump !== 'object') db.jump = { record: null, secret: '' };
+if (!db.tournaments) db.tournaments = {};
+if (!db.tourDrafts) db.tourDrafts = {};
 // секрет подписи номеров забега: живёт в базе, чтобы пережить перезапуск сервера
 if (!db.jump.secret) db.jump.secret = crypto.randomBytes(24).toString('hex');
 let saveT = null;
@@ -459,6 +463,7 @@ async function reconcileFromTelegram(u) {
       const src = t.source || {};
       if (!src.user || String(src.user.id) !== String(u.id)) continue;
       const pl = String(src.invoice_payload || '');
+      if (pl.startsWith('tour:')) { const pid = pl.split(':')[1]; const d = db.tourDrafts[pid]; if (d && !d.tid) { tourActivate(pid); fixed++; } continue; }
       if (!pl.startsWith('skin:')) continue;
       const slug = pl.split(':')[1];
       if (slug && !own.includes(slug)) { own.push(slug); fixed++; }
@@ -476,6 +481,121 @@ function skinsFor(u) {
     return { ...s, owned, holder, disc, discFlies: disc * FLIES_PER_STAR };
   });
 }
+/* ---------- ТУРНИРЫ ----------
+   Турнир создаёт любой игрок за 25★: название, приз текстом и срок. Приз
+   вручает сам организатор — мы ведём таблицу, а по окончании присылаем ему
+   победителей с @username, а победителям — что они выиграли и у кого.
+   Плата за создание — фильтр: пообещать и не вручить можно, но это стоит денег
+   и ничего не даёт.
+   Засчитывается лучший забег за время турнира. Один забег идёт сразу во все
+   турниры, где игрок участвует. */
+const TOUR_FEE = 25;
+const TOUR_DUR = { h1: 3600e3, d1: DAY, d3: 3 * DAY, d7: 7 * DAY };
+const TOUR_MAX_ACTIVE = 3;
+// в названии и призе — только текст: без разметки, управляющих символов и переносов
+const cleanText = (s, max) => String(s || '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+const tourActive = (t, now = Date.now()) => !t.hidden && !t.done && t.endsAt > now;
+function tourBoard(t) {
+  return Object.entries(t.players || {}).map(([id, p]) => ({ id, name: p.name || 'Игрок', best: p.best || 0, at: p.at || 0 }))
+    .sort((a, b) => b.best - a.best || a.at - b.at);
+}
+function tourRank(t, uid) {
+  const b = tourBoard(t), i = b.findIndex(r => r.id === uid);
+  return i < 0 || !b[i].best ? null : i + 1;
+}
+function tourCard(t, u) {
+  const me = u && t.players && t.players[u.id];
+  const top = tourBoard(t)[0];
+  return {
+    id: t.id, title: t.title, prize: t.prize, owner: t.ownerName, official: !!t.official,
+    startsAt: t.startsAt, endsAt: t.endsAt, done: !!t.done,
+    players: Object.keys(t.players || {}).length,
+    joined: !!me, myBest: me ? me.best || 0 : 0, myRank: me ? tourRank(t, u.id) : null,
+    leader: top && top.best ? { name: top.name, best: top.best } : null,
+    mine: !!(u && t.ownerId === u.id),
+  };
+}
+function tourStart(d) {
+  let id; do { id = crypto.randomBytes(4).toString('hex').slice(0, 6); } while (db.tournaments[id]);
+  const now = Date.now();
+  db.tournaments[id] = {
+    id, title: d.title, prize: d.prize, ownerId: d.ownerId, ownerName: d.ownerName, ownerUsername: d.ownerUsername || '',
+    official: !!d.official, createdAt: now, startsAt: now, endsAt: now + d.dur, players: {}, done: false,
+  };
+  save();
+  log('tournament', id, d.title, d.official ? '(официальный)' : 'от ' + d.ownerId);
+  return db.tournaments[id];
+}
+// оплаченный черновик превращаем в турнир ровно один раз
+function tourActivate(pid) {
+  const d = db.tourDrafts[pid];
+  if (!d) return null;
+  if (d.tid) return db.tournaments[d.tid] || null;
+  const t = tourStart(d);
+  d.tid = t.id; d.paidAt = Date.now();
+  return t;
+}
+const tourLink = t => {
+  const base = CFG.appLink;
+  if (/startapp=/.test(base)) return base.replace(/startapp=[^&]*/, 'startapp=t_' + t.id);
+  return base + (base.includes('?') ? '&' : '?') + 'startapp=t_' + t.id;
+};
+async function tourNotify(t) {
+  if (!CFG.token) return;
+  const win = t.winners || [];
+  const who = w => `${esc(w.name)}${w.username ? ' @' + esc(w.username) : ''} — ${w.best} м`;
+  const list = win.length ? win.map((w, i) => `${i + 1}. ${who(w)}`).join('\n') : 'Никто не прыгнул.';
+  const owner = t.official ? CFG.adminId : t.ownerId;
+  if (owner) {
+    try {
+      await tg('sendMessage', { chat_id: +owner, parse_mode: 'HTML',
+        text: `${em('trophy')} <b>Турнир «${esc(t.title)}» завершён</b>\nУчастников: ${Object.keys(t.players || {}).length}\n\n${list}\n\nПриз: ${esc(t.prize)}\nСвяжись с победителями и вручи приз.` });
+    } catch (e) { log('tour notify owner', e.message); }
+  }
+  const org = t.official ? 'SWAMP' : (t.ownerUsername ? '@' + esc(t.ownerUsername) : esc(t.ownerName || 'организатор'));
+  for (let i = 0; i < win.length; i++) {
+    try {
+      await tg('sendMessage', { chat_id: +win[i].id, parse_mode: 'HTML',
+        text: `${em('trophy')} <b>${i + 1} место в турнире «${esc(t.title)}»!</b>\nТвой результат — ${win[i].best} м.\nПриз: ${esc(t.prize)}\nОрганизатор: ${org} — он свяжется с тобой.`,
+        reply_markup: playKb(true) });
+    } catch (e) {}
+  }
+}
+function tourFinalize() {
+  const now = Date.now();
+  for (const t of Object.values(db.tournaments)) {
+    if (t.done || t.endsAt > now) continue;
+    t.done = true;
+    t.winners = tourBoard(t).filter(r => r.best > 0).slice(0, 3)
+      .map(r => ({ id: r.id, name: r.name, best: r.best, username: (db.users[r.id] || {}).username || '' }));
+    save();
+    if (!t.hidden) tourNotify(t).catch(() => {});
+  }
+  // неоплаченные черновики живут полчаса
+  for (const [pid, d] of Object.entries(db.tourDrafts)) if (!d.tid && now - d.at > 30 * 60e3) delete db.tourDrafts[pid];
+}
+setInterval(tourFinalize, 60e3);
+
+/* Подъём в таблице для анимации после забега: кого обогнал, откуда и куда.
+   board — участники с лучшими результатами, игрок в нём со старым значением
+   или вовсе отсутствует (если это его первый результат) */
+function climbOf(board, uid, oldBest, newBest) {
+  if (!(newBest > oldBest)) return null;
+  const others = board.filter(r => r.id !== uid && r.best > 0);
+  const oldRank = oldBest > 0 ? others.filter(r => r.best >= oldBest).length + 1 : null;
+  const newRank = others.filter(r => r.best >= newBest).length + 1;
+  if (oldRank && newRank >= oldRank) return null;
+  const passed = others.filter(r => r.best < newBest && r.best >= (oldBest || 0)).sort((a, b) => b.best - a.best);
+  if (!passed.length) return null;
+  const above = others.filter(r => r.best >= newBest).sort((a, b) => a.best - b.best)[0];
+  return {
+    oldRank, newRank, oldBest, newBest, total: others.length + 1, passedN: passed.length,
+    above: above ? { name: above.name, best: above.best } : null,
+    passed: passed.slice(0, 5).map(r => ({ name: r.name, best: r.best })),
+  };
+}
+const jumpBoard = () => Object.values(db.users).filter(x => isRealPlayer(x) && x.jump && x.jump.best > 0).map(x => ({ id: x.id, name: x.name, best: x.jump.best }));
+
 function jumpTop(n = 20) {
   return Object.values(db.users)
     .filter(u => isRealPlayer(u) && u.jump && u.jump.best > 0)
@@ -632,6 +752,72 @@ const api = {
     save();
     return { ok: true, run: jumpToken(u.id, t0, base), base, jump: jumpState(u), jumpTop: jumpTop(10) };
   },
+  async tourList(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const u = getUser(a); tourFinalize();
+    const now = Date.now(), all = Object.values(db.tournaments).filter(t => !t.hidden);
+    // «мои» — где участвую или которые создал; законченные держим ещё 3 дня, чтобы увидеть итог
+    const mine = all.filter(t => ((t.players && t.players[u.id]) || t.ownerId === u.id) && t.endsAt > now - 3 * DAY)
+      .sort((a, b) => (a.done - b.done) || a.endsAt - b.endsAt).map(t => tourCard(t, u));
+    const open = all.filter(t => tourActive(t, now))
+      .sort((a, b) => (b.official - a.official) || Object.keys(b.players || {}).length - Object.keys(a.players || {}).length)
+      .slice(0, 50).map(t => tourCard(t, u));
+    return { ok: true, mine, open, fee: TOUR_FEE, now };
+  },
+  async tourGet(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const u = getUser(a); tourFinalize();
+    const t = db.tournaments[String(body.id || '')];
+    if (!t || t.hidden) return { ok: false, error: 'Турнир не найден' };
+    const board = tourBoard(t).filter(r => r.best > 0);
+    const i = board.findIndex(r => r.id === u.id);
+    return {
+      ok: true, now: Date.now(), tour: tourCard(t, u), link: tourLink(t),
+      ownerUsername: t.official ? '' : (t.ownerUsername || ''),
+      board: board.slice(0, 50).map((r, k) => ({ rank: k + 1, id: r.id, name: r.name, best: r.best })),
+      me: i >= 0 ? { rank: i + 1, best: board[i].best } : null,
+      winners: t.winners || null,
+    };
+  },
+  async tourJoin(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const u = getUser(a);
+    const t = db.tournaments[String(body.id || '')];
+    if (!t || !tourActive(t)) return { ok: false, error: 'Турнир уже закончился' };
+    if (!t.players[u.id]) { t.players[u.id] = { name: u.name, best: 0, at: 0, joinedAt: Date.now() }; save(); }
+    return { ok: true, tour: tourCard(t, u) };
+  },
+  // черновик турнира; активируется оплатой счёта 'tour:<черновик>'
+  async tourCreate(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const u = getUser(a);
+    if (rateLimited('tourc:' + u.id, 10, 3600e3)) return { ok: false, error: 'Слишком часто, попробуй через час' };
+    const title = cleanText(body.title, 40), prize = cleanText(body.prize, 120), dur = TOUR_DUR[body.dur];
+    if (title.length < 3) return { ok: false, error: 'Название — хотя бы 3 символа' };
+    if (prize.length < 3) return { ok: false, error: 'Опиши приз — хотя бы 3 символа' };
+    if (!dur) return { ok: false, error: 'Выбери срок' };
+    const active = Object.values(db.tournaments).filter(t => t.ownerId === u.id && tourActive(t)).length;
+    if (active >= TOUR_MAX_ACTIVE) return { ok: false, error: `Одновременно можно вести не больше ${TOUR_MAX_ACTIVE} турниров` };
+    const pid = crypto.randomBytes(6).toString('hex');
+    db.tourDrafts[pid] = { at: Date.now(), ownerId: u.id, ownerName: u.name, ownerUsername: u.username || '', title, prize, dur };
+    save();
+    // без Telegram (локальная разработка) оплату не спрашиваем — сразу запускаем
+    if (!CFG.token) { const t = tourActivate(pid); return { ok: true, started: t.id }; }
+    return { ok: true, draft: pid, fee: TOUR_FEE };
+  },
+  // после оплаты: какой турнир получился из черновика
+  async tourDraft(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const u = getUser(a); const d = db.tourDrafts[String(body.draft || '')];
+    if (!d || d.ownerId !== u.id) return { ok: false, error: 'Черновик не найден' };
+    if (!d.tid) {
+      // оплата могла дойти до бота с задержкой или потеряться — сверяемся
+      const paid = db.payments.some(p => String(p.id) === String(u.id) && p.item === 'tour:' + body.draft);
+      if (paid) tourActivate(String(body.draft));
+      else await reconcileFromTelegram(u);
+    }
+    return { ok: true, tid: d.tid || null };
+  },
   // каталог нарядов прыгуна
   async jumpSkins(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
@@ -698,7 +884,24 @@ const api = {
     if (!run.base) j.runs = (j.runs || 0) + 1;
     const prevBest = j.best || 0;
     const isBest = h > prevBest;
+    const climb = [];
+    // общий рейтинг: считаем до того, как записали новый рекорд
+    if (isBest && isRealPlayer(u)) { const c = climbOf(jumpBoard(), u.id, prevBest, h); if (c) climb.push({ ...c, kind: 'global', title: 'Общий рейтинг' }); }
     if (isBest) { j.best = h; j.bestAt = now; }
+    // турниры: забег идёт во все, где игрок участвует и которые шли в момент забега
+    const tours = [];
+    for (const t of Object.values(db.tournaments)) {
+      const p = t.players && t.players[u.id];
+      if (!p || t.hidden || t.done || run.t0 < t.startsAt || run.t0 > t.endsAt) continue;
+      if (h > (p.best || 0)) {
+        const c = climbOf(tourBoard(t), u.id, p.best || 0, h);
+        if (c) climb.push({ ...c, kind: 'tour', id: t.id, title: t.title });
+        p.best = h; p.at = now; p.name = u.name;
+      }
+      tours.push({ id: t.id, title: t.title, rank: tourRank(t, u.id), best: p.best || 0, players: Object.keys(t.players).length });
+    }
+    // сильнее всего впечатляет самый большой подъём — его и показываем первым
+    climb.sort((a, b) => b.passedN - a.passedN || (a.kind === 'tour' ? -1 : 1));
     let isRecord = false;
     const r0 = db.jump.record;
     if (isRealPlayer(u) && (!r0 || h > r0.best)) {
@@ -709,7 +912,7 @@ const api = {
     save();
     const top = jumpTop(50);
     const rank = top.findIndex(r => r.id === u.id) + 1 || null;
-    return { ok: true, height: h, earned: flies, isBest, prevBest, isRecord, rank, jump: jumpState(u), jumpTop: top.slice(0, 20) };
+    return { ok: true, height: h, earned: flies, isBest, prevBest, isRecord, rank, jump: jumpState(u), jumpTop: top.slice(0, 20), climb, tours };
   },
   async invoice(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
@@ -738,6 +941,16 @@ const api = {
       const disc = body.useFlies ? maxDisc : 0;
       j.pendDisc = disc ? { slug: s.slug, flies: disc * FLIES_PER_STAR, at: Date.now() } : null;
       it = { title: `Наряд «${s.name}»`, desc: `Frog Jump: облик ${s.name}, редкость ${String(s.r).replace('.', ',')}%`, price: Math.max(1, s.stars - disc) };
+    }
+    if (!it && String(body.item).startsWith('tour:')) {
+      const pid = String(body.item).slice(5), d = db.tourDrafts[pid];
+      if (!d || d.ownerId !== u.id) return { ok: false, error: 'Черновик турнира устарел — создай заново' };
+      if (d.tid) return { ok: false, error: 'Этот турнир уже оплачен' };
+      const lock = `${u.id}:tour:${pid}`;
+      const until = pendingInvoices.get(lock);
+      if (until && until > Date.now()) return { ok: false, error: 'Счёт уже выставлен — заверши его' };
+      pendingInvoices.set(lock, Date.now() + 5 * 60e3);
+      it = { title: 'Создание турнира', desc: `Frog Jump: турнир «${d.title}»`, price: TOUR_FEE };
     }
     if (!it) return { ok: false, error: 'Нет такого товара' };
     if (it.once && u.inv && u.inv[it.once]) return { ok: false, error: 'Уже куплено' };
@@ -922,6 +1135,25 @@ const api = {
       save();
       return { ok: true, msg: `${side === 'cat' ? 'Коты' : 'Лягушки'} теперь: ${db.war[side]}` };
     }
+    if (act === 'tours') {
+      tourFinalize();
+      const list = Object.values(db.tournaments).sort((a, b) => b.createdAt - a.createdAt).slice(0, 200)
+        .map(t => ({ id: t.id, title: t.title, prize: t.prize, owner: t.ownerName, ownerId: t.ownerId, ownerUsername: t.ownerUsername,
+          official: !!t.official, hidden: !!t.hidden, done: !!t.done, endsAt: t.endsAt, createdAt: t.createdAt,
+          players: Object.keys(t.players || {}).length, winners: t.winners || null }));
+      return { ok: true, tours: list };
+    }
+    if (act === 'tourHide') {
+      const t = db.tournaments[String(body.tid || '')]; if (!t) return { ok: false, error: 'Нет такого турнира' };
+      t.hidden = !t.hidden; save();
+      return { ok: true, msg: t.hidden ? 'Турнир скрыт' : 'Турнир снова виден' };
+    }
+    if (act === 'tourOfficial') {
+      const title = cleanText(body.title, 40), prize = cleanText(body.prize, 120), dur = TOUR_DUR[body.dur];
+      if (title.length < 3 || prize.length < 3 || !dur) return { ok: false, error: 'Заполни название, приз и срок' };
+      const t = tourStart({ title, prize, dur, official: true, ownerId: CFG.adminId || 'admin', ownerName: 'SWAMP' });
+      return { ok: true, msg: 'Официальный турнир запущен', link: tourLink(t) };
+    }
     if (act === 'endlessReset') {
       db.endless.record = null; save();
       return { ok: true, msg: 'Рекорд бесконечной серии сброшен' };
@@ -1082,7 +1314,19 @@ async function onPayment(m) {
   save();
   log('payment', u.id, item, stars);
   const it = shopItem(item, spOf(u));
-  if (item === 'jumpRevive') return;   // игрок уже продолжает забег — сообщение в личку только отвлечёт
+  if (item === 'jumpRevive' || item === 'jumpRevive2') return;   // игрок уже продолжает забег — сообщение в личку только отвлечёт
+  // организатору сразу отдаём ссылку, по которой звать участников
+  if (item.startsWith('tour:')) {
+    const d = db.tourDrafts[item.slice(5)], t = d && d.tid && db.tournaments[d.tid];
+    if (t) { try { await tg('sendMessage', { chat_id: m.chat.id, parse_mode: 'HTML',
+      text: `${em('trophy')} Турнир «${esc(t.title)}» запущен.\nПриз: ${esc(t.prize)}\nЗаканчивается: ${new Date(t.endsAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} МСК\n\nСсылка для участников:\n${tourLink(t)}` }); } catch (e) {} }
+    return;
+  }
+  if (item.startsWith('skin:')) {
+    const s = skinBySlug(item.slice(5));
+    try { await tg('sendMessage', { chat_id: m.chat.id, text: `${em('star')} Наряд «${esc(s ? s.name : item.slice(5))}» твой — он уже надет в Frog Jump.`, parse_mode: 'HTML', reply_markup: playKb(true) }); } catch (e) {}
+    return;
+  }
   try { await tg('sendMessage', { chat_id: m.chat.id, text: `${em('star')} Спасибо! ${esc(it ? it.title : item)} активировано. Открой игру — всё уже там.`, parse_mode: 'HTML', reply_markup: playKb(true) }); } catch (e) {}
 }
 /* ---------- РАССЫЛКА ----------

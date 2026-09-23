@@ -374,6 +374,40 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .skin .disc.on{color:#9dffb0;background:rgba(157,255,176,.16);box-shadow:inset 0 0 0 1px #9dffb0}
 .skin .disc img,.skin .disc .ic{width:11px;height:11px}
 .btn .newdot{position:absolute;top:-4px;right:-4px;width:11px;height:11px;border-radius:50%;background:#ff5d7a;box-shadow:0 0 0 2px #14513a;animation:ndPulse 1.4s ease-in-out infinite}
+/* ---------- ТУРНИРЫ ---------- */
+#tours{z-index:110}
+#tour{z-index:115}
+.hub-tours{background:rgba(0,0,0,.26);border-radius:20px;padding:12px;display:flex;flex-direction:column;gap:8px;box-shadow:inset 0 2px 0 rgba(255,255,255,.08);flex:none}
+.ht-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ht-head b{font-size:19px;font-weight:900;display:flex;align-items:center;gap:6px}
+.ht-head .ic{width:22px;height:22px}
+#hubTourList,.tour-list{display:flex;flex-direction:column;gap:6px}
+.tour-row{border:0;width:100%;display:flex;align-items:center;gap:10px;text-align:left;background:rgba(0,0,0,.24);border-radius:14px;padding:9px 12px;color:#fff;font:800 14px Nunito,system-ui;box-shadow:inset 0 2px 0 rgba(255,255,255,.06)}
+.tour-row:active{transform:scale(.98)}
+.tour-row .tr-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.tour-row .tr-main b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
+.tour-row small{font-size:12px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:800}
+.tour-row .tr-side{display:flex;flex-direction:column;align-items:flex-end;flex:none;gap:1px}
+.tour-row .tr-side b{color:#ffe680;font-size:15px;white-space:nowrap}
+.tour-row.done{opacity:.62}
+.tour-row.me{box-shadow:inset 0 0 0 2px rgba(255,210,63,.45)}
+.tag-off{font-size:10px;font-weight:900;background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00;border-radius:99px;padding:1px 7px;margin-right:5px;vertical-align:1px}
+.tour-meta{width:100%;display:flex;flex-direction:column;gap:6px}
+.tm-prize{background:linear-gradient(90deg,rgba(255,210,63,.24),rgba(255,210,63,.08));border-radius:14px;padding:9px 12px;box-shadow:inset 0 0 0 1px rgba(255,210,63,.45)}
+.tm-prize span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.75;font-weight:900}
+.tm-prize b{font-size:16px;line-height:1.25;word-break:break-word}
+.tm-row{display:flex;justify-content:space-between;gap:8px;font-size:13px;opacity:.9}
+.tm-row b{color:#ffe680;white-space:nowrap}
+.tm-note{font-size:11.5px;opacity:.6;line-height:1.3;text-align:center;width:100%}
+.lb.noimg{grid-template-columns:34px 1fr auto}
+.tour-sep{text-align:center;opacity:.5;font-size:13px;padding:2px 0}
+.tour-form{display:flex;flex-direction:column;gap:8px;padding:2px}
+.tour-form label{font-size:13px;opacity:.85;display:flex;justify-content:space-between}
+.tour-form label i{font-style:normal;opacity:.6}
+.tour-form input,.tour-form textarea{width:100%;border:0;border-radius:14px;background:rgba(0,0,0,.3);color:#fff;font:800 15px Nunito,system-ui;padding:11px 12px;box-shadow:inset 0 2px 0 rgba(0,0,0,.25);resize:none}
+.tour-form input:focus,.tour-form textarea:focus{outline:2px solid var(--acc);outline-offset:-2px}
+.tour-form .btn{width:100%}
+.tour-form .fine{font-size:12px;opacity:.7;line-height:1.35;text-align:center}
 /* рейтинг открывается поверх хаба, а карточка для чата — поверх всего */
 #top{z-index:110}
 #cardPrev{z-index:160}
@@ -589,20 +623,6 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
     </div></div>
     <div class="scroll">
       <div class="hub-jump">
-        <div class="hj-art hm-art">
-          <i class="hm-board"></i>
-          <i class="hm-cell" style="margin-left:-75px"></i><i class="hm-cell hm-mid" style="margin-left:-23px"></i><i class="hm-cell" style="margin-left:29px"></i>
-          <img class="hm-f hm-a" id="hmA" alt=""><img class="hm-f hm-b" id="hmB" alt=""><img class="hm-f hm-c" id="hmC" alt="">
-          <img class="hm-coin" src="icons/coin.png" alt="">
-        </div>
-        <div class="hj-info">
-          <div class="t">Слияние</div>
-          <div class="hj-row"><span id="hubMergeName">Твой уровень</span><b id="hubMergeLv">—</b></div>
-          <div class="hj-row"><span>Очки</span><b id="hubMergeScore">—</b></div>
-          <button class="btn" id="hubMerge">Играть</button>
-        </div>
-      </div>
-      <div class="hub-jump">
         <div class="hj-art" id="hjArt">
           <i class="cl" style="width:60px;top:16px;animation-delay:-4s"></i>
           <i class="cl" style="width:42px;top:44px;animation-delay:-11s;animation-duration:22s"></i>
@@ -626,12 +646,59 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 
         </div>
       </div>
+      <div class="hub-tours">
+        <div class="ht-head"><b><svg class="ic "><use href="#i-trophy"></use></svg> Турниры</b><button class="chip" id="hubToursAll">Все турниры</button></div>
+        <div id="hubTourList"><div class="demo">Загрузка…</div></div>
+        <button class="btn ghost sm" id="hubTourNew">Создать свой турнир</button>
+      </div>
+      <div class="hub-jump">
+        <div class="hj-art hm-art">
+          <i class="hm-board"></i>
+          <i class="hm-cell" style="margin-left:-75px"></i><i class="hm-cell hm-mid" style="margin-left:-23px"></i><i class="hm-cell" style="margin-left:29px"></i>
+          <img class="hm-f hm-a" id="hmA" alt=""><img class="hm-f hm-b" id="hmB" alt=""><img class="hm-f hm-c" id="hmC" alt="">
+          <img class="hm-coin" src="icons/coin.png" alt="">
+        </div>
+        <div class="hj-info">
+          <div class="t">Слияние</div>
+          <div class="hj-row"><span id="hubMergeName">Твой уровень</span><b id="hubMergeLv">—</b></div>
+          <div class="hj-row"><span>Очки</span><b id="hubMergeScore">—</b></div>
+          <button class="btn" id="hubMerge">Играть</button>
+        </div>
+      </div>
       <div class="hub-soon">
         <button data-soon="Flappy Frog"><svg class="ic "><use href="#i-lock"></use></svg>Flappy Frog<small>скоро</small></button>
         <button data-soon="Block Blast"><svg class="ic "><use href="#i-lock"></use></svg>Block Blast<small>скоро</small></button>
         <button data-soon="Сапёр"><svg class="ic "><use href="#i-lock"></use></svg>Сапёр<small>скоро</small></button>
       </div>
         <div class="hub-flies"><svg class="ic "><use href="#i-fly"></use></svg><span>Мошки<small>копятся в Frog Jump — потратишь на наряды лягушки</small></span><b id="hubFlies">0</b></div>
+    </div>
+  </div>
+</div>
+
+<div id="tours" class="overlay hidden">
+  <div class="card" style="height:92dvh">
+    <div class="head"><h2><svg class="ic "><use href="#i-trophy"></use></svg> Турниры</h2><button class="iconbtn" id="toursClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
+    <div class="segbar" id="tourTabs">
+      <button data-tt="mine" class="on">Мои</button>
+      <button data-tt="open">Все</button>
+      <button data-tt="new">Создать</button>
+    </div>
+    <div class="scroll" id="toursBody"></div>
+  </div>
+</div>
+
+<div id="tour" class="overlay hidden">
+  <div class="card" style="height:92dvh">
+    <div class="head"><h2 id="tourTitle">Турнир</h2><button class="iconbtn" id="tourClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
+    <div class="tour-meta">
+      <div class="tm-prize"><span>Приз</span><b id="tourPrize"></b></div>
+      <div class="tm-row"><span id="tourOwner"></span><b id="tourLeft"></b></div>
+    </div>
+    <div class="scroll" id="tourBoard"></div>
+    <div class="tm-note">Приз обещает и вручает организатор. SWAMP ведёт таблицу и в конце присылает ему победителей.</div>
+    <div class="row" style="gap:6px">
+      <button class="btn" id="tourPlay" style="flex:2;margin:0">Участвовать</button>
+      <button class="btn ghost" id="tourShare" style="flex:1;margin:0">Позвать</button>
     </div>
   </div>
 </div>
@@ -2495,6 +2562,141 @@ const JUMP=window.FrogJumpInit?window.FrogJumpInit({
   onClose:()=>openHub(),
   buyJumpRevive,buyJumpItem,shareJump,
 }):null;
+/* ---------- ТУРНИРЫ ----------
+   Турнир — это отдельная таблица лучших забегов за своё время. Один забег идёт
+   во все турниры, где игрок участвует, поэтому в хабе видно место сразу во всех,
+   а после забега прыгун показывает, в каких поднялся */
+let TOURS={mine:[],open:[],fee:25,now:Date.now()},tourTab='mine',tourCur=null,tourTick=0,tourSkew=0;
+const tnow=()=>Date.now()+tourSkew;   // часы сервера: иначе у кого-то «осталось» врёт на минуты
+function leftText(end){
+  const ms=end-tnow();if(ms<=0)return 'завершён';
+  const m=Math.floor(ms/60e3),h=Math.floor(m/60),d=Math.floor(h/24);
+  if(d>=1)return `${d} д ${h%24} ч`;
+  if(h>=1)return `${h} ч ${m%60} мин`;
+  return m>=1?`${m} мин`:'меньше минуты';
+}
+async function loadTours(){
+  if(!CFG.api)return null;
+  try{const r=await api('tourList',{});if(r.ok){TOURS=r;tourSkew=(r.now||Date.now())-Date.now();}return r;}catch(e){return null;}
+}
+function tourRow(t,showRank){
+  const side=t.done?(t.myRank?`${t.myRank} место`:'итоги'):(showRank&&t.joined?(t.myRank?`${t.myRank} место`:'не прыгал'):`${t.players} ${t.players%10===1&&t.players%100!==11?'участник':'участников'}`);
+  return `<button class="tour-row${t.done?' done':''}${t.joined?' me':''}" data-tid="${esc(t.id)}">
+    <span class="tr-main"><b>${t.official?'<span class="tag-off">SWAMP</span>':''}${esc(t.title)}</b><small>${esc(t.prize)}</small></span>
+    <span class="tr-side"><b>${side}</b><small>${t.done?'завершён':leftText(t.endsAt)}</small></span>
+  </button>`;
+}
+function renderHubTours(){
+  const box=$('#hubTourList');if(!box)return;
+  if(!CFG.api){box.innerHTML='<div class="demo">Турниры работают в Telegram с сервером</div>';return;}
+  const list=(TOURS.mine||[]).filter(t=>!t.done).slice(0,3);
+  box.innerHTML=list.length?list.map(t=>tourRow(t,true)).join('')
+    :'<div class="demo">Ты пока ни в одном турнире — загляни во «Все турниры» или создай свой</div>';
+}
+function openTours(tab){
+  tourTab=tab||tourTab;$('#tours').classList.remove('hidden');S.ui();
+  renderTours();loadTours().then(()=>{renderTours();renderHubTours();});
+}
+function renderTours(){
+  $('#tourTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.tt===tourTab));
+  const body=$('#toursBody');
+  if(tourTab==='new'){renderTourForm();return;}
+  const list=tourTab==='mine'?TOURS.mine||[]:TOURS.open||[];
+  body.innerHTML=list.length?`<div class="tour-list">${list.map(t=>tourRow(t,tourTab==='mine')).join('')}</div>`
+    :`<div class="demo">${tourTab==='mine'?'Здесь будут турниры, в которых ты участвуешь':'Сейчас открытых турниров нет — создай первый'}</div>`;
+}
+function renderTourForm(){
+  $('#toursBody').innerHTML=`<div class="tour-form">
+    <label for="tfTitle">Название<i id="tfTitleN">0/40</i></label>
+    <input id="tfTitle" maxlength="40" placeholder="Например, «Прыжок выходных»">
+    <label for="tfPrize">Приз<i id="tfPrizeN">0/120</i></label>
+    <textarea id="tfPrize" rows="2" maxlength="120" placeholder="Что получат победители: NFT, звёзды, что угодно"></textarea>
+    <label>Сколько длится</label>
+    <div class="segbar" id="tfDur"><button data-d="h1">1 час</button><button data-d="d1" class="on">1 день</button><button data-d="d3">3 дня</button><button data-d="d7">7 дней</button></div>
+    <button class="btn" id="tfGo">Создать за ${TOURS.fee||25} <img class="ic" src="icons/tgstar.png" alt=""></button>
+    <div class="fine">Турнир стартует сразу после оплаты. Засчитывается лучший забег за время турнира. Приз вручаешь ты сам — когда турнир закончится, бот пришлёт тебе победителей с их @username.</div>
+  </div>`;
+  const cnt=(id,max)=>{const el=$('#'+id);el.oninput=()=>{$('#'+id+'N').textContent=`${el.value.length}/${max}`;};};
+  cnt('tfTitle',40);cnt('tfPrize',120);
+  $('#tfDur').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.ui();haptic.select();$('#tfDur').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));});
+  $('#tfGo').onclick=createTour;
+}
+async function createTour(){
+  const title=$('#tfTitle').value.trim(),prize=$('#tfPrize').value.trim();
+  const dur=($('#tfDur').querySelector('.on')||{}).dataset?.d||'d1';
+  if(title.length<3){toast('Название — хотя бы 3 символа');$('#tfTitle').focus();return;}
+  if(prize.length<3){toast('Опиши приз');$('#tfPrize').focus();return;}
+  S.ui();
+  const r=await api('tourCreate',{title,prize,dur}).catch(()=>null);
+  if(!r||!r.ok){toast((r&&r.error)||'Сервер не отвечает');return;}
+  if(r.started){toast('Турнир запущен');await loadTours();renderTourForm();openTour(r.started);return;}
+  buyJumpItem('tour:'+r.draft,async()=>{
+    toast('Оплачено, запускаем турнир…',2500);
+    // бот узнаёт об оплате с задержкой — ждём, пока черновик станет турниром
+    for(let i=0;i<10;i++){
+      const d=await api('tourDraft',{draft:r.draft}).catch(()=>null);
+      if(d&&d.tid){await loadTours();renderHubTours();renderTourForm();openTour(d.tid);toast('Турнир запущен — зови участников');return;}
+      await wait(1500);
+    }
+    toast('Оплата прошла — турнир появится во вкладке «Мои» в течение минуты',4000);
+  });
+}
+async function openTour(id){
+  tourCur={id};
+  $('#tour').classList.remove('hidden');
+  $('#tourTitle').textContent='Турнир';$('#tourBoard').innerHTML='<div class="demo">Загрузка…</div>';
+  const r=await api('tourGet',{id}).catch(()=>null);
+  if(!r||!r.ok){$('#tourBoard').innerHTML=`<div class="demo">${esc((r&&r.error)||'Сервер не отвечает')}</div>`;return;}
+  tourSkew=(r.now||Date.now())-Date.now();
+  tourCur=r;renderTour();
+  clearInterval(tourTick);tourTick=setInterval(()=>{if($('#tour').classList.contains('hidden'))clearInterval(tourTick);else $('#tourLeft').textContent=tourCur.tour.done?'завершён':'осталось '+leftText(tourCur.tour.endsAt);},1000);
+}
+function renderTour(){
+  const r=tourCur,t=r.tour;
+  $('#tourTitle').textContent=t.title;
+  $('#tourPrize').textContent=t.prize;
+  $('#tourOwner').textContent=t.official?'Официальный турнир SWAMP':('Организатор: '+(r.ownerUsername?'@'+r.ownerUsername:t.owner));
+  $('#tourLeft').textContent=t.done?'завершён':'осталось '+leftText(t.endsAt);
+  const meId=net.me?net.me.id:null,rows=r.board||[];
+  let html='';
+  if(!rows.length)html='<div class="demo">Пока никто не прыгал — стань первым в таблице</div>';
+  else{
+    html=rows.map(x=>`<div class="lb noimg${x.id===meId?' me':''}"><div class="rk ${x.rank<=3?'top':''}">${x.rank<=3?ic('medal','m'+x.rank):x.rank}</div><div class="nm">${esc(x.name||'Игрок')}</div><div class="sc">${fmtM(x.best)} м</div></div>`).join('');
+    // своё место видно всегда, даже если оно за пределами первой полусотни
+    if(r.me&&!rows.some(x=>x.id===meId))html+=`<div class="tour-sep">…</div><div class="lb noimg me"><div class="rk">${r.me.rank}</div><div class="nm">${esc(myName)}</div><div class="sc">${fmtM(r.me.best)} м</div></div>`;
+  }
+  $('#tourBoard').innerHTML=`<div class="tour-list">${html}</div>`;
+  $('#tourPlay').textContent=t.done?'Турнир завершён':(t.joined?'Играть':'Участвовать');
+  $('#tourPlay').disabled=!!t.done;
+}
+$('#tourPlay').onclick=async()=>{
+  const t=tourCur&&tourCur.tour;if(!t||t.done)return;
+  S.ui();haptic.medium();
+  if(!t.joined){
+    const r=await api('tourJoin',{id:t.id}).catch(()=>null);
+    if(!r||!r.ok){toast((r&&r.error)||'Не получилось');return;}
+    t.joined=true;toast('Ты в турнире — лучший забег пойдёт в таблицу');
+    loadTours().then(renderHubTours);renderTour();return;
+  }
+  // забег засчитается во все турниры, где игрок участвует
+  $('#tour').classList.add('hidden');$('#tours').classList.add('hidden');closeHub();
+  if(JUMP)JUMP.open();
+};
+$('#tourShare').onclick=()=>{
+  const r=tourCur;if(!r||!r.link)return;S.ui();
+  const text=`Турнир «${r.tour.title}» в Frog Jump. Приз: ${r.tour.prize}. Залетай!`;
+  if(TG&&tgv('6.1'))TG.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(r.link)+'&text='+encodeURIComponent(text));
+  else{try{navigator.clipboard.writeText(r.link);toast('Ссылка скопирована');}catch(e){toast(r.link,5000);}}
+};
+$('#tourClose').onclick=()=>{S.ui();$('#tour').classList.add('hidden');clearInterval(tourTick);};
+$('#toursClose').onclick=()=>{S.ui();$('#tours').classList.add('hidden');};
+$('#tourTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(tourTab===b.dataset.tt)return;tourTab=b.dataset.tt;S.ui();haptic.select();renderTours();});
+// строки турниров кликаются и в хабе, и в списке
+document.addEventListener('click',e=>{const row=e.target.closest('.tour-row');if(row){S.ui();openTour(row.dataset.tid);}});
+$('#hubToursAll').onclick=()=>openTours('open');
+$('#hubTourNew').onclick=()=>openTours('new');
+setInterval(()=>{if(!$('#hub').classList.contains('hidden'))renderHubTours();},30e3);
+
 /* ---------- НАРЯДЫ ПРЫГУНА ----------
    Витрина живёт отдельным экраном и сама о себе не напоминает: точка на кнопке
    загорается только когда на новый наряд реально хватило мошек, и гаснет,
@@ -2641,6 +2843,7 @@ function openHub(){
   try{localStorage.setItem(HUB_SEEN,'1');}catch(e){}
   const dot=$('#btnGames .newdot');if(dot)dot.remove();
   renderHub();$('#hub').classList.remove('hidden');
+  renderHubTours();loadTours().then(renderHubTours);
   if(JUMP)JUMP.preload();
   sync(true).then(renderHub).catch(()=>{});
 }
@@ -2665,6 +2868,7 @@ async function init(){
   // приложение открывается в хабе: оттуда выбирают слияние или Frog Jump.
   // По прямой ссылке сразу открываем нужное, хаб остаётся под ним
   if(startParam==='shop'){openHub();openShop();}
+  else if(startParam&&startParam.startsWith('t_')){openHub();openTour(startParam.slice(2));}
   else if(startParam==='jump'&&JUMP){openHub();JUMP.open();}
   else openHub();
   sync(true).then(r=>{

@@ -85,6 +85,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     <button data-tab="payments">Платежи</button>
     <button data-tab="event">Ивент</button>
     <button data-tab="broadcast">Рассылка</button>
+    <button data-tab="tours">Турниры</button>
   </div>
 
   <div id="tab-stats">
@@ -147,6 +148,22 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
         <button class="bad sm" onclick="confirmAct('Сбросить общий рекорд бесконечной серии?',{act:'endlessReset'})">Сбросить рекорд серии</button>
       </div>
     </div>
+  </div>
+
+  <div id="tab-tours" hidden>
+    <div class="card" style="margin-bottom:16px">
+      <span>Официальный турнир — бесплатно, с меткой SWAMP и выше в списке</span>
+      <div class="tools" style="margin-top:10px">
+        <input id="toTitle" maxlength="40" placeholder="Название, до 40 символов">
+        <input id="toPrize" maxlength="120" placeholder="Приз, до 120 символов">
+        <select id="toDur" style="width:auto;flex:0 0 130px">
+          <option value="h1">1 час</option><option value="d1" selected>1 день</option><option value="d3">3 дня</option><option value="d7">7 дней</option>
+        </select>
+        <button onclick="tourOfficial()">Запустить</button>
+      </div>
+      <div class="muted" id="toLink" style="font-size:12.5px;margin-top:6px"></div>
+    </div>
+    <div class="tbl"><table id="toursTbl"></table></div>
   </div>
 
   <div id="tab-broadcast" hidden>
@@ -216,7 +233,7 @@ $('#key').onkeydown=e=>{if(e.key==='Enter')$('#enter').click();};
 (async()=>{ if(INIT&&await tryKey('',true)) return; if(KEY) tryKey(KEY,true); })();
 
 /* ---------- вкладки ---------- */
-const TABS=['stats','players','payments','event','broadcast'];
+const TABS=['stats','players','payments','event','broadcast','tours'];
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
   TABS.forEach(t=>$('#tab-'+t).hidden=(t!==b.dataset.tab));
@@ -229,6 +246,7 @@ async function load(tab){
   if(tab==='payments'){const r=await api({act:'payments'});if(r.ok)renderPayments(r.payments);}
   if(tab==='event'){const r=await api({act:'stats'});if(r.ok)renderEvent(r.stats);}
   if(tab==='broadcast')bcPoll(true);
+  if(tab==='tours'){const r=await api({act:'tours'});if(r.ok)renderTours(r.tours);}
 }
 
 /* ---------- сводка ---------- */
@@ -375,6 +393,35 @@ async function bcPoll(silent){
   $('#bcStatusTxt').textContent=`${done} / ${b.total} · доставлено ${b.sent} · ошибок ${b.failed}`;
   $('#bcCancelBtn').hidden=!b.sending;
   if(b.sending)bcTimer=setTimeout(bcPoll,1500);
+}
+
+/* ---------- турниры ---------- */
+function renderTours(list){
+  const now=Date.now();
+  const st=t=>t.hidden?'<span class="tag test">скрыт</span>':t.done?'<span class="tag">завершён</span>':t.endsAt>now?'<span class="tag sub">идёт</span>':'<span class="tag">завершается</span>';
+  const win=t=>(t.winners||[]).map((w,i)=>`${i+1}. ${esc(w.name)}${w.username?' @'+esc(w.username):''} — ${w.best} м`).join('<br>');
+  $('#toursTbl').innerHTML=`<tr><th>Турнир</th><th>Приз</th><th>Организатор</th><th>Участн.</th><th>До</th><th>Итог</th><th></th></tr>`+
+    (list.map(t=>`<tr data-tid="${esc(t.id)}">
+      <td>${t.official?'<span class="tag hold">SWAMP</span> ':''}${esc(t.title)} ${st(t)}<div class="muted" style="font-size:11.5px">${esc(t.id)}</div></td>
+      <td>${esc(t.prize)}</td>
+      <td>${esc(t.owner||'')}${t.ownerUsername?' <span class="muted">@'+esc(t.ownerUsername)+'</span>':''}</td>
+      <td class="num">${t.players}</td>
+      <td class="num muted">${new Date(t.endsAt).toLocaleString('ru-RU')}</td>
+      <td style="font-size:12.5px">${win(t)||'<span class="muted">—</span>'}</td>
+      <td><button class="${t.hidden?'ghost':'bad'} sm" data-act="hide">${t.hidden?'Вернуть':'Скрыть'}</button></td>
+    </tr>`).join('')||'<tr><td class="muted">Турниров пока нет</td></tr>');
+  $('#toursTbl').querySelectorAll('tr[data-tid]').forEach(tr=>{
+    const b=tr.querySelector('[data-act=hide]');
+    if(b)b.onclick=async()=>{const r=await api({act:'tourHide',tid:tr.dataset.tid});toast(r.ok?r.msg:(r.error||'Ошибка'));load('tours');};
+  });
+}
+async function tourOfficial(){
+  const title=$('#toTitle').value.trim(),prize=$('#toPrize').value.trim(),dur=$('#toDur').value;
+  if(title.length<3||prize.length<3)return toast('Заполни название и приз');
+  if(!confirm(`Запустить официальный турнир «${title}»?`))return;
+  const r=await api({act:'tourOfficial',title,prize,dur});
+  toast(r.ok?r.msg:(r.error||'Ошибка'));
+  if(r.ok){$('#toTitle').value='';$('#toPrize').value='';$('#toLink').textContent='Ссылка для участников: '+r.link;load('tours');}
 }
 
 /* ---------- действия ---------- */

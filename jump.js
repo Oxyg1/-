@@ -157,6 +157,27 @@ window.FrogJumpInit=function(B){
 #fj input[type=range]::-moz-range-track{height:8px;border-radius:99px;background:rgba(0,0,0,.35)}
 #fj input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-8px;border-radius:50%;background:linear-gradient(#ffe36b,#f7b500);box-shadow:0 2px 0 var(--acc-dark)}
 #fj input[type=range]::-moz-range-thumb{width:24px;height:24px;border:0;border-radius:50%;background:#f7b500}
+/* подъём в рейтинге после забега: старая таблица, потом лягушка взлетает вверх */
+#fj .fj-climb{gap:10px}
+#fj .fj-ctag{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.75;font-weight:900;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#fj .fj-cboard{position:relative;width:100%;overflow:hidden}
+#fj .fj-crow{position:absolute;left:0;right:0;height:48px;display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:8px;padding:0 12px;border-radius:14px;background:rgba(0,0,0,.24);transition:transform .75s cubic-bezier(.3,1.3,.5,1),box-shadow .3s,background .3s;font-size:15px}
+#fj .fj-crow .rk{font-weight:900;color:#ffe680;text-align:center;font-variant-numeric:tabular-nums}
+#fj .fj-crow .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:7px}
+#fj .fj-crow .nm img{width:30px;height:30px;object-fit:contain;flex:none}
+#fj .fj-crow .sc{font-weight:900;font-variant-numeric:tabular-nums}
+#fj .fj-crow.me{background:linear-gradient(90deg,rgba(255,210,63,.32),rgba(255,210,63,.14));box-shadow:inset 0 0 0 2px rgba(255,210,63,.75);z-index:3}
+#fj .fj-crow.me.fly{box-shadow:inset 0 0 0 2px #ffd23f,0 10px 26px rgba(255,210,63,.45)}
+#fj .fj-crow.me.land{animation:fjLand .5s cubic-bezier(.2,.9,.3,1.5)}
+@keyframes fjLand{40%{scale:1.07}}
+#fj .fj-crow.down{background:rgba(0,0,0,.34);opacity:.8}
+#fj .fj-crow.gap{background:none;justify-content:center;display:flex;opacity:.55;font-size:13px}
+#fj .fj-ctours{width:100%;display:flex;flex-direction:column;gap:4px}
+#fj .fj-ctours div{display:flex;justify-content:space-between;gap:8px;font-size:13px;background:rgba(0,0,0,.22);border-radius:10px;padding:5px 10px}
+#fj .fj-ctours span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.85}
+#fj .fj-ctours b{white-space:nowrap}
+#fj .fj-conf{position:absolute;width:8px;height:12px;border-radius:2px;pointer-events:none;z-index:20;animation:fjConf 1.3s cubic-bezier(.2,.6,.4,1) forwards}
+@keyframes fjConf{to{transform:translate(var(--dx),var(--dy)) rotate(var(--r));opacity:0}}
 #fj .card .btn{width:100%}
 #fj .card .row .btn{width:auto;flex:1}
 `;
@@ -193,6 +214,13 @@ window.FrogJumpInit=function(B){
   <button class="btn" id="fjBoostGo">Разогнаться · 20 <img class="ic" src="icons/tgstar.png" alt=""></button>
   <button class="btn ghost sm" id="fjBoostSkip">Обычный старт</button>
 </div></div>
+<div class="fj-ov" id="fjClimb" hidden><div class="card fj-climb">
+  <div class="fj-ctag" id="fjCTag"></div>
+  <h2 id="fjCHead">Ты поднялся!</h2>
+  <div class="fj-cboard" id="fjCBoard"></div>
+  <div class="fj-note" id="fjCNote"></div>
+  <button class="btn" id="fjCOk">Круто!</button>
+</div></div>
 <div class="fj-ov" id="fjOver" hidden><div class="card">
   <div class="fj-newrec" id="fjNewRec" hidden>Новый рекорд!</div>
   <h2 id="fjOverT">Забег окончен</h2>
@@ -200,6 +228,7 @@ window.FrogJumpInit=function(B){
   <div class="sub" id="fjOverBest"></div>
   <div class="fj-earn">${FLY}<span>+<b id="fjOverF">0</b></span></div>
   <div class="fj-note" id="fjOverNote"></div>
+  <div class="fj-ctours" id="fjOverTours" hidden></div>
   <button class="btn" id="fjRevive">Продолжить · 10 <img class="ic" src="icons/tgstar.png" alt=""></button>
   <button class="btn" id="fjAgain">Ещё раз</button>
   <div class="row"><button class="btn ghost sm" id="fjShare"><svg class="ic"><use href="#i-send"></use></svg> В чат</button><button class="btn ghost sm" id="fjExit">В хаб</button></div>
@@ -1057,6 +1086,7 @@ window.FrogJumpInit=function(B){
     $('#fjRevive').hidden=rn>=REVIVE_PRICES.length||h<20;
     $('#fjRevive').innerHTML=`Продолжить · ${REVIVE_PRICES[rn]} <img class="ic" src="icons/tgstar.png" alt="">`;
     $('#fjAgain').className=$('#fjRevive').hidden?'btn':'btn ghost';
+    $('#fjOverTours').hidden=true;$('#fjClimb').hidden=true;
     $('#fjOver').hidden=false;SND.card();
     countUp($('#fjOverH'),h,.9,true);countUp($('#fjOverF'),earnedNow,.7,false);
     if(isBest){setTimeout(()=>{if(!$('#fjOver').hidden){SND.record();B.haptic.success();}},650);}
@@ -1070,17 +1100,98 @@ window.FrogJumpInit=function(B){
       const can=res.jump?res.jump.canBuy||0:0;
       if(can>(pref.canBuy||0)){note.textContent+=' · хватает на новый наряд';}
       if(can!==pref.canBuy){pref.canBuy=can;savePref();}
+      // места во всех турнирах, где игрок участвует
+      const box=$('#fjOverTours'),tl=res.tours||[];
+      box.hidden=!tl.length;
+      box.innerHTML=tl.map(t=>`<div><span>${esc(t.title)}</span><b>${t.rank?t.rank+' из '+t.players:'—'}</b></div>`).join('');
+      if(res.climb&&res.climb.length)setTimeout(()=>{if(run===r&&!$('#fjOver').hidden)showClimb(res.climb);},500);
       if(res.isRecord&&!res.local){note.textContent='Лучший результат игры! '+note.textContent;}
       return res;
     });
   }
-  function countUp(el,to,dur,ticks){
+  /* ---------- подъём в рейтинге ----------
+     Как в Duolingo: сначала таблица до забега, потом строка игрока взлетает на
+     новое место, а те, кого обогнал, съезжают вниз на одну строку. Под каждого
+     обогнанного — нота выше предыдущей, на месте — фанфары и конфетти */
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const ROW=54;
+  let climbQueue=[];
+  function climbWord(n){const a=n%10,b=n%100;return a===1&&b!==11?'игрока':(a>=2&&a<=4&&(b<12||b>14))?'игроков':'игроков';}
+  function showClimb(list){
+    if(!list||!list.length)return;
+    climbQueue=list.slice();
+    playClimb(climbQueue.shift(),list.length);
+  }
+  function playClimb(c,count){
+    const board=$('#fjCBoard');board.innerHTML='';
+    $('#fjCTag').textContent=c.kind==='tour'?`Турнир «${c.title}»`:c.title;
+    const one=c.passedN===1;
+    $('#fjCHead').textContent=one?`Ты обогнал ${c.passed[0].name}!`:`Ты обогнал ${c.passedN} ${climbWord(c.passedN)}!`;
+    $('#fjCNote').textContent=`Теперь ты ${c.newRank}-й из ${c.total}`+(climbQueue.length?` · и ещё подъём в ${climbQueue.length===1?'одном рейтинге':climbQueue.length+' рейтингах'}`:'');
+    $('#fjCOk').textContent=climbQueue.length?'Дальше':'Круто!';
+    // строки в порядке «до»: тот, кто выше нового места, обогнанные, потом мы
+    const rows=[];
+    if(c.above)rows.push({name:c.above.name,best:c.above.best,rank:c.newRank-1,k:'above'});
+    c.passed.forEach((p,i)=>rows.push({name:p.name,best:p.best,rank:c.newRank+i,k:'passed'}));
+    const hidden=c.passedN-c.passed.length;
+    if(hidden>0)rows.push({gap:`…ещё ${hidden}`});
+    rows.push({me:true,best:c.oldBest,rank:c.oldRank,k:'me'});
+    board.style.height=rows.length*ROW+'px';
+    const els=rows.map((r,i)=>{
+      const el=document.createElement('div');el.className='fj-crow'+(r.me?' me':'')+(r.gap?' gap':'');
+      if(r.gap)el.textContent=r.gap;
+      else el.innerHTML=`<span class="rk">${r.rank||'—'}</span><span class="nm">${r.me&&frogImg?`<img src="${frogThumb()}" alt="">`:''}${esc(r.me?B.myName:r.name)}</span><span class="sc">${fmtM(r.best)} м</span>`;
+      el.style.transform=`translateY(${i*ROW}px)`;board.appendChild(el);
+      return el;
+    });
+    $('#fjClimb').hidden=false;SND.card();
+    const meIdx=rows.length-1,target=c.above?1:0,passedEls=els.filter((_,i)=>rows[i].k==='passed');
+    setTimeout(()=>{
+      if($('#fjClimb').hidden)return;
+      const me=els[meIdx];me.classList.add('fly');
+      me.style.transform=`translateY(${target*ROW}px)`;
+      passedEls.forEach((el,i)=>{el.classList.add('down');el.style.transform=`translateY(${(target+1+i)*ROW}px)`;
+        el.querySelector('.rk').textContent=rows[els.indexOf(el)].rank+1;});
+      if(hidden>0)els[meIdx-1].style.transform=`translateY(${(meIdx)*ROW}px)`;
+      // ноты под каждого обогнанного — снизу вверх
+      const n=Math.min(c.passedN,8);
+      for(let i=0;i<n;i++)setTimeout(()=>{SND.tick(i+3);B.haptic.select();},120+i*(520/n));
+      countUp(me.querySelector('.sc'),c.newBest,.75,false,' м',c.oldBest);
+      setTimeout(()=>{
+        me.classList.remove('fly');me.classList.add('land');
+        me.querySelector('.rk').textContent=c.newRank;
+        SND.record();B.haptic.success();confetti(me);
+      },780);
+    },650);
+  }
+  function frogThumb(){
+    if(!frogImg)return '';
+    if(!frogThumb.u||frogThumb.src!==frogImg){frogThumb.src=frogImg;frogThumb.u=frogImg.toDataURL('image/png');}
+    return frogThumb.u;
+  }
+  function confetti(el){
+    const r=el.getBoundingClientRect(),cols=['#ffd23f','#ff7eb6','#7fd1ff','#9dffb0','#ffffff'];
+    for(let i=0;i<34;i++){
+      const d=document.createElement('i');d.className='fj-conf';
+      d.style.left=(r.left+r.width*Math.random())+'px';d.style.top=(r.top+r.height/2)+'px';
+      d.style.background=cols[i%cols.length];
+      d.style.setProperty('--dx',(Math.random()*240-120)+'px');d.style.setProperty('--dy',(-Math.random()*200-40)+'px');d.style.setProperty('--r',(Math.random()*720-360)+'deg');
+      root.appendChild(d);setTimeout(()=>d.remove(),1400);
+    }
+  }
+  $('#fjCOk').onclick=()=>{
+    SND.ui();
+    if(climbQueue.length){playClimb(climbQueue.shift(),climbQueue.length+1);return;}
+    $('#fjClimb').hidden=true;
+  };
+  function countUp(el,to,dur,ticks,suffix,from){
     // в свёрнутом приложении кадры не идут — тогда просто показываем итог
-    if(document.hidden){el.textContent=fmtM(to);return;}
+    suffix=suffix||'';from=from||0;
+    if(document.hidden){el.textContent=fmtM(to)+suffix;return;}
     const t0=performance.now();let lastK=-1;
     const step=now=>{
-      const k=Math.min(1,(now-t0)/1000/dur),e=1-Math.pow(1-k,3),v=Math.round(to*e);
-      el.textContent=fmtM(v);
+      const k=Math.min(1,(now-t0)/1000/dur),e=1-Math.pow(1-k,3),v=Math.round(from+(to-from)*e);
+      el.textContent=fmtM(v)+suffix;
       if(ticks){const q=Math.floor(e*12);if(q!==lastK){lastK=q;if(k<1)SND.tick(q);}}
       if(k<1)requestAnimationFrame(step);
     };requestAnimationFrame(step);
@@ -1245,7 +1356,7 @@ window.FrogJumpInit=function(B){
     dir:d=>{touchDir=d;},banner,SND,
     // прогон физики без кадров: в фоновой вкладке requestAnimationFrame не идёт,
     // а проверять механику надо
-    render,zoneBlend,
+    render,zoneBlend,showClimb,
     sim:(sec,onStep)=>{const n=Math.round(sec*120);for(let i=0;i<n&&run;i++){update(STEP);if(onStep&&i%12===0)onStep(run);}return run;}};
   return {open:openGame,close,preload:()=>{loadImgs();return loadFrog((B.net().jump||{}).skin).catch(()=>{});},localBest:()=>pref.best||0,localFlies:()=>pref.flies||0};
 };
