@@ -129,7 +129,7 @@ window.FrogJumpInit=function(B){
 #fj .fj-combo.kick{animation:fjBump .22s}
 #fj .fj-combo img{width:20px;height:20px}
 /* ближайший результат выше тебя среди всех твоих турниров */
-#fj .fj-tpill{background:rgba(6,26,18,.74);border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:800;white-space:nowrap;max-width:calc(100vw - 24px);overflow:hidden;text-overflow:ellipsis;box-shadow:inset 0 0 0 1px rgba(255,210,63,.45);transition:box-shadow .3s}
+#fj .fj-tpill{background:rgba(6,26,18,.74);border-radius:999px;padding:2px 10px;font-size:12px;font-weight:800;white-space:nowrap;max-width:calc(100vw - 24px);overflow:hidden;text-overflow:ellipsis;box-shadow:inset 0 0 0 1px rgba(255,210,63,.45);transition:box-shadow .3s}
 #fj .fj-tpill b{color:#ffe680}
 #fj .fj-tpill.hot{box-shadow:inset 0 0 0 1.5px #ffd23f,0 0 14px rgba(255,210,63,.45)}
 #fj .fj-tpill.kick{animation:fjBump .3s}
@@ -149,6 +149,7 @@ window.FrogJumpInit=function(B){
 #fj .fj-lot{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;pointer-events:none;z-index:5;transition:transform .42s cubic-bezier(.5,-.3,.4,1),opacity .42s}
 #fj .fj-lot img{width:100%;height:100%;object-fit:contain}
 #fj .fj-ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(3,25,17,.72);z-index:10}
+#fj #fjClimb{z-index:12}
 #fj .fj-ov .card{max-width:360px}
 #fj .fj-big{font-size:58px;font-weight:900;line-height:1;color:#ffd23f;text-shadow:0 4px 0 rgba(0,0,0,.3);font-variant-numeric:tabular-nums}
 #fj .fj-big small{font-size:24px;color:#fff;opacity:.85;margin-left:4px}
@@ -177,6 +178,11 @@ window.FrogJumpInit=function(B){
 @keyframes fjLand{40%{scale:1.07}}
 #fj .fj-crow.down{background:rgba(0,0,0,.34);opacity:.8}
 #fj .fj-crow.gap{background:none;justify-content:center;display:flex;opacity:.55;font-size:13px}
+#fj .fj-stats{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#fj .fj-stats div{background:rgba(0,0,0,.22);border-radius:12px;padding:7px 10px;display:flex;flex-direction:column;align-items:flex-start;gap:1px}
+#fj .fj-stats span{font-size:11.5px;opacity:.75;font-weight:700}
+#fj .fj-stats div:last-child:nth-child(odd){grid-column:span 2}
+#fj .fj-stats b{font-size:17px;font-weight:900;font-variant-numeric:tabular-nums}
 #fj .fj-ctours{width:100%;display:flex;flex-direction:column;gap:4px}
 #fj .fj-ctours div{display:flex;justify-content:space-between;gap:8px;font-size:13px;background:rgba(0,0,0,.22);border-radius:10px;padding:5px 10px}
 #fj .fj-ctours span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.85}
@@ -237,7 +243,18 @@ window.FrogJumpInit=function(B){
   <div class="fj-ctours" id="fjOverTours" hidden></div>
   <button class="btn" id="fjRevive">Продолжить · 10 <img class="ic" src="icons/tgstar.png" alt=""></button>
   <button class="btn" id="fjAgain">Ещё раз</button>
-  <div class="row"><button class="btn ghost sm" id="fjShare"><svg class="ic"><use href="#i-send"></use></svg> В чат</button><button class="btn ghost sm" id="fjExit">В хаб</button></div>
+  <div class="row"><button class="btn ghost sm" id="fjShare"><svg class="ic"><use href="#i-send"></use></svg> В чат</button><button class="btn ghost sm" id="fjExit">Завершить</button></div>
+</div></div>
+<div class="fj-ov" id="fjFin" hidden><div class="card fj-fin">
+  <div class="fj-newrec" id="fjFinRec" hidden>Новый рекорд!</div>
+  <h2>Итоги забега</h2>
+  <div class="fj-big"><span id="fjFinH">0</span><small>м</small></div>
+  <div class="sub" id="fjFinBest"></div>
+  <div class="fj-stats" id="fjFinStats"></div>
+  <div class="fj-ctours" id="fjFinTours" hidden></div>
+  <div class="fj-note" id="fjFinNote"></div>
+  <button class="btn" id="fjFinAgain">Ещё раз</button>
+  <div class="row"><button class="btn ghost sm" id="fjFinShare"><svg class="ic"><use href="#i-send"></use></svg> В чат</button><button class="btn ghost sm" id="fjFinExit">В хаб</button></div>
 </div></div>`;
   document.body.appendChild(root);
   const $=s=>root.querySelector(s);
@@ -415,7 +432,7 @@ window.FrogJumpInit=function(B){
       flies_n:0,combo:0,comboT:-9,perfect:0,
       tray:[],lastLot:-1,rocket:0,dragon:0,shield:false,invul:0,tongue:null,
       nextEvent:rnd(7,10),lastEvent:'',mile:100,zone:0,bestCrossed:false,passed:new Set(),
-      reviveN:0,insUsed:false,seg:{base:0,t0:0,f0:0,tokenP:null},
+      reviveN:0,insUsed:false,jumps:0,springs:0,herons_n:0,perfMax:0,climbs:[],tours:null,rank:null,seg:{base:0,t0:0,f0:0,tokenP:null},
     };
     // стартовая кувшинка — широкая, чтобы первый отскок был гарантирован
     r.pads.push(mkPad(W/2,0,150,'n'));r.pads[0].big=true;
@@ -521,6 +538,7 @@ window.FrogJumpInit=function(B){
     r.vy=onSpring?VSPRING:V0;
     const perfect=Math.abs(dx)<p.w*.16;
     r.perfect=perfect?r.perfect+1:0;
+    r.jumps++;if(onSpring)r.springs++;if(r.perfect>r.perfMax)r.perfMax=r.perfect;
     r.sq=onSpring?-.4:-.3;r.sqV=0;
     p.dipV=-(onSpring?160:110);
     splash(r.fx,p.y,onSpring?12:7);
@@ -576,14 +594,14 @@ window.FrogJumpInit=function(B){
     const r=run;
     h.dead=true;h.vy=260;h.vx=rnd(-80,80);if(h.pad)h.pad.heron=null;
     r.vy=VSTOMP;r.sq=-.35;r.sqV=0;r.hitstop=.07;r.shake=Math.max(r.shake,7);
-    r.flies_n+=3;hudFlies();
+    r.flies_n+=3;hudFlies();r.herons_n++;
     SND.stomp();B.haptic.medium();
     txt(h.x,h.y+70,'Бам! +3',{c:'#ffd23f',s:22});
     burst(h.x,h.y+60,14,['#dfe6ec','#ffffff','#aab6c1'],200);
   }
   function knock(h){
     h.dead=true;h.vy=320;h.vx=(wdx(h.x,run.fx)>=0?1:-1)*260;if(h.pad)h.pad.heron=null;
-    run.flies_n+=3;hudFlies();SND.stomp();B.haptic.medium();run.shake=Math.max(run.shake,6);
+    run.flies_n+=3;hudFlies();run.herons_n++;SND.stomp();B.haptic.medium();run.shake=Math.max(run.shake,6);
     txt(h.x,h.y+70,'+3',{c:'#ffd23f',s:20});burst(h.x,h.y+50,10,['#dfe6ec','#ffffff'],200);
   }
   function hurt(){
@@ -1032,7 +1050,7 @@ window.FrogJumpInit=function(B){
         else if(!quality&&avg<.017){quality=1;resize();}
       }
     }
-    if(!paused&&!(run.over&&!$('#fjOver').hidden)){
+    if(!paused&&!(run.over&&(!$('#fjOver').hidden||!$('#fjFin').hidden))){
       let sdt=dt;
       if(run.hitstop>0){run.hitstop-=dt;sdt=0;}
       if(run.slow>0){run.slow-=dt;sdt*=.35;}
@@ -1074,19 +1092,22 @@ window.FrogJumpInit=function(B){
   function updPill(r,m,force){
     const el=elTP();
     if(!tourR.length){el.hidden=true;return;}
+    // пилюля — только когда в каком-то турнире уже можно зацепиться за призовое
+    // место; до этого мотивацию дают пунктирные линии соперников
     let pick=null;
     for(const t of tourR){
       let rank=1,next=null;
       for(const x of t.rows)if(x.best>m){rank++;if(!next||x.best<next.best)next=x;}
+      if(rank>4)continue;
       const gap=next?next.best-m:Infinity;
-      if(!pick||gap<pick.gap||(gap===pick.gap&&rank<pick.rank))pick={t,rank,next,gap};
+      if(!pick||rank<pick.rank||(rank===pick.rank&&gap<pick.gap))pick={t,rank,next,gap};
     }
+    if(!pick){el.hidden=true;r.pillKey='';return;}
     const key=pick.t.id+':'+pick.rank;
     if(!force&&key===r.pillKey&&r.t-(r.pillT||0)<.25)return;
     r.pillT=r.t;
     const lead=!pick.next;
-    el.innerHTML=lead?`«${esc(pick.t.title)}» · <b>1 место</b> — ты лидер`
-      :`«${esc(pick.t.title)}» · ${pick.rank} место · до ${pick.rank-1}-го <b>${fmtM(Math.ceil(pick.gap))} м</b>`;
+    el.innerHTML=lead?`<b>1-е место</b>`:`<b>${fmtM(Math.ceil(pick.gap))} м</b> до ${pick.rank-1}-го`;
     el.classList.toggle('hot',lead||pick.gap<150);
     if(r.pillKey&&key!==r.pillKey)kick(el,'kick');
     r.pillKey=key;el.hidden=false;
@@ -1132,7 +1153,7 @@ window.FrogJumpInit=function(B){
     $('#fjRevive').hidden=rn>=REVIVE_PRICES.length||h<20;
     $('#fjRevive').innerHTML=`Продолжить · ${REVIVE_PRICES[rn]} <img class="ic" src="icons/tgstar.png" alt="">`;
     $('#fjAgain').className=$('#fjRevive').hidden?'btn':'btn ghost';
-    $('#fjOverTours').hidden=true;$('#fjClimb').hidden=true;
+    $('#fjOverTours').hidden=true;$('#fjClimb').hidden=true;$('#fjFin').hidden=true;
     $('#fjOver').hidden=false;SND.card();
     countUp($('#fjOverH'),h,.9,true);countUp($('#fjOverF'),earnedNow,.7,false);
     if(isBest){setTimeout(()=>{if(!$('#fjOver').hidden){SND.record();B.haptic.success();}},650);}
@@ -1147,10 +1168,16 @@ window.FrogJumpInit=function(B){
       if(can>(pref.canBuy||0)){note.textContent+=' · хватает на новый наряд';}
       if(can!==pref.canBuy){pref.canBuy=can;savePref();}
       // места во всех турнирах, где игрок участвует
-      const box=$('#fjOverTours'),tl=res.tours||[];
-      box.hidden=!tl.length;
-      box.innerHTML=tl.map(t=>`<div><span>${esc(t.title)}</span><b>${t.rank?t.rank+' из '+t.players:'—'}</b></div>`).join('');
-      if(res.climb&&res.climb.length)setTimeout(()=>{if(run===r&&!$('#fjOver').hidden)showClimb(res.climb);},500);
+      // подъёмы копим за весь забег (с продолжениями) — покажем их после «Завершить»
+      if(res.tours)r.tours=res.tours;
+      if(res.rank)r.rank=res.rank;
+      for(const c of res.climb||[]){
+        const k=c.kind+':'+(c.id||''),i=r.climbs.findIndex(x=>x.k===k);
+        if(i<0){r.climbs.push({...c,k});continue;}
+        const a=r.climbs[i],seen=new Set();
+        const passed=[...c.passed,...a.passed].filter(p=>!seen.has(p.name)&&seen.add(p.name)).sort((x,y)=>y.best-x.best).slice(0,5);
+        r.climbs[i]={...c,k,oldRank:a.oldRank,oldBest:a.oldBest,passedN:a.passedN+c.passedN,passed};
+      }
       if(res.isRecord&&!res.local){note.textContent='Лучший результат игры! '+note.textContent;}
       return res;
     });
@@ -1285,7 +1312,38 @@ window.FrogJumpInit=function(B){
     SND.ui();B.buyJumpRevive(n?'jumpRevive2':'jumpRevive',()=>revive());
   };
   $('#fjAgain').onclick=()=>{SND.ui();B.haptic.light();beginRun();};
-  $('#fjExit').onclick=()=>{SND.ui();close();};
+  // «Завершить»: продолжений больше не будет — подробные итоги и подъём в рейтингах
+  async function finish(){
+    const r=run;if(!r)return;
+    $('#fjOver').hidden=true;
+    const h=Math.floor(r.maxY/UNIT),isBest=h>bestBefore&&h>0;
+    $('#fjFinRec').hidden=!isBest;
+    $('#fjFinBest').textContent=isBest?(bestBefore?`Прошлый рекорд — ${fmtM(bestBefore)} м`:'Это твой первый забег'):`Твой рекорд — ${fmtM(Math.max(bestBefore,h))} м`;
+    const sec=Math.round(r.t),time=`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
+    const st=[['Мошек',`+${fmtM(r.flies_n)}`],['Время',time],['Прыжков',fmtM(r.jumps)],['Пружин',fmtM(r.springs)],
+      ['Цапель сбито',fmtM(r.herons_n)],['Серия «Точно»',r.perfMax>=2?'×'+r.perfMax:'—']];
+    if(r.reviveN)st.push(['Продолжений',String(r.reviveN)]);
+    if(r.insUsed)st.push(['Страховка','сработала']);
+    $('#fjFinStats').innerHTML=st.map(([a,b])=>`<div><span>${a}</span><b>${b}</b></div>`).join('');
+    $('#fjFinNote').textContent='';$('#fjFinTours').hidden=true;
+    $('#fjFin').hidden=false;SND.card();
+    countUp($('#fjFinH'),h,.8,true);
+    try{await overRes;}catch(e){}
+    if(run!==r||$('#fjFin').hidden)return;
+    const tl=r.tours||[],box=$('#fjFinTours');
+    box.hidden=!tl.length;
+    box.innerHTML=tl.map(t=>`<div><span>${esc(t.title)}</span><b>${t.rank?t.rank+' из '+t.players:'—'}</b></div>`).join('');
+    if(r.rank)$('#fjFinNote').textContent=`Место в общем рейтинге: ${r.rank}`;
+    if(r.climbs.length){
+      // сначала турниры, общий рейтинг — последним
+      const list=r.climbs.slice().sort((a,b)=>(a.kind==='global')-(b.kind==='global'));
+      setTimeout(()=>{if(run===r&&!$('#fjFin').hidden)showClimb(list);},450);
+    }
+  }
+  $('#fjExit').onclick=()=>{SND.ui();finish();};
+  $('#fjFinExit').onclick=()=>{SND.ui();close();};
+  $('#fjFinAgain').onclick=()=>{SND.ui();B.haptic.light();beginRun();};
+  $('#fjFinShare').onclick=async()=>{SND.ui();const h=Math.floor(run.maxY/UNIT);B.shareJump(await shareCard(h),h);};
   $('#fjShare').onclick=async()=>{SND.ui();const h=Math.floor(run.maxY/UNIT);B.shareJump(await shareCard(h),h);};
 
   /* ---------- пауза ---------- */
@@ -1306,7 +1364,9 @@ window.FrogJumpInit=function(B){
   };
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&open)pause();});
   function onBack(){
-    if(!$('#fjOver').hidden){close();return;}
+    if(!$('#fjClimb').hidden){$('#fjCOk').onclick();return;}
+    if(!$('#fjFin').hidden){close();return;}
+    if(!$('#fjOver').hidden){finish();return;}
     if(paused){$('#fjQuit').onclick();return;}
     pause();
   }
@@ -1335,6 +1395,7 @@ window.FrogJumpInit=function(B){
   /* ---------- открыть / закрыть ---------- */
   function start(boostBase){
     $('#fjOver').hidden=true;$('#fjPauseOv').hidden=true;$('#fjBoostOv').hidden=true;paused=false;
+    $('#fjFin').hidden=true;$('#fjClimb').hidden=true;climbQueue=[];
     bestBefore=Math.max(pref.best||0,((B.net().jump||{}).best)||0);
     setRivals();
     run=newRun();
