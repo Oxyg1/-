@@ -128,6 +128,11 @@ window.FrogJumpInit=function(B){
 #fj .fj-combo.hot{background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00;box-shadow:0 3px 0 #a86f00}
 #fj .fj-combo.kick{animation:fjBump .22s}
 #fj .fj-combo img{width:20px;height:20px}
+/* ближайший результат выше тебя среди всех твоих турниров */
+#fj .fj-tpill{background:rgba(6,26,18,.74);border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:800;white-space:nowrap;max-width:calc(100vw - 24px);overflow:hidden;text-overflow:ellipsis;box-shadow:inset 0 0 0 1px rgba(255,210,63,.45);transition:box-shadow .3s}
+#fj .fj-tpill b{color:#ffe680}
+#fj .fj-tpill.hot{box-shadow:inset 0 0 0 1.5px #ffd23f,0 0 14px rgba(255,210,63,.45)}
+#fj .fj-tpill.kick{animation:fjBump .3s}
 #fj .fj-banner{position:absolute;left:50%;top:28%;transform:translate(-50%,-50%) scale(.4);opacity:0;background:rgba(8,30,22,.78);border-radius:18px;padding:10px 18px;font-size:22px;font-weight:900;text-align:center;white-space:nowrap;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.35),inset 0 2px 0 rgba(255,255,255,.1)}
 #fj .fj-banner small{display:block;font-size:13px;font-weight:800;opacity:.8;margin-top:2px}
 #fj .fj-banner.gold{background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00}
@@ -195,6 +200,7 @@ window.FrogJumpInit=function(B){
 <div class="fj-sub">
   <div class="fj-tray" id="fjTray"><i><img alt=""></i><i><img alt=""></i><i><img alt=""></i></div>
   <div class="fj-combo" id="fjCombo"><img src="icons/fire.png" alt=""><b id="fjComboN">×3</b></div>
+  <div class="fj-tpill" id="fjTPill" hidden></div>
 </div>
 <div class="fj-banner" id="fjBanner"></div>
 <div class="fj-hint" id="fjHint" hidden><div><svg><use href="#i-chev"></use></svg></div><div><svg style="transform:scaleX(-1)"><use href="#i-chev"></use></svg></div><p>Держи палец слева или справа</p></div>
@@ -719,6 +725,14 @@ window.FrogJumpInit=function(B){
       for(const rv of rivals){
         if(!r.passed.has(rv.id)&&m>rv.best){r.passed.add(rv.id);txt(r.fx,r.fy+FROG*1.2,`Обогнал: ${rv.name}`,{c:'#9dffb0',s:17,life:1.2});SND.pass();}
       }
+      // обгоны в турнирах — не чаще раза в 0.4 с, иначе на старте их сыплет пачкой
+      for(const t of tourR)for(const x of t.rows){
+        if(m>x.best&&!r.passed.has(x.id)&&x.best>(r.seg.base||0)){
+          r.passed.add(x.id);
+          if(r.t-(r.passT||0)>.4){r.passT=r.t;txt(r.fx,r.fy+FROG*1.2,`Обогнал: ${x.name}`,{c:'#9dffb0',s:17,life:1.2});SND.pass();}
+        }
+      }
+      updPill(r,m);
       if(r.t>=r.nextEvent){r.nextEvent=r.t+rnd(11,16);tryEvent(r);}
       gen(r);
       if(r.fy<r.camY-FROG*.4)fall();
@@ -936,12 +950,19 @@ window.FrogJumpInit=function(B){
     }
   }
   function drawLines(r){
-    const lines=[];
+    const lines=[],seen=new Set();
     if(best>0)lines.push({m:best,label:`Твой рекорд · ${fmtM(best)} м`,me:true});
-    for(const rv of rivals)lines.push({m:rv.best,label:`${rv.name} · ${fmtM(rv.best)} м`,me:false});
+    for(const rv of rivals){seen.add(rv.id);lines.push({m:rv.best,label:`${rv.name} · ${fmtM(rv.best)} м`,me:false});}
+    // соперники по турнирам — только те, чей рекорд сейчас на экране
+    const lo=(r.camY-20)/UNIT,hi=(r.camY+VH+20)/UNIT;
+    for(const t of tourR)for(const x of t.rows){if(x.best<lo||x.best>hi||seen.has(x.id))continue;seen.add(x.id);lines.push({m:x.best,label:`${x.name} · ${fmtM(x.best)} м`,me:false});}
+    lines.sort((a,b)=>a.m-b.m);
     cx.font='800 11px Nunito,"Segoe UI",sans-serif';cx.textBaseline='middle';
+    let lastY=1e9;
     for(const l of lines){
       const y=Y(l.m*UNIT);if(y<-20||y>VH+20)continue;
+      if(!l.me&&Math.abs(y-lastY)<20)continue;   // слипшиеся подписи не рисуем друг на друге
+      lastY=y;
       cx.setLineDash([7,6]);cx.strokeStyle=l.me?'rgba(255,210,63,.95)':'rgba(255,255,255,.75)';cx.lineWidth=1.6;
       cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke();cx.setLineDash([]);
       const tw=cx.measureText(l.label).width+16,lx=l.me?8:W-8-tw;
@@ -1033,6 +1054,7 @@ window.FrogJumpInit=function(B){
           const res=await B.api('jumpStart',{cont:!!cont,insurance:!!insurance,boost:!!boost});
           if(res&&res.ok){
             if(res.jumpTop)B.applyJump({jumpTop:res.jumpTop,jump:res.jump});
+            if(res.tourRivals&&!cont){tourR=res.tourRivals;if(run)updPill(run,Math.floor(run.maxY/UNIT),true);}
             if(!cont)setRivals();
             lastBase=res.base||0;
             return res.run;
@@ -1045,6 +1067,30 @@ window.FrogJumpInit=function(B){
     })();
   }
   let lastBase=0;
+  /* Турнирные соперники: их рекорды — пунктир на своей высоте, а пилюля под
+     лотосами держит самую близкую цель среди всех турниров игрока */
+  let tourR=[];
+  const elTP=()=>$('#fjTPill');
+  function updPill(r,m,force){
+    const el=elTP();
+    if(!tourR.length){el.hidden=true;return;}
+    let pick=null;
+    for(const t of tourR){
+      let rank=1,next=null;
+      for(const x of t.rows)if(x.best>m){rank++;if(!next||x.best<next.best)next=x;}
+      const gap=next?next.best-m:Infinity;
+      if(!pick||gap<pick.gap||(gap===pick.gap&&rank<pick.rank))pick={t,rank,next,gap};
+    }
+    const key=pick.t.id+':'+pick.rank;
+    if(!force&&key===r.pillKey&&r.t-(r.pillT||0)<.25)return;
+    r.pillT=r.t;
+    const lead=!pick.next;
+    el.innerHTML=lead?`«${esc(pick.t.title)}» · <b>1 место</b> — ты лидер`
+      :`«${esc(pick.t.title)}» · ${pick.rank} место · до ${pick.rank-1}-го <b>${fmtM(Math.ceil(pick.gap))} м</b>`;
+    el.classList.toggle('hot',lead||pick.gap<150);
+    if(r.pillKey&&key!==r.pillKey)kick(el,'kick');
+    r.pillKey=key;el.hidden=false;
+  }
   function setRivals(){
     const n=B.net();const me=B.myId();
     best=Math.max(pref.best||0,(n.jump&&n.jump.best)||0);
@@ -1303,6 +1349,7 @@ window.FrogJumpInit=function(B){
     }
     run.seg.tokenP=boostBase>0?Promise.resolve(boostToken):startToken(false);
     elTray.classList.remove('merge');trayRender();comboRender();hudH(0);elFN.textContent='0';
+    updPill(run,Math.floor(run.maxY/UNIT),true);
     ptrs.clear();touchDir=0;acc=0;last=0;
     gen(run);
     if(!pref.hinted){pref.hinted=true;savePref();hintOn=true;hintT=0;const h=$('#fjHint');h.hidden=false;h.classList.remove('off');setTimeout(()=>{if(hintOn&&!hintT)hintT=.01;},4500);}

@@ -156,6 +156,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       <div class="tools" style="margin-top:10px">
         <input id="toTitle" maxlength="40" placeholder="Название, до 40 символов">
         <input id="toPrize" maxlength="120" placeholder="Приз, до 120 символов">
+        <input id="toChan" placeholder="Каналы для подписки: @one, @two (необязательно)">
         <select id="toDur" style="width:auto;flex:0 0 130px">
           <option value="h1">1 час</option><option value="d1" selected>1 день</option><option value="d3">3 дня</option><option value="d7">7 дней</option>
         </select>
@@ -419,7 +420,7 @@ async function tourOfficial(){
   const title=$('#toTitle').value.trim(),prize=$('#toPrize').value.trim(),dur=$('#toDur').value;
   if(title.length<3||prize.length<3)return toast('Заполни название и приз');
   if(!confirm(`Запустить официальный турнир «${title}»?`))return;
-  const r=await api({act:'tourOfficial',title,prize,dur});
+  const r=await api({act:'tourOfficial',title,prize,dur,channels:$('#toChan').value});
   toast(r.ok?r.msg:(r.error||'Ошибка'));
   if(r.ok){$('#toTitle').value='';$('#toPrize').value='';$('#toLink').textContent='Ссылка для участников: '+r.link;load('tours');}
 }

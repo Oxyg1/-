@@ -512,15 +512,69 @@ function tourCard(t, u) {
     players: Object.keys(t.players || {}).length,
     joined: !!me, myBest: me ? me.best || 0 : 0, myRank: me ? tourRank(t, u.id) : null,
     leader: top && top.best ? { name: top.name, best: top.best } : null,
+    channels: (t.channels || []).map(c => ({ username: c.username, title: c.title })),
     mine: !!(u && t.ownerId === u.id),
   };
 }
+/* Обязательная подписка. Организатор указывает до трёх публичных каналов или
+   групп; бот должен быть в них админом — иначе Telegram не отдаёт ему список
+   подписчиков и проверить никого нельзя. Подписку проверяем при входе в турнир
+   и ещё раз у победителей в конце: подписаться, выиграть и тут же отписаться
+   не выйдет — приз переходит следующему. */
+let BOT_ID = null;
+async function botId() { if (!BOT_ID) { const me = await tg('getMe'); BOT_ID = me.id; if (!CFG.botUsername) CFG.botUsername = me.username; } return BOT_ID; }
+function parseChannels(raw) {
+  const list = Array.isArray(raw) ? raw : String(raw || '').split(/[\s,;]+/);
+  const out = [];
+  for (let x of list) {
+    x = String(x || '').trim().replace(/^https?:\/\//, '').replace(/^(t|telegram)\.me\//, '').replace(/^@/, '').split(/[/?#]/)[0];
+    if (!x) continue;
+    if (!/^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(x)) return { error: `«${x}» — это не юзернейм канала. Нужно вроде @mychannel` };
+    if (!out.includes(x.toLowerCase())) out.push(x.toLowerCase());
+  }
+  if (out.length > 3) return { error: 'Не больше трёх каналов' };
+  return { list: out };
+}
+async function resolveChannels(names) {
+  const res = [];
+  const me = await botId();
+  for (const n of names) {
+    let chat;
+    try { chat = await tg('getChat', { chat_id: '@' + n }); } catch (e) { return { error: `Канал @${n} не найден` }; }
+    if (!['channel', 'supergroup'].includes(chat.type)) return { error: `@${n} — не канал и не группа` };
+    let st = '';
+    try { st = (await tg('getChatMember', { chat_id: chat.id, user_id: me })).status; } catch (e) {}
+    if (!['administrator', 'creator'].includes(st)) return { error: `Добавь @${CFG.botUsername || 'бота'} админом в @${n} — иначе он не сможет проверять подписку` };
+    res.push({ id: chat.id, username: chat.username || n, title: chat.title || n });
+  }
+  return { list: res };
+}
+const subCache = new Map();
+async function isSubscribed(ch, uid) {
+  const k = ch.id + ':' + uid, c = subCache.get(k);
+  if (c && Date.now() - c.at < 60e3) return c.ok;
+  let ok = false;
+  try {
+    const m = await tg('getChatMember', { chat_id: ch.id, user_id: +uid });
+    ok = ['creator', 'administrator', 'member'].includes(m.status) || (m.status === 'restricted' && m.is_member);
+  } catch (e) { ok = false; }
+  subCache.set(k, { ok, at: Date.now() });
+  return ok;
+}
+async function missingSubs(t, uid) {
+  if (!CFG.token || !(t.channels || []).length) return [];
+  const miss = [];
+  for (const ch of t.channels) if (!(await isSubscribed(ch, uid))) miss.push({ username: ch.username, title: ch.title });
+  return miss;
+}
+setInterval(() => { const t = Date.now(); for (const [k, c] of subCache) if (t - c.at > 600e3) subCache.delete(k); }, 600e3);
+
 function tourStart(d) {
   let id; do { id = crypto.randomBytes(4).toString('hex').slice(0, 6); } while (db.tournaments[id]);
   const now = Date.now();
   db.tournaments[id] = {
     id, title: d.title, prize: d.prize, ownerId: d.ownerId, ownerName: d.ownerName, ownerUsername: d.ownerUsername || '',
-    official: !!d.official, createdAt: now, startsAt: now, endsAt: now + d.dur, players: {}, done: false,
+    official: !!d.official, createdAt: now, startsAt: now, endsAt: now + d.dur, players: {}, done: false, channels: d.channels || [],
   };
   save();
   log('tournament', id, d.title, d.official ? '(официальный)' : 'от ' + d.ownerId);
@@ -569,12 +623,23 @@ function tourFinalize() {
     t.winners = tourBoard(t).filter(r => r.best > 0).slice(0, 3)
       .map(r => ({ id: r.id, name: r.name, best: r.best, username: (db.users[r.id] || {}).username || '' }));
     save();
-    if (!t.hidden) tourNotify(t).catch(() => {});
+    tourWinners(t).then(() => { if (!t.hidden) return tourNotify(t); }).catch(() => {});
   }
   // неоплаченные черновики живут полчаса
   for (const [pid, d] of Object.entries(db.tourDrafts)) if (!d.tid && now - d.at > 30 * 60e3) delete db.tourDrafts[pid];
 }
 setInterval(tourFinalize, 60e3);
+
+// кто отписался от канала организатора, из призёров выбывает — место следующему
+async function tourWinners(t) {
+  if (!CFG.token || !(t.channels || []).length) return;
+  const win = [];
+  for (const r of tourBoard(t).filter(x => x.best > 0).slice(0, 20)) {
+    if (!(await missingSubs(t, r.id)).length) win.push({ id: r.id, name: r.name, best: r.best, username: (db.users[r.id] || {}).username || '' });
+    if (win.length >= 3) break;
+  }
+  t.winners = win; save();
+}
 
 /* Подъём в таблице для анимации после забега: кого обогнал, откуда и куда.
    board — участники с лучшими результатами, игрок в нём со старым значением
@@ -601,7 +666,7 @@ function jumpTop(n = 20) {
     .filter(u => isRealPlayer(u) && u.jump && u.jump.best > 0)
     .sort((a, b) => b.jump.best - a.jump.best)
     .slice(0, n)
-    .map((u, i) => ({ rank: i + 1, id: u.id, name: u.name, best: u.jump.best }));
+    .map((u, i) => ({ rank: i + 1, id: u.id, name: u.name, best: u.jump.best, skin: u.jump.skin || 'original' }));
 }
 const jumpState = u => {
   const j = u ? jumpRec(u) : null;
@@ -750,7 +815,13 @@ const api = {
     }
     const t0 = Math.max(Date.now(), (j.lastT0 || 0) + 1);
     save();
-    return { ok: true, run: jumpToken(u.id, t0, base), base, jump: jumpState(u), jumpTop: jumpTop(10) };
+    // рекорды соперников по всем турнирам игрока: клиент рисует их линии на высоте
+    // рекорда и держит в пилюле ближайший результат выше
+    const tourRivals = Object.values(db.tournaments).filter(t => tourActive(t) && t.players[u.id]).map(t => ({
+      id: t.id, title: t.title,
+      rows: tourBoard(t).filter(r => r.id !== u.id && r.best > 0).slice(0, 60).map(r => ({ id: r.id, name: r.name, best: r.best })),
+    }));
+    return { ok: true, run: jumpToken(u.id, t0, base), base, jump: jumpState(u), jumpTop: jumpTop(10), tourRivals };
   },
   async tourList(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
@@ -771,11 +842,13 @@ const api = {
     if (!t || t.hidden) return { ok: false, error: 'Турнир не найден' };
     const board = tourBoard(t).filter(r => r.best > 0);
     const i = board.findIndex(r => r.id === u.id);
+    const skinOf = id => ((db.users[id] || {}).jump || {}).skin || 'original';
     return {
       ok: true, now: Date.now(), tour: tourCard(t, u), link: tourLink(t),
-      ownerUsername: t.official ? '' : (t.ownerUsername || ''),
-      board: board.slice(0, 50).map((r, k) => ({ rank: k + 1, id: r.id, name: r.name, best: r.best })),
-      me: i >= 0 ? { rank: i + 1, best: board[i].best } : null,
+      ownerUsername: t.official ? '' : (t.ownerUsername || ''), bot: CFG.botUsername || '',
+      board: board.slice(0, 50).map((r, k) => ({ rank: k + 1, id: r.id, name: r.name, best: r.best, skin: skinOf(r.id) })),
+      // своё место и сколько не хватает до следующего — главное, что хочется знать
+      me: i >= 0 ? { rank: i + 1, best: board[i].best, gap: i > 0 ? board[i - 1].best - board[i].best + 1 : 0 } : null,
       winners: t.winners || null,
     };
   },
@@ -784,7 +857,11 @@ const api = {
     const u = getUser(a);
     const t = db.tournaments[String(body.id || '')];
     if (!t || !tourActive(t)) return { ok: false, error: 'Турнир уже закончился' };
-    if (!t.players[u.id]) { t.players[u.id] = { name: u.name, best: 0, at: 0, joinedAt: Date.now() }; save(); }
+    if (!t.players[u.id]) {
+      const need = await missingSubs(t, u.id);
+      if (need.length) return { ok: false, error: 'Сначала подпишись на каналы организатора', need };
+      t.players[u.id] = { name: u.name, best: 0, at: 0, joinedAt: Date.now() }; save();
+    }
     return { ok: true, tour: tourCard(t, u) };
   },
   // черновик турнира; активируется оплатой счёта 'tour:<черновик>'
@@ -798,8 +875,13 @@ const api = {
     if (!dur) return { ok: false, error: 'Выбери срок' };
     const active = Object.values(db.tournaments).filter(t => t.ownerId === u.id && tourActive(t)).length;
     if (active >= TOUR_MAX_ACTIVE) return { ok: false, error: `Одновременно можно вести не больше ${TOUR_MAX_ACTIVE} турниров` };
+    const pc = parseChannels(body.channels);
+    if (pc.error) return { ok: false, error: pc.error };
+    let channels = pc.list.map(n => ({ id: '@' + n, username: n, title: '@' + n }));
+    // без токена (разработка) проверить нечем — принимаем как есть
+    if (CFG.token && pc.list.length) { const rc = await resolveChannels(pc.list); if (rc.error) return { ok: false, error: rc.error }; channels = rc.list; }
     const pid = crypto.randomBytes(6).toString('hex');
-    db.tourDrafts[pid] = { at: Date.now(), ownerId: u.id, ownerName: u.name, ownerUsername: u.username || '', title, prize, dur };
+    db.tourDrafts[pid] = { at: Date.now(), ownerId: u.id, ownerName: u.name, ownerUsername: u.username || '', title, prize, dur, channels };
     save();
     // без Telegram (локальная разработка) оплату не спрашиваем — сразу запускаем
     if (!CFG.token) { const t = tourActivate(pid); return { ok: true, started: t.id }; }
@@ -1151,7 +1233,10 @@ const api = {
     if (act === 'tourOfficial') {
       const title = cleanText(body.title, 40), prize = cleanText(body.prize, 120), dur = TOUR_DUR[body.dur];
       if (title.length < 3 || prize.length < 3 || !dur) return { ok: false, error: 'Заполни название, приз и срок' };
-      const t = tourStart({ title, prize, dur, official: true, ownerId: CFG.adminId || 'admin', ownerName: 'SWAMP' });
+      const pc = parseChannels(body.channels); if (pc.error) return { ok: false, error: pc.error };
+      let channels = pc.list.map(n => ({ id: '@' + n, username: n, title: '@' + n }));
+      if (CFG.token && pc.list.length) { const rc = await resolveChannels(pc.list); if (rc.error) return { ok: false, error: rc.error }; channels = rc.list; }
+      const t = tourStart({ title, prize, dur, channels, official: true, ownerId: CFG.adminId || 'admin', ownerName: 'SWAMP' });
       return { ok: true, msg: 'Официальный турнир запущен', link: tourLink(t) };
     }
     if (act === 'endlessReset') {
