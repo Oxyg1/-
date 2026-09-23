@@ -671,7 +671,6 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
   <div class="hub-shell">
     <div class="head hub-head"><h2 id="hubHead">SWAMP</h2><div class="row" style="width:auto">
       <button class="iconbtn" id="hubChat" title="Чат"><svg class="ic "><use href="#i-chat"></use></svg></button>
-      <button class="iconbtn" id="hubClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button>
     </div></div>
     <div class="hub-panes">
       <section class="hub-pane on" data-pane="games"><div class="scroll">
@@ -3025,7 +3024,6 @@ function openHub(){
 }
 const closeHub=()=>$('#hub').classList.add('hidden');
 $('#btnGames').onclick=()=>{S.ui();haptic.light();openHub();};
-$('#hubClose').onclick=()=>{S.ui();closeHub();};
 $('#hubMerge').onclick=()=>{S.ui();haptic.light();closeHub();};
 $('#hubChat').onclick=()=>{S.ui();openTg(CFG.chat);};
 $('#hubPlay').onclick=()=>{
