@@ -391,9 +391,12 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .tb-dot{position:absolute;top:2px;left:calc(50% + 8px);width:10px;height:10px;border-radius:50%;background:#ff5d7a;box-shadow:0 0 0 2px #10402d;animation:ndPulse 1.4s ease-in-out infinite}
 /* подробный экран турнира */
 .tour-scroll{display:flex;flex-direction:column;gap:10px}
-.t-count{display:flex;align-items:baseline;justify-content:space-between;gap:8px;background:rgba(0,0,0,.24);border-radius:14px;padding:9px 12px}
-.t-count span{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.75;font-weight:900}
-.t-count b{font:900 24px/1 Nunito,system-ui;color:#ffe680;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.t-hero{display:flex;gap:6px;align-items:stretch}
+.t-prize{flex:1;min-width:0;background:linear-gradient(90deg,rgba(255,210,63,.24),rgba(255,210,63,.08));border-radius:14px;padding:8px 12px;box-shadow:inset 0 0 0 1px rgba(255,210,63,.45)}
+.t-prize b{display:block;font-size:15px;line-height:1.25;word-break:break-word}
+.t-hero span{display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;opacity:.7;font-weight:900;margin-bottom:2px}
+.t-count{flex:none;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;background:rgba(0,0,0,.24);border-radius:14px;padding:8px 12px}
+.t-count b{font:900 19px/1 Nunito,system-ui;color:#ffe680;font-variant-numeric:tabular-nums;white-space:nowrap}
 .t-count.soon b{color:#ff8fa3}
 .t-podium{display:flex;align-items:flex-end;justify-content:center;gap:8px;min-height:150px;padding-top:4px}
 .t-pod{display:flex;flex-direction:column;align-items:center;gap:2px;width:31%;max-width:110px;min-width:0}
@@ -406,20 +409,22 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .t-pod.p2 .blk{height:50px;background:linear-gradient(#eef2f5,#bcc6cf)}
 .t-pod.p3 .blk{height:36px;background:linear-gradient(#e2a064,#b8702f)}
 .t-pod.empty{opacity:.35}
-.t-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.t-stats div{background:rgba(0,0,0,.24);border-radius:12px;padding:7px 4px;text-align:center;display:flex;flex-direction:column;gap:2px;min-width:0}
-.t-stats b{font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.t-stats small{font-size:10.5px;opacity:.72;line-height:1.15}
-.t-stats .hl b{color:#ffe680}
+.t-me{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.24);border-radius:14px;padding:8px 12px;box-shadow:inset 0 0 0 2px rgba(255,210,63,.45)}
+.t-me .rk{font:900 20px Nunito;color:#ffe680;min-width:26px;font-variant-numeric:tabular-nums}
+.t-me .nm{flex:1;display:flex;flex-direction:column;font-size:15px;font-weight:900}
+.t-me small{font-size:12px;opacity:.72;font-weight:800;font-variant-numeric:tabular-nums}
+.t-me .gp{display:flex;flex-direction:column;align-items:flex-end}
+.t-me .gp b{color:#ffe680;font-size:15px;font-variant-numeric:tabular-nums}
 .t-chan{background:rgba(0,0,0,.24);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
-.t-chan>b{font-size:14px}
-.t-chan>small{font-size:12px;opacity:.75}
+.t-chan>small{font-size:12.5px;opacity:.8;font-weight:800}
+.t-chan.ok{background:none;padding:0 4px}
+.t-chan.ok>small{opacity:.6}
 .t-chan .ch{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.2);border-radius:10px;padding:6px 8px}
 .t-chan .ch span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px}
 .t-chan .ch.miss{box-shadow:inset 0 0 0 1.5px #ff8fa3}
 .t-chan .ch.miss span::after{content:' — не подписан';color:#ff8fa3;font-size:12px}
-.t-info{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}
-.t-info span{opacity:.7}
+.t-info{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12px;opacity:.6;padding:4px 4px 0}
+.t-info span{opacity:.8}
 .t-info b{text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .tour-row .tag-ch{font-size:10px;font-weight:900;background:rgba(127,209,255,.2);color:#9fe0ff;border-radius:99px;padding:1px 6px;margin-left:5px;vertical-align:1px}
 #tourNew{z-index:116}
@@ -456,7 +461,13 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .tour-form input,.tour-form textarea{width:100%;border:0;border-radius:14px;background:rgba(0,0,0,.3);color:#fff;font:800 15px Nunito,system-ui;padding:11px 12px;box-shadow:inset 0 2px 0 rgba(0,0,0,.25);resize:none}
 .tour-form input:focus,.tour-form textarea:focus{outline:2px solid var(--acc);outline-offset:-2px}
 .tour-form .btn{width:100%}
-.tour-form .fine{font-size:12px;opacity:.7;line-height:1.35;text-align:center}
+.tour-form .fine{font-size:12px;opacity:.6;line-height:1.35;text-align:center}
+.tour-form label:not(:first-child){margin-top:4px}
+.tf-add{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:4px;padding:11px;border:1.5px dashed rgba(255,255,255,.25);border-radius:14px;background:none;color:#fff;font:800 14px Nunito,system-ui;opacity:.8;cursor:pointer}
+.tf-add .ic{width:16px;height:16px}
+.tf-chan{display:flex;flex-direction:column;gap:8px}
+.tf-hint{font-size:12px;opacity:.65;line-height:1.35}
+.tf-hint b{color:var(--acc);font-weight:800}
 /* рейтинг открывается поверх хаба, а карточка для чата — поверх всего */
 #top{z-index:110}
 #cardPrev{z-index:160}
@@ -483,6 +494,9 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 <symbol id="i-sound-off" viewBox="0 0 24 24">
   <path d="M4 9.3h3.2l4.4-3.9a.9.9 0 0 1 1.5.7v11.8a.9.9 0 0 1-1.5.7l-4.4-3.9H4a1.1 1.1 0 0 1-1.1-1.1v-3.2A1.1 1.1 0 0 1 4 9.3z" fill="#fff"/>
   <path d="M16.1 9.6l4.6 4.8M20.7 9.6l-4.6 4.8" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+</symbol>
+<symbol id="i-plus" viewBox="0 0 24 24">
+  <path d="M12 5v14M5 12h14" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
 </symbol>
 <symbol id="i-close" viewBox="0 0 24 24">
   <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
@@ -752,15 +766,16 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
   <div class="card" style="height:92dvh">
     <div class="head"><h2 id="tourTitle">Турнир</h2><button class="iconbtn" id="tourClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
     <div class="scroll tour-scroll">
-      <div class="tm-prize"><span>Приз</span><b id="tourPrize"></b></div>
-      <div class="t-count"><span id="tourCountL">До конца</span><b id="tourCount">—</b></div>
+      <div class="t-hero">
+        <div class="t-prize"><span>Приз</span><b id="tourPrize"></b></div>
+        <div class="t-count"><span id="tourCountL">До конца</span><b id="tourCount">—</b></div>
+      </div>
       <div class="t-podium" id="tourPodium"></div>
-      <div class="t-stats" id="tourStats"></div>
+      <div class="t-me" id="tourStats"></div>
       <div class="t-chan" id="tourChan" hidden></div>
-      <div class="t-info" id="tourInfo"></div>
       <div class="hub-label" id="tourBoardL">Таблица</div>
       <div class="tour-list" id="tourBoard"></div>
-      <div class="tm-note">Приз обещает и вручает организатор. SWAMP ведёт таблицу и в конце присылает ему победителей.</div>
+      <div class="t-info" id="tourInfo"></div>
     </div>
     <div class="row" style="gap:6px">
       <button class="btn" id="tourPlay" style="flex:2;margin:0">Участвовать</button>
@@ -2680,19 +2695,24 @@ function renderTours(){
 function openTours(tab){openHub();showPane('tours');if(tab){tourTab=tab;renderTours();}}
 function renderTourForm(){
   $('#tourNewBody').innerHTML=`<div class="tour-form">
-    <label for="tfTitle">Название<i id="tfTitleN">0/40</i></label>
-    <input id="tfTitle" maxlength="40" placeholder="Например, «Прыжок выходных»">
-    <label for="tfPrize">Приз<i id="tfPrizeN">0/120</i></label>
-    <textarea id="tfPrize" rows="2" maxlength="120" placeholder="Что получат победители: NFT, звёзды, что угодно"></textarea>
-    <label>Сколько длится</label>
+    <label for="tfTitle">Название<i id="tfTitleN"></i></label>
+    <input id="tfTitle" maxlength="40" placeholder="Прыжок выходных">
+    <label for="tfPrize">Приз<i id="tfPrizeN"></i></label>
+    <textarea id="tfPrize" rows="2" maxlength="120" placeholder="NFT, звёзды — что угодно"></textarea>
+    <label>Длительность</label>
     <div class="segbar" id="tfDur"><button data-d="h1">1 час</button><button data-d="d1" class="on">1 день</button><button data-d="d3">3 дня</button><button data-d="d7">7 дней</button></div>
-    <label for="tfChan">Подписка на каналы<i>необязательно</i></label>
-    <input id="tfChan" placeholder="@mychannel, @second — до трёх" autocapitalize="off" spellcheck="false">
-    <div class="fine" style="text-align:left">Чтобы участвовать, игрок должен быть подписан на все указанные каналы. Добавь бота <b>@${esc(CFG.botName||'swampis_bot')}</b> админом в каждый канал — без этого он не сможет проверять подписку, и турнир не создастся.</div>
+    <button class="tf-add" id="tfChanAdd"><svg class="ic"><use href="#i-plus"></use></svg>Обязательная подписка на канал</button>
+    <div class="tf-chan" id="tfChanBox" hidden>
+      <label for="tfChan">Каналы<i>до трёх</i></label>
+      <input id="tfChan" placeholder="@mychannel" autocapitalize="off" spellcheck="false">
+      <div class="tf-hint">Добавь <b>@${esc(CFG.botName||'swampis_bot')}</b> админом в канал — так бот проверит подписку</div>
+    </div>
     <button class="btn" id="tfGo">Создать за ${TOURS.fee||25} <img class="ic" src="icons/tgstar.png" alt=""></button>
-    <div class="fine">Турнир стартует сразу после оплаты. Засчитывается лучший забег за время турнира. Приз вручаешь ты сам — когда турнир закончится, бот пришлёт победителей с их @username. Кто к концу турнира отпишется от каналов, из призёров выбывает.</div>
+    <div class="fine">Старт сразу после оплаты · приз вручаешь сам — бот пришлёт победителей</div>
   </div>`;
-  const cnt=(id,max)=>{const el=$('#'+id);el.oninput=()=>{$('#'+id+'N').textContent=`${el.value.length}/${max}`;};};
+  // счётчик символов появляется, только когда до лимита недалеко
+  const cnt=(id,max)=>{const el=$('#'+id);el.oninput=()=>{const n=el.value.length;$('#'+id+'N').textContent=n>max*.7?`${n}/${max}`:'';};};
+  $('#tfChanAdd').onclick=()=>{S.ui();$('#tfChanAdd').hidden=true;$('#tfChanBox').hidden=false;$('#tfChan').focus();};
   cnt('tfTitle',40);cnt('tfPrize',120);
   $('#tfDur').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.ui();haptic.select();$('#tfDur').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));});
   $('#tfGo').onclick=createTour;
@@ -2752,28 +2772,32 @@ function renderTour(miss){
     return `<div class="${cls}">${x?`<img data-skin="${esc(x.skin)}" alt="">`:'<img alt="">'}<b>${x?esc(x.name):'—'}</b><small>${x?fmtM(x.best)+' м':'свободно'}</small><div class="blk">${i+1}</div></div>`;
   }).join('');
   $('#tourPodium').querySelectorAll('img[data-skin]').forEach(im=>thumb('frogs/'+im.dataset.skin).then(u=>im.src=u).catch(()=>{}));
-  const me=r.me;
-  $('#tourStats').innerHTML=`
-    <div><b>${t.players}</b><small>${plural(t.players,'участник','участника','участников')}</small></div>
-    <div class="hl"><b>${me?me.rank:'—'}</b><small>твоё место</small></div>
-    <div><b>${me?fmtM(me.best):'—'}</b><small>твой лучший, м</small></div>
-    <div class="hl"><b>${me?(me.rank===1?'лидер':fmtM(me.gap)):'—'}</b><small>${me&&me.rank===1?'держи место':'до следующего, м'}</small></div>`;
+  const me=r.me,st=$('#tourStats');
+  // одна строка про себя: место, лучший и сколько до следующего
+  st.hidden=!me;
+  if(me)st.innerHTML=`<span class="rk">${me.rank}</span><span class="nm">Ты<small>${fmtM(me.best)} м</small></span>`+
+    `<span class="gp">${me.rank===1?'<b>лидер</b>':`<b>${fmtM(me.gap)} м</b><small>до ${me.rank-1}-го</small>`}</span>`;
   // обязательная подписка
   const ch=t.channels||[],chBox=$('#tourChan');
   chBox.hidden=!ch.length;
   if(ch.length){
     const missing=new Set((miss||[]).map(x=>x.username));
-    chBox.innerHTML=`<b>Обязательная подписка</b><small>${t.joined?'Ты подписан — участие открыто':'Подпишись на ${ch.length>1?"все каналы":"канал"}, чтобы участвовать'}</small>`+
-      ch.map(c=>`<div class="ch${missing.has(c.username)?' miss':''}"><span>@${esc(c.username)}${c.title&&c.title!=='@'+c.username?' · '+esc(c.title):''}</span><button class="chip gold" data-ch="${esc(c.username)}">Открыть</button></div>`).join('')+
+    // участнику достаточно короткой строки; остальным — каналы с кнопками
+    chBox.classList.toggle('ok',!!t.joined);
+    chBox.innerHTML=t.joined
+      ?`<small>Подписка: ${ch.map(c=>'@'+esc(c.username)).join(', ')}</small>`
+      :`<small>Для участия подпишись на ${ch.length>1?'каналы':'канал'}</small>`+
+      ch.map(c=>`<div class="ch${missing.has(c.username)?' miss':''}"><span>@${esc(c.username)}</span><button class="chip gold" data-ch="${esc(c.username)}">Открыть</button></div>`).join('')+
       (missing.size?'<button class="btn sm" id="tourRecheck" style="width:100%;margin:2px 0 0">Я подписался — проверить</button>':'');
     chBox.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>{S.ui();openTg('https://t.me/'+b.dataset.ch);});
     const rc=$('#tourRecheck');if(rc)rc.onclick=()=>joinTour();
   }
+  // мелкий шрифт внизу: кто ведёт, сроки и правило одной строкой каждое
   $('#tourInfo').innerHTML=`
     <span>Организатор</span><b>${t.official?'SWAMP':(r.ownerUsername?'@'+esc(r.ownerUsername):esc(t.owner||'игрок'))}</b>
-    <span>Начало</span><b>${fmtDate(t.startsAt)}</b>
-    <span>Конец</span><b>${fmtDate(t.endsAt)}</b>
-    <span>Засчитывается</span><b>лучший забег за время турнира</b>`;
+    <span>Сроки</span><b>${fmtDate(t.startsAt)} — ${fmtDate(t.endsAt)}</b>
+    <span>Правило</span><b>лучший забег за время турнира</b>
+    <span>Приз</span><b>вручает организатор</b>`;
   const rest=rows.filter(x=>x.rank>3);
   let html='';
   if(!rows.length)html='<div class="demo">Пока никто не прыгал — стань первым в таблице</div>';
@@ -2783,6 +2807,7 @@ function renderTour(miss){
   if(me&&me.rank>3&&!rows.some(x=>x.id===meId))html+=`<div class="tour-sep">…</div><div class="lb noimg me"><div class="rk">${me.rank}</div><div class="nm">${esc(myName)}</div><div class="sc">${fmtM(me.best)} м</div></div>`;
   $('#tourBoard').innerHTML=html;
   $('#tourBoardL').hidden=!rest.length;
+  $('#tourBoardL').textContent=`Таблица · ${t.players} ${plural(t.players,'участник','участника','участников')}`;
   $('#tourPlay').textContent=t.done?'Турнир завершён':(t.joined?'Играть':'Участвовать');
   $('#tourPlay').disabled=!!t.done;
 }

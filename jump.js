@@ -157,6 +157,9 @@ window.FrogJumpInit=function(B){
 #fj .fj-earn{display:flex;align-items:center;justify-content:center;gap:8px;font-size:18px;font-weight:900;background:rgba(0,0,0,.22);border-radius:14px;padding:6px 14px}
 #fj .fj-earn svg{width:28px;height:28px}
 #fj .fj-note{font-size:13px;opacity:.75;text-align:center;line-height:1.3}
+#fj .fj-sopts{display:flex;flex-direction:column;gap:8px;width:100%}
+#fj .fj-sopts .btn{display:flex;flex-direction:column;align-items:center;gap:0;margin:0;padding-block:10px}
+#fj .fj-sopts small{font-size:12px;font-weight:800;opacity:.7}
 #fj .fj-sens{display:flex;justify-content:space-between;width:100%;font-size:14px;opacity:.85;margin-top:2px}
 #fj input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:26px;background:none;margin:0}
 #fj input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:99px;background:rgba(0,0,0,.35);box-shadow:inset 0 2px 0 rgba(0,0,0,.25)}
@@ -218,6 +221,16 @@ window.FrogJumpInit=function(B){
   <input type="range" id="fjSens" min="60" max="180" step="5" value="100">
   <button class="btn" id="fjResume">Продолжить</button>
   <div class="row"><button class="btn ghost sm" id="fjSnd"></button><button class="btn ghost sm" id="fjQuit">Выйти</button></div>
+</div></div>
+<div class="fj-ov" id="fjSensOv" hidden><div class="card">
+  <h2 id="fjSOT">Как слушается лягушка?</h2>
+  <div class="sub" id="fjSOS">Подстроим управление под твою руку</div>
+  <div class="fj-sopts">
+    <button class="btn ghost" data-s="1"><b>Медленно</b><small>не успеваю повернуть</small></button>
+    <button class="btn" data-s="0"><b>В самый раз</b></button>
+    <button class="btn ghost" data-s="-1"><b>Резко</b><small>заносит мимо кувшинок</small></button>
+  </div>
+  <div class="fj-note" id="fjSOV"></div>
 </div></div>
 <div class="fj-ov" id="fjBoostOv" hidden><div class="card">
   <h2>Начать с половины?</h2>
@@ -411,8 +424,40 @@ window.FrogJumpInit=function(B){
   // кажется то вязкой, то резкой. Значение по умолчанию не трогаем, но даём
   // подогнать под себя — настройка живёт вместе с выбором управления
   const sens=()=>(pref.sens||100)/100;
+  /* Онбординг чувствительности. Треть игроков довольна стандартной, треть
+     считает её вялой, треть — дёрганой. Поэтому после первых прыжков спрашиваем
+     «как слушается?» и подкручиваем, пока не скажут «в самый раз»: шаг каждый
+     раз меньше, чтобы быстро сойтись. Спрашиваем один раз в жизни, а тех, кто
+     уже сам двигал ползунок, не трогаем */
+  const SENS_STEPS=[30,20,10];
+  function sensPending(){return !pref.sensDone&&((pref.sens||100)===100||pref.sensTry>0);}
+  function askSens(){
+    const r=run;if(!r||!r.alive||paused)return;
+    paused=true;ptrs.clear();touchDir=0;
+    const n=pref.sensTry||0;
+    $('#fjSOT').textContent=n?'А теперь?':'Как слушается лягушка?';
+    $('#fjSOS').textContent=n?`Чувствительность ${pref.sens}%`:'Подстроим управление под твою руку';
+    $('#fjSOV').textContent='';
+    $('#fjSensOv').hidden=false;SND.card();
+  }
+  function sensAnswer(d){
+    const r=run;SND.ui();B.haptic.select();
+    $('#fjSensOv').hidden=true;paused=false;last=0;
+    const n=pref.sensTry||0;
+    if(!d||n>=SENS_STEPS.length){
+      pref.sensDone=true;savePref();
+      banner(d?`Чувствительность ${pref.sens}%`:'Готово','поменять можно в паузе',true);
+      return;
+    }
+    pref.sens=Math.max(60,Math.min(180,(pref.sens||100)+d*SENS_STEPS[n]));
+    pref.sensTry=n+1;savePref();
+    $('#fjSens').value=pref.sens;$('#fjSensV').textContent=pref.sens+'%';
+    banner(`Чувствительность ${pref.sens}%`,'попрыгай немного — спросим ещё раз',true);
+    if(r)r.sensAskAt=r.jumps+7;
+  }
+  root.querySelectorAll('#fjSensOv [data-s]').forEach(b=>b.onclick=()=>sensAnswer(+b.dataset.s));
   $('#fjSens').oninput=e=>{
-    pref.sens=Math.max(60,Math.min(180,+e.target.value||100));
+    pref.sens=Math.max(60,Math.min(180,+e.target.value||100));pref.sensDone=true;
     $('#fjSensV').textContent=pref.sens+'%';
   };
   $('#fjSens').onchange=()=>{savePref();B.haptic.select();};
@@ -539,6 +584,7 @@ window.FrogJumpInit=function(B){
     const perfect=Math.abs(dx)<p.w*.16;
     r.perfect=perfect?r.perfect+1:0;
     r.jumps++;if(onSpring)r.springs++;if(r.perfect>r.perfMax)r.perfMax=r.perfect;
+    if(r.jumps===r.sensAskAt)askSens();
     r.sq=onSpring?-.4:-.3;r.sqV=0;
     p.dipV=-(onSpring?160:110);
     splash(r.fx,p.y,onSpring?12:7);
@@ -1371,6 +1417,7 @@ window.FrogJumpInit=function(B){
   };
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&open)pause();});
   function onBack(){
+    if(!$('#fjSensOv').hidden){sensAnswer(0);return;}
     if(!$('#fjClimb').hidden){$('#fjCOk').onclick();return;}
     if(!$('#fjFin').hidden){close();return;}
     if(!$('#fjOver').hidden){finish();return;}
@@ -1402,10 +1449,11 @@ window.FrogJumpInit=function(B){
   /* ---------- открыть / закрыть ---------- */
   function start(boostBase){
     $('#fjOver').hidden=true;$('#fjPauseOv').hidden=true;$('#fjBoostOv').hidden=true;paused=false;
-    $('#fjFin').hidden=true;$('#fjClimb').hidden=true;climbQueue=[];afterClimb=null;
+    $('#fjFin').hidden=true;$('#fjClimb').hidden=true;$('#fjSensOv').hidden=true;climbQueue=[];afterClimb=null;
     bestBefore=Math.max(pref.best||0,((B.net().jump||{}).best)||0);
     setRivals();
     run=newRun();
+    if(sensPending())run.sensAskAt=8;
     if(boostBase>0){
       // разгон: поле, камера и счётчик высоты сразу на половине рекорда
       const y=boostBase*UNIT;
