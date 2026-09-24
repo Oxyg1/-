@@ -821,7 +821,9 @@ const api = {
       id: t.id, title: t.title,
       rows: tourBoard(t).filter(r => r.id !== u.id && r.best > 0).slice(0, 60).map(r => ({ id: r.id, name: r.name, best: r.best })),
     }));
-    return { ok: true, run: jumpToken(u.id, t0, base), base, jump: jumpState(u), jumpTop: jumpTop(10), tourRivals };
+    // все соперники общего рейтинга: линия каждого висит на высоте его рекорда
+    const allRivals = jumpBoard().filter(r => r.id !== u.id).sort((a, b) => b.best - a.best).slice(0, 150);
+    return { ok: true, run: jumpToken(u.id, t0, base), base, jump: jumpState(u), jumpTop: jumpTop(10), tourRivals, allRivals };
   },
   async tourList(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };

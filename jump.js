@@ -741,7 +741,8 @@ window.FrogJumpInit=function(B){
         for(let i=0;i<40;i++)P({k:'petal',x:rnd(0,W),y:r.camY+VH+10,vx:rnd(-50,50),vy:-rnd(60,220),g:120,life:rnd(1.2,2),s:rnd(3,6),c:pick(['#ffd23f','#ff7eb6','#7fd1ff','#9dffb0','#fff']),r:rnd(0,6),vr:rnd(-8,8)});
       }
       for(const rv of rivals){
-        if(!r.passed.has(rv.id)&&m>rv.best){r.passed.add(rv.id);txt(r.fx,r.fy+FROG*1.2,`Обогнал: ${rv.name}`,{c:'#9dffb0',s:17,life:1.2});SND.pass();}
+        if(!r.passed.has(rv.id)&&m>rv.best&&rv.best>(r.seg.base||0)){r.passed.add(rv.id);
+          if(r.t-(r.passT||0)>.4){r.passT=r.t;txt(r.fx,r.fy+FROG*1.2,`Обогнал: ${rv.name}`,{c:'#9dffb0',s:17,life:1.2});SND.pass();}}
       }
       // обгоны в турнирах — не чаще раза в 0.4 с, иначе на старте их сыплет пачкой
       for(const t of tourR)for(const x of t.rows){
@@ -971,18 +972,18 @@ window.FrogJumpInit=function(B){
     const lines=[],seen=new Set();
     if(best>0)lines.push({m:best,label:`Твой рекорд · ${fmtM(best)} м`,me:true});
     for(const rv of rivals){seen.add(rv.id);lines.push({m:rv.best,label:`${rv.name} · ${fmtM(rv.best)} м`,me:false});}
-    // соперники по турнирам — только те, чей рекорд сейчас на экране
-    const lo=(r.camY-20)/UNIT,hi=(r.camY+VH+20)/UNIT;
-    for(const t of tourR)for(const x of t.rows){if(x.best<lo||x.best>hi||seen.has(x.id))continue;seen.add(x.id);lines.push({m:x.best,label:`${x.name} · ${fmtM(x.best)} м`,me:false});}
+    // все соперники по турнирам — каждый на высоте своего рекорда
+    for(const t of tourR)for(const x of t.rows){if(seen.has(x.id))continue;seen.add(x.id);lines.push({m:x.best,label:`${x.name} · ${fmtM(x.best)} м`,me:false});}
     lines.sort((a,b)=>a.m-b.m);
     cx.font='800 11px Nunito,"Segoe UI",sans-serif';cx.textBaseline='middle';
     let lastY=1e9;
     for(const l of lines){
       const y=Y(l.m*UNIT);if(y<-20||y>VH+20)continue;
-      if(!l.me&&Math.abs(y-lastY)<20)continue;   // слипшиеся подписи не рисуем друг на друге
-      lastY=y;
       cx.setLineDash([7,6]);cx.strokeStyle=l.me?'rgba(255,210,63,.95)':'rgba(255,255,255,.75)';cx.lineWidth=1.6;
       cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke();cx.setLineDash([]);
+      // линия есть у всех, а слипшиеся подписи друг на друге не рисуем
+      if(!l.me&&Math.abs(y-lastY)<20)continue;
+      lastY=y;
       const tw=cx.measureText(l.label).width+16,lx=l.me?8:W-8-tw;
       cx.fillStyle='rgba(8,30,22,.78)';cx.beginPath();cx.roundRect?cx.roundRect(lx,y-19,tw,16,8):cx.rect(lx,y-19,tw,16);cx.fill();
       cx.fillStyle=l.me?'#ffd23f':'#fff';cx.textAlign='left';cx.fillText(l.label,lx+8,y-11);
@@ -1074,6 +1075,7 @@ window.FrogJumpInit=function(B){
             if(res.jumpTop)B.applyJump({jumpTop:res.jumpTop,jump:res.jump});
             if(res.tourRivals&&!cont){tourR=res.tourRivals;if(run)updPill(run,Math.floor(run.maxY/UNIT),true);}
             if(!cont)setRivals();
+            if(res.allRivals&&!cont)rivals=res.allRivals;
             lastBase=res.base||0;
             return res.run;
           }
@@ -1117,7 +1119,7 @@ window.FrogJumpInit=function(B){
     best=Math.max(pref.best||0,(n.jump&&n.jump.best)||0);
     if(run&&run.t<5)bestBefore=Math.max(bestBefore,best);
     // линии соперников: ближайшие сверху, не больше трёх — чтобы было за кем тянуться
-    rivals=(n.jumpTop||[]).filter(t=>t.id!==me&&t.best>0).sort((a,b)=>a.best-b.best).filter(t=>t.best>best*.6).slice(-3);
+    rivals=(n.jumpTop||[]).filter(t=>t.id!==me&&t.best>0);
   }
   async function submitSeg(r){
     const seg=r.seg;
@@ -1188,7 +1190,7 @@ window.FrogJumpInit=function(B){
      обогнанного — нота выше предыдущей, на месте — фанфары и конфетти */
   const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ROW=54;
-  let climbQueue=[];
+  let climbQueue=[],afterClimb=null;
   function climbWord(n){const a=n%10,b=n%100;return a===1&&b!==11?'игрока':(a>=2&&a<=4&&(b<12||b>14))?'игроков':'игроков';}
   function showClimb(list){
     if(!list||!list.length)return;
@@ -1256,6 +1258,7 @@ window.FrogJumpInit=function(B){
     SND.ui();
     if(climbQueue.length){playClimb(climbQueue.shift(),climbQueue.length+1);return;}
     $('#fjClimb').hidden=true;
+    if(afterClimb){const f=afterClimb;afterClimb=null;f();}
   };
   function countUp(el,to,dur,ticks,suffix,from){
     // в свёрнутом приложении кадры не идут — тогда просто показываем итог
@@ -1325,20 +1328,24 @@ window.FrogJumpInit=function(B){
     if(r.reviveN)st.push(['Продолжений',String(r.reviveN)]);
     if(r.insUsed)st.push(['Страховка','сработала']);
     $('#fjFinStats').innerHTML=st.map(([a,b])=>`<div><span>${a}</span><b>${b}</b></div>`).join('');
-    $('#fjFinNote').textContent='';$('#fjFinTours').hidden=true;
+    $('#fjFinNote').textContent='';
+    try{await overRes;}catch(e){}
+    if(run!==r)return;
+    if(r.climbs.length){
+      // сначала подъём в рейтингах (турниры, общий — последним), итоги — после
+      afterClimb=()=>showFin(r);
+      showClimb(r.climbs.slice().sort((a,b)=>(a.kind==='global')-(b.kind==='global')));
+    }else showFin(r);
+  }
+  function showFin(r){
+    if(run!==r)return;
+    const h=Math.floor(r.maxY/UNIT);
     $('#fjFin').hidden=false;SND.card();
     countUp($('#fjFinH'),h,.8,true);
-    try{await overRes;}catch(e){}
-    if(run!==r||$('#fjFin').hidden)return;
     const tl=r.tours||[],box=$('#fjFinTours');
     box.hidden=!tl.length;
     box.innerHTML=tl.map(t=>`<div><span>${esc(t.title)}</span><b>${t.rank?t.rank+' из '+t.players:'—'}</b></div>`).join('');
     if(r.rank)$('#fjFinNote').textContent=`Место в общем рейтинге: ${r.rank}`;
-    if(r.climbs.length){
-      // сначала турниры, общий рейтинг — последним
-      const list=r.climbs.slice().sort((a,b)=>(a.kind==='global')-(b.kind==='global'));
-      setTimeout(()=>{if(run===r&&!$('#fjFin').hidden)showClimb(list);},450);
-    }
   }
   $('#fjExit').onclick=()=>{SND.ui();finish();};
   $('#fjFinExit').onclick=()=>{SND.ui();close();};
@@ -1395,7 +1402,7 @@ window.FrogJumpInit=function(B){
   /* ---------- открыть / закрыть ---------- */
   function start(boostBase){
     $('#fjOver').hidden=true;$('#fjPauseOv').hidden=true;$('#fjBoostOv').hidden=true;paused=false;
-    $('#fjFin').hidden=true;$('#fjClimb').hidden=true;climbQueue=[];
+    $('#fjFin').hidden=true;$('#fjClimb').hidden=true;climbQueue=[];afterClimb=null;
     bestBefore=Math.max(pref.best||0,((B.net().jump||{}).best)||0);
     setRivals();
     run=newRun();
