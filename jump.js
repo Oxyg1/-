@@ -1110,9 +1110,9 @@ window.FrogJumpInit=function(B){
 
   /* ---------- сервер ---------- */
   const hasApi=()=>B.hasApi();
-  function startToken(cont,insurance,boost){
+  function startToken(cont,insurance,boost,tries){
     if(!hasApi())return Promise.resolve(null);
-    const tries=(cont&&!insurance)||boost?10:2;   // оплата доходит до бота с задержкой
+    tries=tries||((cont&&!insurance)||boost?10:2);   // оплата доходит до бота с задержкой
     return (async()=>{
       for(let i=0;i<tries;i++){
         try{
@@ -1482,20 +1482,28 @@ window.FrogJumpInit=function(B){
     $('#fjBoostSub').innerHTML=`Забег начнётся сразу с ${fmtM(half)} м — это половина твоего рекорда ${fmtM(j.best||0)} м.<br>Мошки, рекорд и место в рейтинге считаются как обычно.`;
     $('#fjBoostOv').hidden=false;SND.card();
   }
+  /* Разгон забираем только у сервера. Сразу после оплаты локальная копия ещё
+     не знает о покупке (Telegram сообщает боту о платеже с задержкой), поэтому
+     не смотрим в неё, а ждём, пока сервер выдаст забег с половины рекорда.
+     Если платёж так и не дошёл — стартуем обычно, разгон сработает позже */
+  async function boostStart(justPaid){
+    const go=$('#fjBoostGo');
+    $('#fjBoostOv').hidden=false;go.disabled=true;go.textContent='Разгоняемся…';$('#fjBoostSkip').hidden=true;
+    boostToken=await startToken(false,false,true,justPaid?20:10);
+    go.disabled=false;go.innerHTML=`Разогнаться · 20 <img class="ic" src="icons/tgstar.png" alt="">`;$('#fjBoostSkip').hidden=false;
+    $('#fjBoostOv').hidden=true;
+    if(boostToken){start(lastBase);return true;}
+    if(justPaid&&B.toast)B.toast('Оплата ещё идёт — разгон сработает в следующем забеге',4000);
+    return false;
+  }
   async function beginRun(){
     const j=B.net().jump||{};
-    if(j.boost>0){   // разгон уже оплачен — забираем и стартуем выше
-      $('#fjBoostOv').hidden=false;$('#fjBoostGo').disabled=true;$('#fjBoostGo').textContent='Разгоняемся…';
-      boostToken=await startToken(false,false,true);
-      $('#fjBoostGo').disabled=false;$('#fjBoostGo').innerHTML=`Разогнаться · 20 <img class="ic" src="icons/tgstar.png" alt="">`;
-      $('#fjBoostOv').hidden=true;
-      if(boostToken){start(lastBase);return;}
-    }
+    if(j.boost>0&&await boostStart(false))return;   // разгон уже оплачен — стартуем выше
     if(!boostOffered&&boostReady()&&hasApi()){boostOffered=true;offerBoost();run=null;render0();return;}
     start();
   }
   function render0(){cx.setTransform(dpr,0,0,dpr,0,0);cx.fillStyle='#0c3a2a';cx.fillRect(0,0,cssW,cssH);}
-  $('#fjBoostGo').onclick=()=>{SND.ui();B.buyJumpItem('jumpBoost',async()=>{await beginRun();});};
+  $('#fjBoostGo').onclick=()=>{SND.ui();B.buyJumpItem('jumpBoost',async()=>{if(!(await boostStart(true)))start();});};
   $('#fjBoostSkip').onclick=()=>{SND.ui();$('#fjBoostOv').hidden=true;start();};
   async function openGame(){
     if(open)return;
