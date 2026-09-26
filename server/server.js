@@ -1302,8 +1302,26 @@ const api = {
       const list = Object.values(db.tournaments).sort((a, b) => b.createdAt - a.createdAt).slice(0, 200)
         .map(t => ({ id: t.id, title: t.title, prize: t.prize, owner: t.ownerName, ownerId: t.ownerId, ownerUsername: t.ownerUsername,
           official: !!t.official, hidden: !!t.hidden, done: !!t.done, endsAt: t.endsAt, createdAt: t.createdAt,
-          players: Object.keys(t.players || {}).length, winners: t.winners || null }));
+          players: Object.keys(t.players || {}).length, winners: t.winners || null, places: placesOf(t), startsAt: t.startsAt }));
       return { ok: true, tours: list };
+    }
+    // правка идущего турнира: название, приз, число призовых мест, время окончания
+    if (act === 'tourEdit') {
+      const t = db.tournaments[String(body.tid || '')]; if (!t) return { ok: false, error: 'Нет такого турнира' };
+      if (t.done) return { ok: false, error: 'Турнир уже завершён — итоги не меняем' };
+      const ch = [];
+      if (body.title !== undefined) { const v = cleanText(body.title, 40); if (v.length < 3) return { ok: false, error: 'Название — хотя бы 3 символа' }; if (v !== t.title) { t.title = v; ch.push('название'); } }
+      if (body.prize !== undefined) { const v = cleanText(body.prize, 120); if (v.length < 3) return { ok: false, error: 'Приз — хотя бы 3 символа' }; if (v !== t.prize) { t.prize = v; ch.push('приз'); } }
+      if (body.places !== undefined) { const v = placesOf({ places: body.places }); if (v !== placesOf(t)) { t.places = v; ch.push('мест: ' + v); } }
+      if (body.endsAt !== undefined) {
+        const v = Math.round(+body.endsAt);
+        if (!(v > Date.now() + 60e3)) return { ok: false, error: 'Конец должен быть в будущем' };
+        if (v - t.startsAt > TOUR_MAX_DUR) return { ok: false, error: 'Турнир не может идти дольше 14 дней' };
+        if (v !== t.endsAt) { t.endsAt = v; ch.push('конец'); }
+      }
+      if (!ch.length) return { ok: true, msg: 'Ничего не изменилось' };
+      save(); log('tour edit', t.id, ch.join(', '));
+      return { ok: true, msg: 'Сохранено: ' + ch.join(', ') };
     }
     if (act === 'tourHide') {
       const t = db.tournaments[String(body.tid || '')]; if (!t) return { ok: false, error: 'Нет такого турнира' };

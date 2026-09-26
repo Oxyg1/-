@@ -398,10 +398,12 @@ async function bcPoll(silent){
 }
 
 /* ---------- турниры ---------- */
+// время для <input type=datetime-local> — в часовом поясе браузера
+function toLocalInput(ms){const d=new Date(ms),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
 function renderTours(list){
   const now=Date.now();
   const st=t=>t.hidden?'<span class="tag test">скрыт</span>':t.done?'<span class="tag">завершён</span>':t.endsAt>now?'<span class="tag sub">идёт</span>':'<span class="tag">завершается</span>';
-  const win=t=>(t.winners||[]).map((w,i)=>`${i+1}. ${esc(w.name)}${w.username?' @'+esc(w.username):''} — ${w.best} м`).join('<br>');
+  const win0=t=>(t.winners||[]).map((w,i)=>`${i+1}. ${esc(w.name)}${w.username?' @'+esc(w.username):''} — ${w.best} м`).join('<br>');
   $('#toursTbl').innerHTML=`<tr><th>Турнир</th><th>Приз</th><th>Организатор</th><th>Участн.</th><th>До</th><th>Итог</th><th></th></tr>`+
     (list.map(t=>`<tr data-tid="${esc(t.id)}">
       <td>${t.official?'<span class="tag hold">SWAMP</span> ':''}${esc(t.title)} ${st(t)}<div class="muted" style="font-size:11.5px">${esc(t.id)}</div></td>
@@ -409,10 +411,26 @@ function renderTours(list){
       <td>${esc(t.owner||'')}${t.ownerUsername?' <span class="muted">@'+esc(t.ownerUsername)+'</span>':''}</td>
       <td class="num">${t.players}</td>
       <td class="num muted">${new Date(t.endsAt).toLocaleString('ru-RU')}</td>
-      <td style="font-size:12.5px">${win(t)||'<span class="muted">—</span>'}</td>
-      <td><button class="${t.hidden?'ghost':'bad'} sm" data-act="hide">${t.hidden?'Вернуть':'Скрыть'}</button></td>
-    </tr>`).join('')||'<tr><td class="muted">Турниров пока нет</td></tr>');
+      <td style="font-size:12.5px">${win0(t)||`<span class="muted">мест: ${t.places||3}</span>`}</td>
+      <td style="white-space:nowrap">${t.done?'':'<button class="ghost sm" data-act="edit">Изменить</button> '}<button class="${t.hidden?'ghost':'bad'} sm" data-act="hide">${t.hidden?'Вернуть':'Скрыть'}</button></td>
+    </tr>
+    ${t.done?'':`<tr class="tedit" data-for="${esc(t.id)}" hidden><td colspan="7"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <label style="flex:1 1 180px">Название<input data-f="title" maxlength="40" value="${esc(t.title)}"></label>
+      <label style="flex:2 1 240px">Приз<input data-f="prize" maxlength="120" value="${esc(t.prize)}"></label>
+      <label style="flex:0 0 120px">Призовых мест<select data-f="places">${[...Array(10)].map((_,i)=>`<option value="${i+1}"${i+1===(t.places||3)?' selected':''}>${i+1}</option>`).join('')}</select></label>
+      <label style="flex:0 0 210px">Конец<input data-f="endsAt" type="datetime-local" value="${toLocalInput(t.endsAt)}"></label>
+      <button class="sm" data-act="save">Сохранить</button></div></td></tr>`}`).join('')||'<tr><td class="muted">Турниров пока нет</td></tr>');
   $('#toursTbl').querySelectorAll('tr[data-tid]').forEach(tr=>{
+    const ed=tr.querySelector('[data-act=edit]'),box=$('#toursTbl').querySelector(`tr.tedit[data-for="${tr.dataset.tid}"]`);
+    if(ed&&box){
+      ed.onclick=()=>{box.hidden=!box.hidden;};
+      box.querySelector('[data-act=save]').onclick=async()=>{
+        const f=k=>box.querySelector(`[data-f=${k}]`).value;
+        const endsAt=new Date(f('endsAt')).getTime();
+        const r=await api({act:'tourEdit',tid:tr.dataset.tid,title:f('title'),prize:f('prize'),places:+f('places'),endsAt});
+        toast(r.ok?r.msg:(r.error||'Ошибка'));if(r.ok)load('tours');
+      };
+    }
     const b=tr.querySelector('[data-act=hide]');
     if(b)b.onclick=async()=>{const r=await api({act:'tourHide',tid:tr.dataset.tid});toast(r.ok?r.msg:(r.error||'Ошибка'));load('tours');};
   });
