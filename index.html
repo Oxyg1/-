@@ -465,6 +465,14 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .tour-form .btn{width:100%}
 .tour-form .fine{font-size:12px;opacity:.6;line-height:1.35;text-align:center}
 .tour-form label:not(:first-child){margin-top:4px}
+.tf-dur button{font-size:13px;padding-left:2px;padding-right:2px}
+.tf-own{display:flex;gap:8px;width:100%}
+.tf-step{flex:1;min-width:0;display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.28);border-radius:14px;padding:5px 6px 5px 10px}
+.tf-step span{flex:1;min-width:0;font-size:13px;opacity:.75}
+.tf-step b{min-width:22px;text-align:center;font-size:18px;color:#ffe680;font-variant-numeric:tabular-nums}
+.tf-step button{flex:none;width:30px;height:30px;border:0;border-radius:10px;background:rgba(255,255,255,.1);color:#fff;font:900 20px Nunito,system-ui;line-height:1;cursor:pointer}
+.tf-step button:active{transform:scale(.92)}
+.tf-end{font-size:12.5px;opacity:.65;margin-top:-2px}
 .tf-add{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:4px;padding:11px;border:1.5px dashed rgba(255,255,255,.25);border-radius:14px;background:none;color:#fff;font:800 14px Nunito,system-ui;opacity:.8;cursor:pointer}
 .tf-add .ic{width:16px;height:16px}
 .tf-chan{display:flex;flex-direction:column;gap:8px}
@@ -2702,7 +2710,12 @@ function renderTourForm(){
     <label for="tfPrize">Приз<i id="tfPrizeN"></i></label>
     <textarea id="tfPrize" rows="2" maxlength="120" placeholder="NFT, звёзды — что угодно"></textarea>
     <label>Длительность</label>
-    <div class="segbar" id="tfDur"><button data-d="h1">1 час</button><button data-d="d1" class="on">1 день</button><button data-d="d3">3 дня</button><button data-d="d7">7 дней</button></div>
+    <div class="segbar tf-dur" id="tfDur"><button data-d="h1">1 час</button><button data-d="d1" class="on">1 день</button><button data-d="d3">3 дня</button><button data-d="d7">7 дней</button><button data-d="own">Своё</button></div>
+    <div class="tf-own" id="tfOwn" hidden>
+      <div class="tf-step"><span>Дни</span><button data-s="d" data-v="-1">−</button><b id="tfDays">2</b><button data-s="d" data-v="1">+</button></div>
+      <div class="tf-step"><span>Часы</span><button data-s="h" data-v="-1">−</button><b id="tfHours">0</b><button data-s="h" data-v="1">+</button></div>
+    </div>
+    <div class="tf-end" id="tfEnd"></div>
     <button class="tf-add" id="tfChanAdd"><svg class="ic"><use href="#i-plus"></use></svg>Обязательная подписка на канал</button>
     <div class="tf-chan" id="tfChanBox" hidden>
       <label for="tfChan">Каналы<i>до трёх</i></label>
@@ -2716,13 +2729,29 @@ function renderTourForm(){
   const cnt=(id,max)=>{const el=$('#'+id);el.oninput=()=>{const n=el.value.length;$('#'+id+'N').textContent=n>max*.7?`${n}/${max}`:'';};};
   $('#tfChanAdd').onclick=()=>{S.ui();$('#tfChanAdd').hidden=true;$('#tfChanBox').hidden=false;$('#tfChan').focus();};
   cnt('tfTitle',40);cnt('tfPrize',120);
-  $('#tfDur').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.ui();haptic.select();$('#tfDur').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));});
+  // срок: готовый вариант или свой — дни и часы, от часа до двух недель
+  const PRE={h1:1,d1:24,d3:72,d7:168};let own={d:2,h:0};
+  const durHours=()=>{const k=($('#tfDur').querySelector('.on')||{}).dataset?.d||'d1';return k==='own'?own.d*24+own.h:PRE[k];};
+  const updEnd=()=>{
+    $('#tfDays').textContent=own.d;$('#tfHours').textContent=own.h;
+    const h=durHours(),end=new Date(tnow()+h*3600e3);
+    $('#tfEnd').textContent=`Закончится ${end.toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'})}, ${end.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
+  };
+  $('#tfDur').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.ui();haptic.select();$('#tfDur').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));$('#tfOwn').hidden=b.dataset.d!=='own';updEnd();});
+  $('#tfOwn').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{
+    S.ui();haptic.select();
+    let d=own.d,h=own.h;if(b.dataset.s==='d')d+=+b.dataset.v;else h+=+b.dataset.v;
+    if(h>23){h=0;d++;}if(h<0){h=d>0?23:0;if(d>0)d--;}
+    d=Math.max(0,Math.min(14,d));if(d===14)h=0;if(d===0&&h<1)h=1;
+    own={d,h};updEnd();});
+  $('#tfDur').dataset.hours='';$('#tfDur').getHours=durHours;
+  updEnd();
   $('#tfGo').onclick=createTour;
 }
 function openTourNew(){renderTourForm();$('#tourNew').classList.remove('hidden');S.ui();haptic.light();}
 async function createTour(){
   const title=$('#tfTitle').value.trim(),prize=$('#tfPrize').value.trim(),channels=$('#tfChan').value.trim();
-  const dur=($('#tfDur').querySelector('.on')||{}).dataset?.d||'d1';
+  const k=($('#tfDur').querySelector('.on')||{}).dataset?.d||'d1',dur=k==='own'?$('#tfDur').getHours():k;
   if(title.length<3){toast('Название — хотя бы 3 символа');$('#tfTitle').focus();return;}
   if(prize.length<3){toast('Опиши приз');$('#tfPrize').focus();return;}
   S.ui();

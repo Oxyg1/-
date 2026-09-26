@@ -491,6 +491,14 @@ function skinsFor(u) {
    турниры, где игрок участвует. */
 const TOUR_FEE = 25;
 const TOUR_DUR = { h1: 3600e3, d1: DAY, d3: 3 * DAY, d7: 7 * DAY };
+const TOUR_MAX_DUR = 14 * DAY;
+// срок турнира: готовый вариант или своё число часов — от часа до двух недель
+function tourDur(v) {
+  if (TOUR_DUR[v]) return TOUR_DUR[v];
+  const h = Math.round(Number(v));
+  if (!Number.isFinite(h) || h < 1 || h * 3600e3 > TOUR_MAX_DUR) return 0;
+  return h * 3600e3;
+}
 const TOUR_MAX_ACTIVE = 3;
 // в названии и призе — только текст: без разметки, управляющих символов и переносов
 const cleanText = (s, max) => String(s || '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -871,10 +879,10 @@ const api = {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     const u = getUser(a);
     if (rateLimited('tourc:' + u.id, 10, 3600e3)) return { ok: false, error: 'Слишком часто, попробуй через час' };
-    const title = cleanText(body.title, 40), prize = cleanText(body.prize, 120), dur = TOUR_DUR[body.dur];
+    const title = cleanText(body.title, 40), prize = cleanText(body.prize, 120), dur = tourDur(body.dur);
     if (title.length < 3) return { ok: false, error: 'Название — хотя бы 3 символа' };
     if (prize.length < 3) return { ok: false, error: 'Опиши приз — хотя бы 3 символа' };
-    if (!dur) return { ok: false, error: 'Выбери срок' };
+    if (!dur) return { ok: false, error: 'Срок — от 1 часа до 14 дней' };
     const active = Object.values(db.tournaments).filter(t => t.ownerId === u.id && tourActive(t)).length;
     if (active >= TOUR_MAX_ACTIVE) return { ok: false, error: `Одновременно можно вести не больше ${TOUR_MAX_ACTIVE} турниров` };
     const pc = parseChannels(body.channels);
@@ -1233,7 +1241,7 @@ const api = {
       return { ok: true, msg: t.hidden ? 'Турнир скрыт' : 'Турнир снова виден' };
     }
     if (act === 'tourOfficial') {
-      const title = cleanText(body.title, 40), prize = cleanText(body.prize, 120), dur = TOUR_DUR[body.dur];
+      const title = cleanText(body.title, 40), prize = cleanText(body.prize, 120), dur = tourDur(body.dur);
       if (title.length < 3 || prize.length < 3 || !dur) return { ok: false, error: 'Заполни название, приз и срок' };
       const pc = parseChannels(body.channels); if (pc.error) return { ok: false, error: pc.error };
       let channels = pc.list.map(n => ({ id: '@' + n, username: n, title: '@' + n }));
