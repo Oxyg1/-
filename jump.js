@@ -1146,7 +1146,7 @@ window.FrogJumpInit=function(B){
     for(const t of tourR){
       let rank=1,next=null;
       for(const x of t.rows)if(x.best>m){rank++;if(!next||x.best<next.best)next=x;}
-      if(rank>4)continue;
+      if(rank>(t.places||3)+1)continue;
       const gap=next?next.best-m:Infinity;
       if(!pick||rank<pick.rank||(rank===pick.rank&&gap<pick.gap))pick={t,rank,next,gap};
     }

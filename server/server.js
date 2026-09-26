@@ -492,6 +492,7 @@ function skinsFor(u) {
 const TOUR_FEE = 25;
 const TOUR_DUR = { h1: 3600e3, d1: DAY, d3: 3 * DAY, d7: 7 * DAY };
 const TOUR_MAX_DUR = 14 * DAY;
+const placesOf = t => Math.max(1, Math.min(10, Math.round(+(t && t.places) || 3)));
 // срок турнира: готовый вариант или своё число часов — от часа до двух недель
 function tourDur(v) {
   if (TOUR_DUR[v]) return TOUR_DUR[v];
@@ -521,7 +522,7 @@ function tourCard(t, u) {
     joined: !!me, myBest: me ? me.best || 0 : 0, myRank: me ? tourRank(t, u.id) : null,
     leader: top && top.best ? { name: top.name, best: top.best } : null,
     channels: (t.channels || []).map(c => ({ username: c.username, title: c.title })),
-    mine: !!(u && t.ownerId === u.id),
+    mine: !!(u && t.ownerId === u.id), places: placesOf(t),
   };
 }
 /* Обязательная подписка. Организатор указывает до трёх публичных каналов или
@@ -583,6 +584,7 @@ function tourStart(d) {
   db.tournaments[id] = {
     id, title: d.title, prize: d.prize, ownerId: d.ownerId, ownerName: d.ownerName, ownerUsername: d.ownerUsername || '',
     official: !!d.official, createdAt: now, startsAt: now, endsAt: now + d.dur, players: {}, done: false, channels: d.channels || [],
+    places: placesOf(d),
   };
   save();
   log('tournament', id, d.title, d.official ? '(официальный)' : 'от ' + d.ownerId);
@@ -628,7 +630,7 @@ function tourFinalize() {
   for (const t of Object.values(db.tournaments)) {
     if (t.done || t.endsAt > now) continue;
     t.done = true;
-    t.winners = tourBoard(t).filter(r => r.best > 0).slice(0, 3)
+    t.winners = tourBoard(t).filter(r => r.best > 0).slice(0, placesOf(t))
       .map(r => ({ id: r.id, name: r.name, best: r.best, username: (db.users[r.id] || {}).username || '' }));
     save();
     tourWinners(t).then(() => { if (!t.hidden) return tourNotify(t); }).catch(() => {});
@@ -642,9 +644,10 @@ setInterval(tourFinalize, 60e3);
 async function tourWinners(t) {
   if (!CFG.token || !(t.channels || []).length) return;
   const win = [];
-  for (const r of tourBoard(t).filter(x => x.best > 0).slice(0, 20)) {
+  const need = placesOf(t);
+  for (const r of tourBoard(t).filter(x => x.best > 0).slice(0, need * 4 + 10)) {
     if (!(await missingSubs(t, r.id)).length) win.push({ id: r.id, name: r.name, best: r.best, username: (db.users[r.id] || {}).username || '' });
-    if (win.length >= 3) break;
+    if (win.length >= need) break;
   }
   t.winners = win; save();
 }
@@ -722,6 +725,9 @@ function safeKeyEqual(a, b) {
 
 /* ---------- API ---------- */
 const CARDS = path.join(__dirname, 'cards'); fs.mkdirSync(CARDS, { recursive: true });
+// недокачанные части гифок живут 10 минут
+const uploads = new Map();
+setInterval(() => { const t = Date.now(); for (const [k, u] of uploads) if (t - u.at > 600e3) uploads.delete(k); }, 60e3);
 const api = {
   async sync(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
@@ -826,7 +832,7 @@ const api = {
     // рекорды соперников по всем турнирам игрока: клиент рисует их линии на высоте
     // рекорда и держит в пилюле ближайший результат выше
     const tourRivals = Object.values(db.tournaments).filter(t => tourActive(t) && t.players[u.id]).map(t => ({
-      id: t.id, title: t.title,
+      id: t.id, title: t.title, places: placesOf(t),
       rows: tourBoard(t).filter(r => r.id !== u.id && r.best > 0).slice(0, 60).map(r => ({ id: r.id, name: r.name, best: r.best })),
     }));
     // все соперники общего рейтинга: линия каждого висит на высоте его рекорда
@@ -891,7 +897,7 @@ const api = {
     // без токена (разработка) проверить нечем — принимаем как есть
     if (CFG.token && pc.list.length) { const rc = await resolveChannels(pc.list); if (rc.error) return { ok: false, error: rc.error }; channels = rc.list; }
     const pid = crypto.randomBytes(6).toString('hex');
-    db.tourDrafts[pid] = { at: Date.now(), ownerId: u.id, ownerName: u.name, ownerUsername: u.username || '', title, prize, dur, channels };
+    db.tourDrafts[pid] = { at: Date.now(), ownerId: u.id, ownerName: u.name, ownerUsername: u.username || '', title, prize, dur, channels, places: placesOf({ places: body.places }) };
     save();
     // без Telegram (локальная разработка) оплату не спрашиваем — сразу запускаем
     if (!CFG.token) { const t = tourActivate(pid); return { ok: true, started: t.id }; }
@@ -1119,12 +1125,29 @@ const api = {
      GIF (у сервера нет канваса), мы сохраняем её и готовим пост с подписью и кнопкой.
      prepared_id открывает у игрока окно «Отправить в…» с каналами, где он админ;
      dm — запасной путь: бот присылает тот же пост в личку, его можно переслать. */
+  async upload(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const uid = String(body.uid || ''), i = +body.i, n = +body.n, part = String(body.part || '');
+    if (!/^[a-z0-9]{6,20}$/.test(uid) || !(n >= 1 && n <= 24) || !(i >= 0 && i < n) || part.length > 800e3) return { ok: false, error: 'bad chunk' };
+    const key = a.id + ':' + uid;
+    let up = uploads.get(key);
+    if (!up) { if (rateLimited('upl:' + a.id, 20, 3600e3)) return { ok: false, error: 'Слишком часто' }; up = { n, parts: new Array(n), at: Date.now() }; uploads.set(key, up); }
+    if (up.n !== n) return { ok: false, error: 'bad chunk' };
+    up.parts[i] = part;
+    return { ok: true };
+  },
   async tourPromo(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     if (rateLimited('tpromo:' + a.id, 12, 3600e3)) return { ok: false, error: 'Слишком часто. Попробуй через час' };
     const t = db.tournaments[String(body.id || '')];
     if (!t || t.hidden) return { ok: false, error: 'Турнир не найден' };
-    const gif = Buffer.from(String(body.gif || ''), 'base64'), jpg = Buffer.from(String(body.jpg || ''), 'base64');
+    let gifB64 = String(body.gif || '');
+    if (body.upload) {
+      const key = a.id + ':' + String(body.upload), up = uploads.get(key);
+      if (!up || up.parts.some(p => p === undefined)) return { ok: false, error: 'Гифка загрузилась не полностью — попробуй ещё раз' };
+      gifB64 = up.parts.join(''); uploads.delete(key);
+    }
+    const gif = Buffer.from(gifB64, 'base64'), jpg = Buffer.from(String(body.jpg || ''), 'base64');
     if (gif.length < 100 || gif.slice(0, 6).toString() !== 'GIF89a') return { ok: false, error: 'bad gif' };
     if (jpg.length < 100 || jpg[0] !== 0xFF || jpg[1] !== 0xD8) return { ok: false, error: 'bad poster' };
     const base = `tour-${t.id}-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
@@ -1133,14 +1156,15 @@ const api = {
     const e = x => String(x).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     const end = new Date(t.endsAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     const ch = (t.channels || []).map(c => '@' + c.username).join(', ');
+    const pl = placesOf(t), plTxt = pl === 1 ? 'забирает лучший результат' : `получат ${pl} лучших`;
     const caption = `🏆 <b>Турнир «${e(t.title)}»</b> в Frog Jump
 
-🎁 Приз: ${e(t.prize)}
+🎁 Приз: ${e(t.prize)} — ${plTxt}
 ⏳ До ${end} (МСК)` +
       (ch ? `
 📢 Для участия — подписка на ${e(ch)}` : '') + `
 
-Прыгай выше всех — лучший результат забирает приз 👇`;
+В зачёт идёт лучший прыжок за время турнира 👇`;
     const markup = { inline_keyboard: [[{ text: 'Участвовать', url: tourLink(t) }]] };
     const res = { ok: true, url, poster };
     const W = Math.max(1, Math.min(2000, +body.w || 640)), H = Math.max(1, Math.min(2000, +body.h || 360));
@@ -1292,7 +1316,7 @@ const api = {
       const pc = parseChannels(body.channels); if (pc.error) return { ok: false, error: pc.error };
       let channels = pc.list.map(n => ({ id: '@' + n, username: n, title: '@' + n }));
       if (CFG.token && pc.list.length) { const rc = await resolveChannels(pc.list); if (rc.error) return { ok: false, error: rc.error }; channels = rc.list; }
-      const t = tourStart({ title, prize, dur, channels, official: true, ownerId: CFG.adminId || 'admin', ownerName: 'SWAMP' });
+      const t = tourStart({ title, prize, dur, channels, places: body.places, official: true, ownerId: CFG.adminId || 'admin', ownerName: 'SWAMP' });
       return { ok: true, msg: 'Официальный турнир запущен', link: tourLink(t) };
     }
     if (act === 'endlessReset') {

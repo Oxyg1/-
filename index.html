@@ -478,6 +478,16 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .tp-note{font-size:12.5px;opacity:.7;text-align:center;line-height:1.35}
 .tp-bar{width:100%;height:8px;border-radius:99px;background:rgba(0,0,0,.3);overflow:hidden}
 .tp-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffe36b,#f7b500);border-radius:99px}
+/* пока лягушка грузится, её нет или место пустое — полупрозрачный силуэт, а не рамка */
+.lb img:not([src]),.t-pod img:not([src]),.skin img:not([src]),.row img:not([src]){content:url(icons/frog_ghost.png)}
+.t-pod.nopz{opacity:.55}
+.t-rule{display:flex;align-items:center;gap:10px;background:rgba(255,210,63,.1);border-radius:14px;padding:9px 12px;font-size:13.5px;line-height:1.3;box-shadow:inset 0 0 0 1px rgba(255,210,63,.3)}
+.t-rule .ic{width:22px;height:22px;flex:none}
+.t-rule b{color:#ffe680}
+.tour-list .lb.pz .rk{color:#ffd23f}
+.tour-list .pz-line{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#ffe680;opacity:.7;padding:2px 4px}
+.tour-list .pz-line::before,.tour-list .pz-line::after{content:'';flex:1;height:1px;background:rgba(255,210,63,.4)}
+.tf-step.wide span{font-size:13px;opacity:.85}
 .tf-add{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:4px;padding:11px;border:1.5px dashed rgba(255,255,255,.25);border-radius:14px;background:none;color:#fff;font:800 14px Nunito,system-ui;opacity:.8;cursor:pointer}
 .tf-add .ic{width:16px;height:16px}
 .tf-chan{display:flex;flex-direction:column;gap:8px}
@@ -786,6 +796,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
         <div class="t-prize"><span>Приз</span><b id="tourPrize"></b></div>
         <div class="t-count"><span id="tourCountL">До конца</span><b id="tourCount">—</b></div>
       </div>
+      <div class="t-rule" id="tourRule"></div>
       <div class="t-podium" id="tourPodium"></div>
       <div class="t-me" id="tourStats"></div>
       <div class="t-chan" id="tourChan" hidden></div>
@@ -793,9 +804,9 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
       <div class="tour-list" id="tourBoard"></div>
       <div class="t-info" id="tourInfo"></div>
     </div>
-    <div class="row" style="gap:6px">
-      <button class="btn" id="tourPlay" style="flex:2;margin:0">Участвовать</button>
-      <button class="btn ghost" id="tourShare" style="flex:1;margin:0">Позвать</button>
+    <div class="row" style="gap:6px;flex-wrap:nowrap">
+      <button class="btn" id="tourPlay" style="flex:1 1 auto;min-width:0;margin:0;padding-left:12px;padding-right:12px">Участвовать</button>
+      <button class="btn ghost" id="tourShare" style="flex:none;margin:0;padding-left:14px;padding-right:14px">Позвать</button>
       <button class="btn ghost" id="tourPromoBtn" style="flex:none;margin:0;padding:9px 13px" title="Анонс для канала"><svg class="ic"><use href="#i-promo"></use></svg></button>
     </div>
   </div>
@@ -2690,7 +2701,7 @@ async function loadTours(){
 function tourRow(t,showRank){
   const side=t.done?(t.myRank?`${t.myRank} место`:'итоги'):(showRank&&t.joined?(t.myRank?`${t.myRank} место`:'не прыгал'):`${t.players} ${plural(t.players,'участник','участника','участников')}`);
   return `<button class="tour-row${t.done?' done':''}${t.joined?' me':''}" data-tid="${esc(t.id)}">
-    <span class="tr-main"><b>${t.official?'<span class="tag-off">SWAMP</span>':''}${esc(t.title)}${(t.channels||[]).length?'<span class="tag-ch">подписка</span>':''}</b><small>${esc(t.prize)}</small></span>
+    <span class="tr-main"><b>${t.official?'<span class="tag-off">SWAMP</span>':''}${esc(t.title)}${(t.channels||[]).length?'<span class="tag-ch">подписка</span>':''}</b><small>${(t.places||3)===1?'1 место':'топ-'+(t.places||3)} · ${esc(t.prize)}</small></span>
     <span class="tr-side"><b>${side}</b><small>${t.done?'завершён':leftText(t.endsAt)}</small></span>
   </button>`;
 }
@@ -2734,6 +2745,8 @@ function renderTourForm(){
       <div class="tf-step"><span>Часы</span><button data-s="h" data-v="-1">−</button><b id="tfHours">0</b><button data-s="h" data-v="1">+</button></div>
     </div>
     <div class="tf-end" id="tfEnd"></div>
+    <label>Призовых мест</label>
+    <div class="tf-own"><div class="tf-step wide"><span id="tfPlTxt">Приз получат 3 лучших</span><button data-p="-1">−</button><b id="tfPlaces">3</b><button data-p="1">+</button></div></div>
     <button class="tf-add" id="tfChanAdd"><svg class="ic"><use href="#i-plus"></use></svg>Обязательная подписка на канал</button>
     <div class="tf-chan" id="tfChanBox" hidden>
       <label for="tfChan">Каналы<i>до трёх</i></label>
@@ -2763,6 +2776,11 @@ function renderTourForm(){
     d=Math.max(0,Math.min(14,d));if(d===14)h=0;if(d===0&&h<1)h=1;
     own={d,h};updEnd();});
   $('#tfDur').dataset.hours='';$('#tfDur').getHours=durHours;
+  // сколько мест получают приз: от 1 до 10
+  let places=3;
+  const updPl=()=>{$('#tfPlaces').textContent=places;$('#tfPlTxt').textContent=places===1?'Приз получит лучший':`Приз получат ${places} лучших`;};
+  document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{S.ui();haptic.select();places=Math.max(1,Math.min(10,places+(+b.dataset.p)));updPl();});
+  $('#tfPlaces').getPlaces=()=>places;updPl();
   updEnd();
   $('#tfGo').onclick=createTour;
 }
@@ -2774,7 +2792,7 @@ async function createTour(){
   if(prize.length<3){toast('Опиши приз');$('#tfPrize').focus();return;}
   S.ui();
   const go=$('#tfGo');go.disabled=true;go.textContent=channels?'Проверяем каналы…':'Создаём…';
-  const r=await api('tourCreate',{title,prize,dur,channels}).catch(()=>null);
+  const r=await api('tourCreate',{title,prize,dur,channels,places:$('#tfPlaces').getPlaces()}).catch(()=>null);
   go.disabled=false;go.innerHTML=`Создать за ${TOURS.fee||25} <img class="ic" src="icons/tgstar.png" alt="">`;
   if(!r||!r.ok){toast((r&&r.error)||'Сервер не отвечает',4000);return;}
   const done=async tid=>{$('#tourNew').classList.add('hidden');await loadTours();tourTab='mine';renderTours();openTour(tid);};
@@ -2815,17 +2833,21 @@ function renderTour(miss){
   $('#tourPrize').textContent=t.prize;
   tourClock();
   // пьедестал: в законченном турнире — призёры (с учётом отписавшихся), иначе лидеры
+  const P=t.places||3;
+  $('#tourRule').innerHTML=`<svg class="ic"><use href="#i-trophy"></use></svg><span>${P===1?'Приз получит <b>лучший</b>':`Приз получат <b>${P} лучших</b>`} — в зачёт идёт лучший прыжок за время турнира${(t.channels||[]).length?', нужна подписка до конца':''}</span>`;
   const podium=(t.done&&r.winners?r.winners:rows.slice(0,3)).map(x=>({name:x.name,best:x.best,skin:(rows.find(y=>y.id===x.id)||{}).skin||x.skin||'original'}));
   $('#tourPodium').innerHTML=[1,0,2].map(i=>{
-    const x=podium[i],cls='t-pod p'+(i+1)+(x?'':' empty');
+    const x=podium[i],cls='t-pod p'+(i+1)+(x?'':' empty')+(i+1>P?' nopz':'');
     return `<div class="${cls}">${x?`<img data-skin="${esc(x.skin)}" alt="">`:'<img alt="">'}<b>${x?esc(x.name):'—'}</b><small>${x?fmtM(x.best)+' м':'свободно'}</small><div class="blk">${i+1}</div></div>`;
   }).join('');
   $('#tourPodium').querySelectorAll('img[data-skin]').forEach(im=>thumb('frogs/'+im.dataset.skin).then(u=>im.src=u).catch(()=>{}));
   const me=r.me,st=$('#tourStats');
   // одна строка про себя: место, лучший и сколько до следующего
   st.hidden=!me;
-  if(me)st.innerHTML=`<span class="rk">${me.rank}</span><span class="nm">Ты<small>${fmtM(me.best)} м</small></span>`+
-    `<span class="gp">${me.rank===1?'<b>лидер</b>':`<b>${fmtM(me.gap)} м</b><small>до ${me.rank-1}-го</small>`}</span>`;
+  // вне призовой зоны важнее всего — сколько до последнего призового места
+  const edge=me&&me.rank>P?rows[P-1]:null,toPrize=edge?edge.best-me.best+1:0;
+  if(me)st.innerHTML=`<span class="rk">${me.rank}</span><span class="nm">Ты<small>${fmtM(me.best)} м · ${me.rank<=P?'в призах':'вне призов'}</small></span>`+
+    `<span class="gp">${me.rank===1?'<b>лидер</b>':edge?`<b>${fmtM(toPrize)} м</b><small>до ${P}-го места с призом</small>`:`<b>${fmtM(me.gap)} м</b><small>до ${me.rank-1}-го</small>`}</span>`;
   // обязательная подписка
   const ch=t.channels||[],chBox=$('#tourChan');
   chBox.hidden=!ch.length;
@@ -2851,7 +2873,9 @@ function renderTour(miss){
   let html='';
   if(!rows.length)html='<div class="demo">Пока никто не прыгал — стань первым в таблице</div>';
   else if(!rest.length)html='<div class="demo">Все участники — на пьедестале</div>';
-  else html=rest.map(x=>`<div class="lb noimg${x.id===meId?' me':''}"><div class="rk">${x.rank}</div><div class="nm">${esc(x.name||'Игрок')}</div><div class="sc">${fmtM(x.best)} м</div></div>`).join('');
+  else html=rest.map(x=>`<div class="lb noimg${x.id===meId?' me':''}${x.rank<=P?' pz':''}"><div class="rk">${x.rank}</div><div class="nm">${esc(x.name||'Игрок')}</div><div class="sc">${fmtM(x.best)} м</div></div>`+
+    (x.rank===P&&P>3&&rest.some(y=>y.rank>P)?'<div class="pz-line">граница призов</div>':'')).join('');
+  if(P<=3&&rest.length)html=`<div class="pz-line">дальше — без приза</div>`+html;
   // своё место видно всегда, даже если оно за пределами первой полусотни
   if(me&&me.rank>3&&!rows.some(x=>x.id===meId))html+=`<div class="tour-sep">…</div><div class="lb noimg me"><div class="rk">${me.rank}</div><div class="nm">${esc(myName)}</div><div class="sc">${fmtM(me.best)} м</div></div>`;
   $('#tourBoard').innerHTML=html;
@@ -2914,7 +2938,8 @@ function tpDraw(g,t,ph){
   gr=g.createLinearGradient(sx-80,0,sx+80,0);gr.addColorStop(0,'rgba(255,255,255,0)');gr.addColorStop(.5,'rgba(255,255,255,.85)');gr.addColorStop(1,'rgba(255,255,255,0)');
   g.save();g.beginPath();g.rect(sx-80,ty-fs,160,fs*1.2);g.clip();g.fillStyle=gr;g.fillText(t.title,64,ty);g.restore();
   // приз
-  g.font=`900 24px ${F}`;g.fillStyle='rgba(255,255,255,.62)';g.fillText('ПРИЗ',66,272);
+  const PL=t.places||3;
+  g.font=`900 24px ${F}`;g.fillStyle='rgba(255,255,255,.62)';g.fillText(PL===1?'ПРИЗ · ЛУЧШЕМУ':`ПРИЗ · ТОП-${PL}`,66,272);
   g.font=`900 46px ${F}`;g.fillStyle='#fff';
   tpWrap(g,t.prize,640).slice(0,2).forEach((ln,i)=>g.fillText(ln,64,324+i*54));
   // срок
@@ -3030,7 +3055,14 @@ async function tpSend(mode){
       window.__tpGif=url;$('#tpFill').style.width='100%';return;
     }
     $('#tpNote').textContent='Загружаю…';
-    const r=await api('tourPromo',{id:t.id,gif:b64(gif),jpg,w:TP.GW,h:TP.GH,dm:mode==='dm'});
+    // частями по ~600 КБ: nginx по умолчанию режет запросы больше 1 МБ
+    const g64=b64(gif),CH=600000,n=Math.ceil(g64.length/CH),uid=Math.random().toString(36).slice(2,12);
+    for(let i=0;i<n;i++){
+      const u=await api('upload',{uid,i,n,part:g64.slice(i*CH,(i+1)*CH)});
+      if(!u||!u.ok)throw new Error((u&&u.error)||'Не удалось загрузить гифку');
+      $('#tpFill').style.width=Math.round(85+13*(i+1)/n)+'%';
+    }
+    const r=await api('tourPromo',{id:t.id,upload:uid,jpg,w:TP.GW,h:TP.GH,dm:mode==='dm'});
     $('#tpFill').style.width='100%';
     if(!r||!r.ok)throw new Error((r&&r.error)||'Сервер не принял гифку');
     TP.gifUrl=r.url;
