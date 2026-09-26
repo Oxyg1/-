@@ -1147,12 +1147,15 @@ const api = {
       if (!up || up.parts.some(p => p === undefined)) return { ok: false, error: 'Гифка загрузилась не полностью — попробуй ещё раз' };
       gifB64 = up.parts.join(''); uploads.delete(key);
     }
+    // MP4 (H.264, собран на телефоне через WebCodecs) или GIF, если кодека не нашлось
     const gif = Buffer.from(gifB64, 'base64'), jpg = Buffer.from(String(body.jpg || ''), 'base64');
-    if (gif.length < 100 || gif.slice(0, 6).toString() !== 'GIF89a') return { ok: false, error: 'bad gif' };
+    const isMp4 = gif.length > 100 && gif.slice(4, 8).toString() === 'ftyp', isGif = gif.slice(0, 6).toString() === 'GIF89a';
+    if (gif.length < 100 || (!isMp4 && !isGif)) return { ok: false, error: 'bad gif' };
     if (jpg.length < 100 || jpg[0] !== 0xFF || jpg[1] !== 0xD8) return { ok: false, error: 'bad poster' };
     const base = `tour-${t.id}-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
-    fs.writeFileSync(path.join(CARDS, base + '.gif'), gif); fs.writeFileSync(path.join(CARDS, base + '.jpg'), jpg);
-    const url = `${CFG.appUrl}/cards/${base}.gif`, poster = `${CFG.appUrl}/cards/${base}.jpg`;
+    const ext = isMp4 ? '.mp4' : '.gif';
+    fs.writeFileSync(path.join(CARDS, base + ext), gif); fs.writeFileSync(path.join(CARDS, base + '.jpg'), jpg);
+    const url = `${CFG.appUrl}/cards/${base}${ext}`, poster = `${CFG.appUrl}/cards/${base}.jpg`;
     const e = x => String(x).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     const end = new Date(t.endsAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     const ch = (t.channels || []).map(c => '@' + c.username).join(', ');
@@ -1166,14 +1169,16 @@ const api = {
 
 В зачёт идёт лучший прыжок за время турнира 👇`;
     const markup = { inline_keyboard: [[{ text: 'Участвовать', url: tourLink(t) }]] };
-    const res = { ok: true, url, poster };
+    const res = { ok: true, url, poster, type: isMp4 ? 'mp4' : 'gif' };
     const W = Math.max(1, Math.min(2000, +body.w || 640)), H = Math.max(1, Math.min(2000, +body.h || 360));
     if (CFG.token && a.real) {
       try {
         const r = await tg('savePreparedInlineMessage', {
           user_id: +a.id, allow_user_chats: true, allow_group_chats: true, allow_channel_chats: true, allow_bot_chats: false,
-          result: { type: 'gif', id: crypto.randomBytes(6).toString('hex'), gif_url: url, gif_width: W, gif_height: H,
-            thumbnail_url: poster, thumbnail_mime_type: 'image/jpeg', caption, parse_mode: 'HTML', reply_markup: markup },
+          result: Object.assign(isMp4
+            ? { type: 'mpeg4_gif', mpeg4_url: url, mpeg4_width: W, mpeg4_height: H, mpeg4_duration: 3 }
+            : { type: 'gif', gif_url: url, gif_width: W, gif_height: H },
+            { id: crypto.randomBytes(6).toString('hex'), thumbnail_url: poster, thumbnail_mime_type: 'image/jpeg', caption, parse_mode: 'HTML', reply_markup: markup }),
         });
         res.prepared_id = r.id;
       } catch (err) { log('tour promo prepared', err.message); }
@@ -1407,7 +1412,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname.startsWith('/cards/')) {
       const f = path.join(CARDS, path.basename(url.pathname)); if (!fs.existsSync(f)) return send(404, 'not found', 'text/plain');
-      return send(200, fs.readFileSync(f), f.endsWith('.jpg') ? 'image/jpeg' : f.endsWith('.gif') ? 'image/gif' : 'image/png');
+      return send(200, fs.readFileSync(f), f.endsWith('.jpg') ? 'image/jpeg' : f.endsWith('.gif') ? 'image/gif' : f.endsWith('.mp4') ? 'video/mp4' : 'image/png');
     }
     let p = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
     const f = path.normalize(path.join(ROOT, p)); if (!f.startsWith(ROOT) || f.includes(path.sep + 'server' + path.sep)) return send(403, 'forbidden', 'text/plain');

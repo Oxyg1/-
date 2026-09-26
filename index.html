@@ -2908,7 +2908,7 @@ $('#tourPlay').onclick=async()=>{
    пьедестале, по названию пробегает блик, светлячки плывут. Превью крутится вживую,
    а для GIF те же кадры снимаются по фазе. GIF собираем сами: общая палитра на 256
    цветов (самые частые цвета в 15-битной сетке) и стандартный LZW. */
-const TP={W:1280,H:720,LEN:3.2,FR:40,GW:640,GH:360,imgs:null,raf:0,busy:false,gifUrl:null};
+const TP={W:1280,H:720,LEN:3.2,FPS:30,GFR:40,imgs:null,raf:0,busy:false,gifUrl:null};
 function tpRound(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
 function tpWrap(g,text,maxW){const words=String(text).split(/\s+/),lines=[];let cur='';
   for(const w of words){const t=cur?cur+' '+w:w;if(g.measureText(t).width>maxW&&cur){lines.push(cur);cur=w;}else cur=t;}if(cur)lines.push(cur);return lines;}
@@ -2974,26 +2974,50 @@ async function tpLoadImgs(){
   TP.imgs=await Promise.all(slugs.map(sl=>thumb('frogs/'+sl).then(u=>new Promise(r=>{const im=new Image();im.onload=()=>r(im);im.onerror=()=>r(null);im.src=u;})).catch(()=>null)));
   return TP.imgs;
 }
-// GIF89a: общая палитра + LZW
+// GIF89a (запасной путь без WebCodecs): палитра медианным делением по реальным
+// цветам, упорядоченный дизеринг Байера против полос на градиентах, и каждый кадр
+// после первого хранит только изменившиеся пиксели (остальное прозрачное)
 function gifEncode(frames,w,h,delay){
-  const cnt=new Uint32Array(32768);
-  for(const d of frames)for(let i=0;i<d.length;i+=16)cnt[((d[i]>>3)<<10)|((d[i+1]>>3)<<5)|(d[i+2]>>3)]++;
-  const keys=[];for(let k=0;k<32768;k++)if(cnt[k])keys.push(k);
-  keys.sort((a,b)=>cnt[b]-cnt[a]);
-  const pal=keys.slice(0,256).map(k=>[((k>>10)&31)*8+4,((k>>5)&31)*8+4,(k&31)*8+4]);
+  const TR=255,samp=[];
+  for(const d of frames)for(let i=0;i<d.length;i+=4*97)samp.push(d[i],d[i+1],d[i+2]);
+  const boxes=[{a:0,b:samp.length/3}],idx=new Uint32Array(samp.length/3).map((_,i)=>i);
+  const rangeOf=bx=>{let mn=[255,255,255],mx=[0,0,0];for(let i=bx.a;i<bx.b;i++){const j=idx[i]*3;for(let c=0;c<3;c++){const v=samp[j+c];if(v<mn[c])mn[c]=v;if(v>mx[c])mx[c]=v;}}
+    const r=[mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2]];const c=r[1]>=r[0]&&r[1]>=r[2]?1:r[0]>=r[2]?0:2;return {c,r:r[c]*(bx.b-bx.a)};};
+  while(boxes.length<255){
+    let bi=-1,best=0,bc=0;
+    boxes.forEach((bx,i)=>{if(bx.b-bx.a<2)return;const q=rangeOf(bx);if(q.r>best){best=q.r;bi=i;bc=q.c;}});
+    if(bi<0)break;
+    const bx=boxes[bi],part=Array.from(idx.subarray(bx.a,bx.b)).sort((x,y)=>samp[x*3+bc]-samp[y*3+bc]);
+    idx.set(part,bx.a);const mid=bx.a+(part.length>>1);
+    boxes.splice(bi,1,{a:bx.a,b:mid},{a:mid,b:bx.b});
+  }
+  const pal=boxes.map(bx=>{let r=0,g=0,b=0;for(let i=bx.a;i<bx.b;i++){const j=idx[i]*3;r+=samp[j];g+=samp[j+1];b+=samp[j+2];}const n=bx.b-bx.a||1;return [r/n|0,g/n|0,b/n|0];});
   while(pal.length<256)pal.push([0,0,0]);
   const map=new Int16Array(32768).fill(-1);
   const near=k=>{const r=((k>>10)&31)*8+4,g=((k>>5)&31)*8+4,b=(k&31)*8+4;let bi=0,bd=1e9;
-    for(let i=0;i<256;i++){const p=pal[i],d=(p[0]-r)**2*2+(p[1]-g)**2*4+(p[2]-b)**2*3;if(d<bd){bd=d;bi=i;}}return bi;};
+    for(let i=0;i<255;i++){const p=pal[i],d=(p[0]-r)**2*2+(p[1]-g)**2*4+(p[2]-b)**2*3;if(d<bd){bd=d;bi=i;}}return bi;};
+  const BY=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
   const out=[];const str=s=>{for(const ch of s)out.push(ch.charCodeAt(0));};const u16=v=>out.push(v&255,(v>>8)&255);
   str('GIF89a');u16(w);u16(h);out.push(0xF7,0,0);
   for(const p of pal)out.push(p[0],p[1],p[2]);
   out.push(0x21,0xFF,11);str('NETSCAPE2.0');out.push(3,1,0,0,0);            // бесконечная петля
-  const idx=new Uint8Array(w*h);
-  for(const d of frames){
-    for(let i=0,j=0;j<idx.length;i+=4,j++){const k=((d[i]>>3)<<10)|((d[i+1]>>3)<<5)|(d[i+2]>>3);let v=map[k];if(v<0)v=map[k]=near(k);idx[j]=v;}
-    out.push(0x21,0xF9,4,0);u16(delay);out.push(0,0);                      // задержка кадра
-    out.push(0x2C);u16(0);u16(0);u16(w);u16(h);out.push(0);
+  let prev=null;
+  for(let fi=0;fi<frames.length;fi++){
+    const d=frames[fi],cur=new Uint8Array(w*h);
+    for(let y=0,j=0,i=0;y<h;y++)for(let x=0;x<w;x++,j++,i+=4){
+      const o=BY[(y&3)*4+(x&3)]-7.5;                                        // ±половина шага палитры
+      const r=Math.max(0,Math.min(255,d[i]+o)),g=Math.max(0,Math.min(255,d[i+1]+o)),b=Math.max(0,Math.min(255,d[i+2]+o));
+      const k=((r>>3)<<10)|((g>>3)<<5)|(b>>3);let v=map[k];if(v<0)v=map[k]=near(k);cur[j]=v;}
+    // прямоугольник изменений относительно прошлого кадра
+    let x0=0,y0=0,x1=w-1,y1=h-1;
+    if(prev){x0=w;y0=h;x1=-1;y1=-1;
+      for(let y=0,j=0;y<h;y++)for(let x=0;x<w;x++,j++)if(cur[j]!==prev[j]){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
+      if(x1<0){x0=y0=0;x1=y1=0;}}
+    const rw=x1-x0+1,rh=y1-y0+1,idx=new Uint8Array(rw*rh);
+    for(let y=0;y<rh;y++)for(let x=0;x<rw;x++){const j=(y+y0)*w+x+x0,v=cur[j];idx[y*rw+x]=prev&&prev[j]===v?TR:v;}
+    prev=cur;
+    out.push(0x21,0xF9,4,prev&&fi?0x05:0x04);u16(delay);out.push(TR,0);    // задержка, прозрачный = «как было»
+    out.push(0x2C);u16(x0);u16(y0);u16(rw);u16(rh);out.push(0);
     // LZW
     out.push(8);const clear=256,eoi=257;let size=9,next=258;const dict=new Map();
     let buf=0,bits=0;const blk=[];
@@ -3015,20 +3039,53 @@ function gifEncode(frames,w,h,delay){
   return new Uint8Array(out);
 }
 const b64=u8=>{let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s);};
-async function tpBuild(t){
-  const c=document.createElement('canvas');c.width=TP.GW;c.height=TP.GH;const g=c.getContext('2d',{willReadFrequently:true});
-  const frames=[];
-  for(let f=0;f<TP.FR;f++){
-    g.setTransform(TP.GW/TP.W,0,0,TP.GH/TP.H,0,0);tpDraw(g,t,f/TP.FR);
-    frames.push(g.getImageData(0,0,TP.GW,TP.GH).data);
-    $('#tpFill').style.width=Math.round(f/TP.FR*70)+'%';
-    if(f%4===3)await new Promise(r=>setTimeout(r,0));                     // даём интерфейсу дышать
+// MP4 1280×720 через WebCodecs (кодек телефона) — чётко и легко; GIF — если кодека нет
+function tpLoadMuxer(){
+  if(window.Mp4Muxer)return Promise.resolve(true);
+  return new Promise(r=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.min.js';
+    s.onload=()=>r(!!window.Mp4Muxer);s.onerror=()=>r(false);document.head.appendChild(s);});
+}
+async function tpMp4(t,c,g){
+  if(!window.VideoEncoder||!window.VideoFrame)return null;
+  const W=TP.W,H=TP.H,N=Math.round(TP.LEN*TP.FPS);
+  let codec=null;
+  for(const cd of ['avc1.4d0028','avc1.42e01f','avc1.640028'])
+    try{const q=await VideoEncoder.isConfigSupported({codec:cd,width:W,height:H,bitrate:5e6,framerate:TP.FPS});if(q.supported){codec=cd;break;}}catch(e){}
+  if(!codec||!(await tpLoadMuxer()))return null;
+  const muxer=new Mp4Muxer.Muxer({target:new Mp4Muxer.ArrayBufferTarget(),video:{codec:'avc',width:W,height:H},fastStart:'in-memory'});
+  let err=null;
+  const enc=new VideoEncoder({output:(ch,meta)=>muxer.addVideoChunk(ch,meta),error:e=>{err=e;}});
+  enc.configure({codec,width:W,height:H,bitrate:5e6,framerate:TP.FPS,latencyMode:'quality'});
+  for(let f=0;f<N;f++){
+    tpDraw(g,t,f/N);
+    const vf=new VideoFrame(c,{timestamp:Math.round(f*1e6/TP.FPS),duration:Math.round(1e6/TP.FPS)});
+    enc.encode(vf,{keyFrame:f%TP.FPS===0});vf.close();
+    if(enc.encodeQueueSize>6)await new Promise(r=>setTimeout(r,5));
+    $('#tpFill').style.width=Math.round(f/N*80)+'%';
+    if(err)break;
   }
-  await new Promise(r=>setTimeout(r,0));
-  const gif=gifEncode(frames,TP.GW,TP.GH,Math.round(TP.LEN/TP.FR*100));
+  await enc.flush();enc.close();
+  if(err)return null;
+  muxer.finalize();
+  return new Uint8Array(muxer.target.buffer);
+}
+async function tpBuild(t){
+  const c=document.createElement('canvas');c.width=TP.W;c.height=TP.H;const g=c.getContext('2d',{willReadFrequently:true});
+  let media=null,type='mp4';
+  try{media=await tpMp4(t,c,g);}catch(e){console.warn('mp4',e);media=null;}
+  if(!media){
+    type='gif';const frames=[];
+    for(let f=0;f<TP.GFR;f++){
+      tpDraw(g,t,f/TP.GFR);frames.push(g.getImageData(0,0,TP.W,TP.H).data);
+      $('#tpFill').style.width=Math.round(f/TP.GFR*50)+'%';
+      if(f%4===3)await new Promise(r=>setTimeout(r,0));                   // даём интерфейсу дышать
+    }
+    await new Promise(r=>setTimeout(r,0));
+    media=gifEncode(frames,TP.W,TP.H,Math.round(TP.LEN/TP.GFR*100));
+  }
   $('#tpFill').style.width='85%';
-  const pc=document.createElement('canvas');pc.width=TP.W;pc.height=TP.H;tpDraw(pc.getContext('2d'),t,.15);
-  return {gif,jpg:pc.toDataURL('image/jpeg',.9).split(',')[1]};
+  tpDraw(g,t,.15);
+  return {media,type,jpg:c.toDataURL('image/jpeg',.9).split(',')[1]};
 }
 async function openTourPromo(){
   const t=tourCur&&tourCur.tour;if(!t)return;
@@ -3047,12 +3104,12 @@ async function tpSend(mode){
   $('#tpNote').textContent='Собираю гифку…';
   try{
     await tpLoadImgs();
-    const {gif,jpg}=await tpBuild(t);
+    const {media:gif,type,jpg}=await tpBuild(t);
     if(!inTG||!CFG.api){
-      // вне Telegram — просто показываем готовую гифку
-      const url=URL.createObjectURL(new Blob([gif],{type:'image/gif'}));
-      $('#tpNote').innerHTML=`Готово: ${(gif.length/1024/1024).toFixed(2)} МБ. В Telegram она уйдёт в канал одной кнопкой`;
-      window.__tpGif=url;$('#tpFill').style.width='100%';return;
+      // вне Telegram — просто показываем готовый файл
+      const url=URL.createObjectURL(new Blob([gif],{type:type==='mp4'?'video/mp4':'image/gif'}));
+      $('#tpNote').innerHTML=`Готово: ${type.toUpperCase()} 1280×720, ${(gif.length/1024/1024).toFixed(2)} МБ. В Telegram уйдёт в канал одной кнопкой`;
+      window.__tpGif=url;window.__tpType=type;$('#tpFill').style.width='100%';return;
     }
     $('#tpNote').textContent='Загружаю…';
     // частями по ~600 КБ: nginx по умолчанию режет запросы больше 1 МБ
@@ -3062,11 +3119,11 @@ async function tpSend(mode){
       if(!u||!u.ok)throw new Error((u&&u.error)||'Не удалось загрузить гифку');
       $('#tpFill').style.width=Math.round(85+13*(i+1)/n)+'%';
     }
-    const r=await api('tourPromo',{id:t.id,upload:uid,jpg,w:TP.GW,h:TP.GH,dm:mode==='dm'});
+    const r=await api('tourPromo',{id:t.id,upload:uid,jpg,w:TP.W,h:TP.H,dm:mode==='dm'});
     $('#tpFill').style.width='100%';
     if(!r||!r.ok)throw new Error((r&&r.error)||'Сервер не принял гифку');
     TP.gifUrl=r.url;
-    if(mode==='save'){if(TG&&tgv('8.0'))TG.downloadFile({url:r.url,file_name:'turnir.gif'});$('#tpNote').textContent='Гифка сохраняется';return;}
+    if(mode==='save'){if(TG&&tgv('8.0'))TG.downloadFile({url:r.url,file_name:'turnir.'+(r.type||'gif')});$('#tpNote').textContent='Файл сохраняется';return;}
     if(mode==='post'&&r.prepared_id&&TG&&tgv('8.0')){
       TG.shareMessage(r.prepared_id,ok=>{if(ok){toast('Анонс опубликован');haptic.success();}});
       $('#tpNote').textContent='Выбери свой канал в списке — пост уйдёт с кнопкой «Участвовать»';return;
