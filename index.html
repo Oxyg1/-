@@ -473,6 +473,11 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .tf-step button{flex:none;width:30px;height:30px;border:0;border-radius:10px;background:rgba(255,255,255,.1);color:#fff;font:900 20px Nunito,system-ui;line-height:1;cursor:pointer}
 .tf-step button:active{transform:scale(.92)}
 .tf-end{font-size:12.5px;opacity:.65;margin-top:-2px}
+#tourPromo{z-index:117}
+#tpCanvas{width:100%;height:auto;aspect-ratio:16/9;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.tp-note{font-size:12.5px;opacity:.7;text-align:center;line-height:1.35}
+.tp-bar{width:100%;height:8px;border-radius:99px;background:rgba(0,0,0,.3);overflow:hidden}
+.tp-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffe36b,#f7b500);border-radius:99px}
 .tf-add{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:4px;padding:11px;border:1.5px dashed rgba(255,255,255,.25);border-radius:14px;background:none;color:#fff;font:800 14px Nunito,system-ui;opacity:.8;cursor:pointer}
 .tf-add .ic{width:16px;height:16px}
 .tf-chan{display:flex;flex-direction:column;gap:8px}
@@ -511,6 +516,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 <symbol id="i-close" viewBox="0 0 24 24">
   <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
 </symbol>
+<symbol id="i-promo" viewBox="0 0 24 24"><path d="M3 10v4c0 .6.4 1 1 1h2l1 5h3l-1-5h1l8 4V5l-8 4H4c-.6 0-1 .4-1 1z" fill="#fff"/><path d="M21 9.5v5" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></symbol>
 <symbol id="i-send" viewBox="0 0 24 24">
   <path d="M21.3 3.2L2.6 10.5c-.8.3-.7 1.4.1 1.6l4.9 1.4 1.6 5c.2.8 1.2.9 1.6.2l2.2-3 4.5 3.3c.5.4 1.3.1 1.4-.5l3.3-14c.2-.8-.6-1.4-1-1.3z" fill="#eaf6ee"/>
   <path d="M7.6 13.5L20 4.9l-9.9 10.4-.4 3.2z" fill="#a9cdb8"/>
@@ -790,7 +796,19 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
     <div class="row" style="gap:6px">
       <button class="btn" id="tourPlay" style="flex:2;margin:0">Участвовать</button>
       <button class="btn ghost" id="tourShare" style="flex:1;margin:0">Позвать</button>
+      <button class="btn ghost" id="tourPromoBtn" style="flex:none;margin:0;padding:9px 13px" title="Анонс для канала"><svg class="ic"><use href="#i-promo"></use></svg></button>
     </div>
+  </div>
+</div>
+
+<div id="tourPromo" class="overlay hidden">
+  <div class="card">
+    <div class="head"><h2>Анонс для канала</h2><button class="iconbtn" id="tpClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
+    <canvas id="tpCanvas" width="1280" height="720"></canvas>
+    <div class="tp-note" id="tpNote">Гифка с подписью и кнопкой «Участвовать» — опубликуй в свой канал</div>
+    <div class="tp-bar" id="tpBar" hidden><i id="tpFill"></i></div>
+    <button class="btn" id="tpPost" style="width:100%">Опубликовать в канал</button>
+    <div class="row" style="gap:6px"><button class="btn ghost sm" id="tpDm" style="flex:1;margin:0">Прислать мне в бот</button><button class="btn ghost sm" id="tpSave" style="flex:1;margin:0">Скачать GIF</button></div>
   </div>
 </div>
 
@@ -2861,6 +2879,178 @@ $('#tourPlay').onclick=async()=>{
   $('#tour').classList.add('hidden');closeHub();
   if(JUMP)JUMP.open();
 };
+/* ---------- анонс турнира: анимированная карточка → GIF → пост в канал ----------
+   Карточка — чистая функция фазы 0..1 (петля 3.2 с): лягушки по очереди прыгают на
+   пьедестале, по названию пробегает блик, светлячки плывут. Превью крутится вживую,
+   а для GIF те же кадры снимаются по фазе. GIF собираем сами: общая палитра на 256
+   цветов (самые частые цвета в 15-битной сетке) и стандартный LZW. */
+const TP={W:1280,H:720,LEN:3.2,FR:40,GW:640,GH:360,imgs:null,raf:0,busy:false,gifUrl:null};
+function tpRound(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+function tpWrap(g,text,maxW){const words=String(text).split(/\s+/),lines=[];let cur='';
+  for(const w of words){const t=cur?cur+' '+w:w;if(g.measureText(t).width>maxW&&cur){lines.push(cur);cur=w;}else cur=t;}if(cur)lines.push(cur);return lines;}
+function tpDraw(g,t,ph){
+  const W=TP.W,H=TP.H,F='Nunito,"Segoe UI",system-ui,sans-serif',TAU=Math.PI*2;
+  // фон — болото
+  let gr=g.createLinearGradient(0,0,0,H);gr.addColorStop(0,'#1f7a53');gr.addColorStop(1,'#0a2f22');g.fillStyle=gr;g.fillRect(0,0,W,H);
+  gr=g.createRadialGradient(W*.72,H*.55,40,W*.72,H*.55,620);gr.addColorStop(0,'rgba(255,230,120,.16)');gr.addColorStop(1,'rgba(255,230,120,0)');g.fillStyle=gr;g.fillRect(0,0,W,H);
+  for(let i=0;i<26;i++){const r=k=>{const x=Math.sin(i*127.1+k*311.7)*43758.5453;return x-Math.floor(x);};
+    const x=r(1)*W+Math.sin(TAU*ph+r(2)*TAU)*18,y=(r(3)*H-ph*60*(1+r(4))+H*2)%H;
+    g.globalAlpha=.15+.35*(.5+.5*Math.sin(TAU*ph*2+r(5)*TAU));g.fillStyle='#ffe680';g.beginPath();g.arc(x,y,2.5+r(6)*4,0,TAU);g.fill();}
+  g.globalAlpha=1;
+  // плашка сверху
+  g.font=`900 26px ${F}`;const tag='ТУРНИР · FROG JUMP',tw=g.measureText(tag).width+44;
+  g.fillStyle='rgba(6,26,18,.6)';tpRound(g,64,52,tw,50,25);g.fill();
+  g.fillStyle='#ffe680';g.textBaseline='middle';g.fillText(tag,86,78);
+  // название — золото с коричневой обводкой и объёмом, как логотип
+  let fs=96;g.font=`900 ${fs}px ${F}`;while(g.measureText(t.title).width>700&&fs>52){fs-=4;g.font=`900 ${fs}px ${F}`;}
+  const ty=190;g.textBaseline='alphabetic';g.lineJoin='round';
+  for(let d=14;d>0;d-=2){g.strokeStyle=d>10?'#4a2c00':'#6b4200';g.lineWidth=20;g.strokeText(t.title,64,ty+d);}
+  g.strokeStyle='#5a3b00';g.lineWidth=20;g.strokeText(t.title,64,ty);
+  const tWidth=g.measureText(t.title).width;
+  gr=g.createLinearGradient(0,ty-fs*.8,0,ty);gr.addColorStop(0,'#fff5b0');gr.addColorStop(.5,'#ffd23f');gr.addColorStop(1,'#f5a300');
+  g.fillStyle=gr;g.fillText(t.title,64,ty);
+  // блик по золоту
+  const sx=64+(ph*1.6-.3)*(tWidth+300);
+  gr=g.createLinearGradient(sx-80,0,sx+80,0);gr.addColorStop(0,'rgba(255,255,255,0)');gr.addColorStop(.5,'rgba(255,255,255,.85)');gr.addColorStop(1,'rgba(255,255,255,0)');
+  g.save();g.beginPath();g.rect(sx-80,ty-fs,160,fs*1.2);g.clip();g.fillStyle=gr;g.fillText(t.title,64,ty);g.restore();
+  // приз
+  g.font=`900 24px ${F}`;g.fillStyle='rgba(255,255,255,.62)';g.fillText('ПРИЗ',66,272);
+  g.font=`900 46px ${F}`;g.fillStyle='#fff';
+  tpWrap(g,t.prize,640).slice(0,2).forEach((ln,i)=>g.fillText(ln,64,324+i*54));
+  // срок
+  const end=new Date(t.endsAt);
+  g.font=`800 30px ${F}`;g.fillStyle='rgba(255,255,255,.78)';
+  g.fillText(`до ${end.toLocaleDateString('ru-RU',{day:'numeric',month:'long'})}, ${end.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`,66,t.prize.length>30?452:404);
+  // кнопка «Участвовать» — пульсирует
+  const pulse=1+.035*Math.sin(TAU*ph*2),bw=380,bh=96,bx=64,by=H-64-bh;
+  g.save();g.translate(bx+bw/2,by+bh/2);g.scale(pulse,pulse);g.translate(-bw/2,-bh/2);
+  g.fillStyle='#a86f00';tpRound(g,0,10,bw,bh,30);g.fill();
+  gr=g.createLinearGradient(0,0,0,bh);gr.addColorStop(0,'#ffe36b');gr.addColorStop(1,'#f7b500');g.fillStyle=gr;tpRound(g,0,0,bw,bh,30);g.fill();
+  g.fillStyle='#5a3b00';g.font=`900 40px ${F}`;g.textAlign='center';g.textBaseline='middle';g.fillText('Участвовать →',bw/2,bh/2+2);
+  g.restore();g.textAlign='left';g.textBaseline='alphabetic';
+  g.font=`800 26px ${F}`;g.fillStyle='rgba(255,255,255,.6)';g.fillText('@'+(CFG.botName||'swampis_bot'),bx+bw+30,by+bh/2+14);
+  // пьедестал и лягушки: прыгают по очереди — 3, 2, 1
+  const base=H-70,cx=930,cols=[[cx-150,150,'#eef2f5','#bcc6cf',2],[cx,215,'#ffe36b','#f7b500',1],[cx+150,110,'#e2a064','#b8702f',3]];
+  cols.forEach(([x,h,c1,c2,n],i)=>{
+    g.fillStyle='rgba(0,0,0,.25)';tpRound(g,x-66,base-h+8,132,h,18);g.fill();
+    gr=g.createLinearGradient(0,base-h,0,base);gr.addColorStop(0,c1);gr.addColorStop(1,c2);g.fillStyle=gr;tpRound(g,x-66,base-h,132,h,18);g.fill();
+    g.fillStyle='#5a3b00';g.font=`900 48px ${F}`;g.textAlign='center';g.fillText(n,x,base-h+58);g.textAlign='left';
+    const img=TP.imgs&&TP.imgs[i];if(!img)return;
+    const off=[.66,.33,0][i],p=((ph+off)%1),hop=p<.28?Math.sin(p/.28*Math.PI):0,land=p>=.28&&p<.36?1-(p-.28)/.08:0;
+    const sz=150,sq=land*.14;
+    const fy=base-h-8-hop*70;
+    g.save();g.translate(x,fy);g.scale(1+sq,1-sq);
+    g.drawImage(img,-sz/2,-sz*.86,sz,sz);g.restore();
+  });
+}
+async function tpLoadImgs(){
+  if(TP.imgs)return TP.imgs;
+  const mySkin=(net.jump&&net.jump.skin)||'original',slugs=['honeyhop',mySkin,'icefrog'];
+  TP.imgs=await Promise.all(slugs.map(sl=>thumb('frogs/'+sl).then(u=>new Promise(r=>{const im=new Image();im.onload=()=>r(im);im.onerror=()=>r(null);im.src=u;})).catch(()=>null)));
+  return TP.imgs;
+}
+// GIF89a: общая палитра + LZW
+function gifEncode(frames,w,h,delay){
+  const cnt=new Uint32Array(32768);
+  for(const d of frames)for(let i=0;i<d.length;i+=16)cnt[((d[i]>>3)<<10)|((d[i+1]>>3)<<5)|(d[i+2]>>3)]++;
+  const keys=[];for(let k=0;k<32768;k++)if(cnt[k])keys.push(k);
+  keys.sort((a,b)=>cnt[b]-cnt[a]);
+  const pal=keys.slice(0,256).map(k=>[((k>>10)&31)*8+4,((k>>5)&31)*8+4,(k&31)*8+4]);
+  while(pal.length<256)pal.push([0,0,0]);
+  const map=new Int16Array(32768).fill(-1);
+  const near=k=>{const r=((k>>10)&31)*8+4,g=((k>>5)&31)*8+4,b=(k&31)*8+4;let bi=0,bd=1e9;
+    for(let i=0;i<256;i++){const p=pal[i],d=(p[0]-r)**2*2+(p[1]-g)**2*4+(p[2]-b)**2*3;if(d<bd){bd=d;bi=i;}}return bi;};
+  const out=[];const str=s=>{for(const ch of s)out.push(ch.charCodeAt(0));};const u16=v=>out.push(v&255,(v>>8)&255);
+  str('GIF89a');u16(w);u16(h);out.push(0xF7,0,0);
+  for(const p of pal)out.push(p[0],p[1],p[2]);
+  out.push(0x21,0xFF,11);str('NETSCAPE2.0');out.push(3,1,0,0,0);            // бесконечная петля
+  const idx=new Uint8Array(w*h);
+  for(const d of frames){
+    for(let i=0,j=0;j<idx.length;i+=4,j++){const k=((d[i]>>3)<<10)|((d[i+1]>>3)<<5)|(d[i+2]>>3);let v=map[k];if(v<0)v=map[k]=near(k);idx[j]=v;}
+    out.push(0x21,0xF9,4,0);u16(delay);out.push(0,0);                      // задержка кадра
+    out.push(0x2C);u16(0);u16(0);u16(w);u16(h);out.push(0);
+    // LZW
+    out.push(8);const clear=256,eoi=257;let size=9,next=258;const dict=new Map();
+    let buf=0,bits=0;const blk=[];
+    const emit=c=>{buf|=c<<bits;bits+=size;while(bits>=8){blk.push(buf&255);buf>>>=8;bits-=8;}};
+    emit(clear);let pre=idx[0];
+    for(let i=1;i<idx.length;i++){
+      const k=idx[i],key=(pre<<8)|k,c=dict.get(key);
+      if(c!==undefined){pre=c;continue;}
+      emit(pre);
+      if(next===4096){emit(clear);dict.clear();next=258;size=9;}
+      else{if(next>=(1<<size))size++;dict.set(key,next++);}
+      pre=k;
+    }
+    emit(pre);emit(eoi);if(bits>0)blk.push(buf&255);
+    for(let i=0;i<blk.length;i+=255){const n=Math.min(255,blk.length-i);out.push(n);for(let j=0;j<n;j++)out.push(blk[i+j]);}
+    out.push(0);
+  }
+  out.push(0x3B);
+  return new Uint8Array(out);
+}
+const b64=u8=>{let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s);};
+async function tpBuild(t){
+  const c=document.createElement('canvas');c.width=TP.GW;c.height=TP.GH;const g=c.getContext('2d',{willReadFrequently:true});
+  const frames=[];
+  for(let f=0;f<TP.FR;f++){
+    g.setTransform(TP.GW/TP.W,0,0,TP.GH/TP.H,0,0);tpDraw(g,t,f/TP.FR);
+    frames.push(g.getImageData(0,0,TP.GW,TP.GH).data);
+    $('#tpFill').style.width=Math.round(f/TP.FR*70)+'%';
+    if(f%4===3)await new Promise(r=>setTimeout(r,0));                     // даём интерфейсу дышать
+  }
+  await new Promise(r=>setTimeout(r,0));
+  const gif=gifEncode(frames,TP.GW,TP.GH,Math.round(TP.LEN/TP.FR*100));
+  $('#tpFill').style.width='85%';
+  const pc=document.createElement('canvas');pc.width=TP.W;pc.height=TP.H;tpDraw(pc.getContext('2d'),t,.15);
+  return {gif,jpg:pc.toDataURL('image/jpeg',.9).split(',')[1]};
+}
+async function openTourPromo(){
+  const t=tourCur&&tourCur.tour;if(!t)return;
+  S.ui();haptic.light();
+  $('#tourPromo').classList.remove('hidden');$('#tpBar').hidden=true;TP.gifUrl=null;
+  $('#tpNote').textContent='Гифка с подписью и кнопкой «Участвовать» — опубликуй в свой канал';
+  await tpLoadImgs();
+  const g=$('#tpCanvas').getContext('2d'),t0=performance.now();
+  cancelAnimationFrame(TP.raf);
+  const loop=now=>{if($('#tourPromo').classList.contains('hidden'))return;tpDraw(g,t,((now-t0)/1000/TP.LEN)%1);TP.raf=requestAnimationFrame(loop);};
+  TP.raf=requestAnimationFrame(loop);
+}
+async function tpSend(mode){
+  const t=tourCur&&tourCur.tour;if(!t||TP.busy)return;
+  S.ui();TP.busy=true;$('#tpBar').hidden=false;$('#tpFill').style.width='2%';
+  $('#tpNote').textContent='Собираю гифку…';
+  try{
+    await tpLoadImgs();
+    const {gif,jpg}=await tpBuild(t);
+    if(!inTG||!CFG.api){
+      // вне Telegram — просто показываем готовую гифку
+      const url=URL.createObjectURL(new Blob([gif],{type:'image/gif'}));
+      $('#tpNote').innerHTML=`Готово: ${(gif.length/1024/1024).toFixed(2)} МБ. В Telegram она уйдёт в канал одной кнопкой`;
+      window.__tpGif=url;$('#tpFill').style.width='100%';return;
+    }
+    $('#tpNote').textContent='Загружаю…';
+    const r=await api('tourPromo',{id:t.id,gif:b64(gif),jpg,w:TP.GW,h:TP.GH,dm:mode==='dm'});
+    $('#tpFill').style.width='100%';
+    if(!r||!r.ok)throw new Error((r&&r.error)||'Сервер не принял гифку');
+    TP.gifUrl=r.url;
+    if(mode==='save'){if(TG&&tgv('8.0'))TG.downloadFile({url:r.url,file_name:'turnir.gif'});$('#tpNote').textContent='Гифка сохраняется';return;}
+    if(mode==='post'&&r.prepared_id&&TG&&tgv('8.0')){
+      TG.shareMessage(r.prepared_id,ok=>{if(ok){toast('Анонс опубликован');haptic.success();}});
+      $('#tpNote').textContent='Выбери свой канал в списке — пост уйдёт с кнопкой «Участвовать»';return;
+    }
+    $('#tpNote').textContent=r.sent?'Бот прислал анонс тебе в личку — перешли его в канал':'Готово';
+    if(r.sent)toast('Анонс у тебя в чате с ботом',2500);
+  }catch(e){
+    const m=String(e.message||e);
+    $('#tpNote').textContent=/413|large/i.test(m)?'Гифка не пролезла на сервер (лимит nginx)':m;
+  }finally{TP.busy=false;}
+}
+$('#tourPromoBtn').onclick=openTourPromo;
+$('#tpClose').onclick=()=>{S.ui();$('#tourPromo').classList.add('hidden');cancelAnimationFrame(TP.raf);};
+$('#tpPost').onclick=()=>tpSend('post');
+$('#tpDm').onclick=()=>tpSend('dm');
+$('#tpSave').onclick=()=>tpSend('save');
 $('#tourShare').onclick=()=>{
   const r=tourCur;if(!r||!r.link)return;S.ui();
   const text=`Турнир «${r.tour.title}» в Frog Jump. Приз: ${r.tour.prize}. Залетай!`;
