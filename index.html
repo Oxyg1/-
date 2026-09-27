@@ -816,6 +816,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
   <div class="card">
     <div class="head"><h2>Анонс для канала</h2><button class="iconbtn" id="tpClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
     <canvas id="tpCanvas" width="1280" height="720"></canvas>
+    <div class="segbar" id="tpFps"><button data-f="30">30 fps</button><button data-f="60">60 fps · плавнее</button></div>
     <div class="tp-note" id="tpNote">Гифка с подписью и кнопкой «Участвовать» — опубликуй в свой канал</div>
     <div class="tp-bar" id="tpBar" hidden><i id="tpFill"></i></div>
     <button class="btn" id="tpPost" style="width:100%">Опубликовать в канал</button>
@@ -2908,7 +2909,7 @@ $('#tourPlay').onclick=async()=>{
    пьедестале, по названию пробегает блик, светлячки плывут. Превью крутится вживую,
    а для GIF те же кадры снимаются по фазе. GIF собираем сами: общая палитра на 256
    цветов (самые частые цвета в 15-битной сетке) и стандартный LZW. */
-const TP={W:1280,H:720,LEN:3.2,FPS:30,GFR:40,imgs:null,raf:0,busy:false,gifUrl:null};
+const TP={W:1280,H:720,LEN:3.2,FPS:30,GFR:80,imgs:null,raf:0,busy:false,gifUrl:null};
 function tpRound(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
 function tpWrap(g,text,maxW){const words=String(text).split(/\s+/),lines=[];let cur='';
   for(const w of words){const t=cur?cur+' '+w:w;if(g.measureText(t).width>maxW&&cur){lines.push(cur);cur=w;}else cur=t;}if(cur)lines.push(cur);return lines;}
@@ -3050,12 +3051,12 @@ async function tpMp4(t,c,g){
   const W=TP.W,H=TP.H,N=Math.round(TP.LEN*TP.FPS);
   let codec=null;
   for(const cd of ['avc1.4d0028','avc1.42e01f','avc1.640028'])
-    try{const q=await VideoEncoder.isConfigSupported({codec:cd,width:W,height:H,bitrate:5e6,framerate:TP.FPS});if(q.supported){codec=cd;break;}}catch(e){}
+    try{const q=await VideoEncoder.isConfigSupported({codec:cd,width:W,height:H,bitrate:TP.FPS>30?8e6:5e6,framerate:TP.FPS});if(q.supported){codec=cd;break;}}catch(e){}
   if(!codec||!(await tpLoadMuxer()))return null;
   const muxer=new Mp4Muxer.Muxer({target:new Mp4Muxer.ArrayBufferTarget(),video:{codec:'avc',width:W,height:H},fastStart:'in-memory'});
   let err=null;
   const enc=new VideoEncoder({output:(ch,meta)=>muxer.addVideoChunk(ch,meta),error:e=>{err=e;}});
-  enc.configure({codec,width:W,height:H,bitrate:5e6,framerate:TP.FPS,latencyMode:'quality'});
+  enc.configure({codec,width:W,height:H,bitrate:TP.FPS>30?8e6:5e6,framerate:TP.FPS,latencyMode:'quality'});
   for(let f=0;f<N;f++){
     tpDraw(g,t,f/N);
     const vf=new VideoFrame(c,{timestamp:Math.round(f*1e6/TP.FPS),duration:Math.round(1e6/TP.FPS)});
@@ -3108,7 +3109,7 @@ async function tpSend(mode){
     if(!inTG||!CFG.api){
       // вне Telegram — просто показываем готовый файл
       const url=URL.createObjectURL(new Blob([gif],{type:type==='mp4'?'video/mp4':'image/gif'}));
-      $('#tpNote').innerHTML=`Готово: ${type.toUpperCase()} 1280×720, ${(gif.length/1024/1024).toFixed(2)} МБ. В Telegram уйдёт в канал одной кнопкой`;
+      $('#tpNote').innerHTML=`Готово: ${type.toUpperCase()} 1280×720, ${type==='mp4'?TP.FPS:25} fps, ${(gif.length/1024/1024).toFixed(2)} МБ. В Telegram уйдёт в канал одной кнопкой`;
       window.__tpGif=url;window.__tpType=type;$('#tpFill').style.width='100%';return;
     }
     $('#tpNote').textContent='Загружаю…';
@@ -3135,6 +3136,10 @@ async function tpSend(mode){
     $('#tpNote').textContent=/413|large/i.test(m)?'Гифка не пролезла на сервер (лимит nginx)':m;
   }finally{TP.busy=false;}
 }
+// частота кадров анонса: 30 или 60 (60 — только в MP4; запасной GIF держит ~25 fps)
+{let f=30;try{f=+localStorage.getItem('swamp.tpFps')||30;}catch(e){}
+ const setF=v=>{TP.FPS=v===60?60:30;$('#tpFps').querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.f===TP.FPS));};
+ setF(f);$('#tpFps').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(TP.busy)return;S.ui();haptic.select();setF(+b.dataset.f);try{localStorage.setItem('swamp.tpFps',TP.FPS);}catch(e){}});}
 $('#tourPromoBtn').onclick=openTourPromo;
 $('#tpClose').onclick=()=>{S.ui();$('#tourPromo').classList.add('hidden');cancelAnimationFrame(TP.raf);};
 $('#tpPost').onclick=()=>tpSend('post');
