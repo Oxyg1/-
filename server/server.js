@@ -512,6 +512,112 @@ function tourRank(t, uid) {
   const b = tourBoard(t), i = b.findIndex(r => r.id === uid);
   return i < 0 || !b[i].best ? null : i + 1;
 }
+/* ---------- Движ в чате турнира ----------
+   Организатор добавляет бота в свой (или чужой) чат по ссылке startgroup с запросом
+   права закреплять сообщения — чат привязывается к турниру. Дальше бот:
+   • пишет в чат, когда кто-то становится лидером или врывается в призовую зону;
+   • держит закреп с текущим топом и правит его при каждом изменении;
+   • пишет в личку тем, кого обогнали, — один раз, пока игрок не поднимется выше
+     места, с которого упал (иначе при каждом прыжке соперника шла бы лавина). */
+const TE_ID = { trophy: '5449505439182007199', gift: '5411480216809792207', time: '5217517268929389065', mega: '5278528159837348960',
+  point: '5470177992950946662', crown: '5805553606635559688', bolt: '5884428842780594914', up: '5938437708635443119',
+  party: '6041731551845159060', target: '6032949275732742941', star: '6034923938486684992', chart: '5938539885907415367', down: '5893057118545646106' };
+const TE_FB = { trophy: '🏆', gift: '🎁', time: '⏳', mega: '📢', point: '👇', crown: '👑', bolt: '⚡', up: '⬆️', party: '🎉', target: '🎯', star: '⭐', chart: '📈', down: '🔻' };
+const te = k => `<tg-emoji emoji-id="${TE_ID[k]}">${TE_FB[k]}</tg-emoji>`;
+// приз за конкретное место: из списка организатора или из текста «1 место … 2 место …»
+function prizeFor(t, place) {
+  if (Array.isArray(t.prizes) && t.prizes[place - 1]) return t.prizes[place - 1];
+  const src = String(t.prize || '');
+  const re = /(\d+)\s*(?:-?[ейя]\s*)?мест[оа][\s:—–-]*([\s\S]*?)(?=\s*\d+\s*(?:-?[ейя]\s*)?мест[оа]|\s*—\s*получ|$)/gi;
+  for (const m of src.matchAll(re)) if (+m[1] === place && m[2].trim()) return m[2].trim().replace(/[,;.\s]+$/, '');
+  return place <= placesOf(t) && !/\d\s*мест/i.test(src) ? src : '';
+}
+const mm = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' м';
+const tourPlayKb = t => ({ inline_keyboard: [[{ text: EMO_BTN + 'Прыгать', url: tourLink(t) }]] });
+// очередь отправки: Telegram режет больше ~30 сообщений в секунду и ~20 в минуту в одну группу
+const tgQueue = []; let tgBusy = false;
+function tgQ(method, params) {
+  return new Promise(res => { tgQueue.push({ method, params, res }); if (!tgBusy) tgPump(); });
+}
+async function tgPump() {
+  tgBusy = true;
+  while (tgQueue.length) {
+    const { method, params, res } = tgQueue.shift();
+    try { res(await tg(method, params)); } catch (e) { if (!/not modified/i.test(e.message)) log('tgQ', method, e.message); res(null); }
+    await new Promise(r => setTimeout(r, String(params.chat_id).startsWith('-') ? 1100 : 45));
+  }
+  tgBusy = false;
+}
+function tourTopText(t) {
+  const P = placesOf(t), top = tourBoard(t).filter(r => r.best > 0).slice(0, P);
+  const end = new Date(t.endsAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  const rows = [];
+  for (let i = 0; i < P; i++) {
+    const r = top[i], pz = prizeFor(t, i + 1);
+    rows.push(`${i === 0 ? te('crown') : `${i + 1}.`} ${r ? `<b>${esc(r.name)}</b> — ${mm(r.best)}` : '<i>свободно</i>'}${pz ? ` · ${esc(pz)}` : ''}`);
+  }
+  if (t.done) return `${te('trophy')} <b>Турнир «${esc(t.title)}» завершён</b>\n\n${rows.join('\n')}\n\nУчастников: ${Object.keys(t.players || {}).length}`;
+  return `${te('trophy')} <b>Турнир «${esc(t.title)}» — топ-${P} сейчас</b>\n\n${rows.join('\n')}\n\n${te('time')} До ${end} (МСК) · участников: ${Object.keys(t.players || {}).length}\nПрыгай и выбивай из топа ${te('point')}`;
+}
+const pinTimers = new Map();
+function tourPinSoon(t) {
+  if (!t.chat || !t.chat.id || !CFG.token || pinTimers.has(t.id)) return;
+  pinTimers.set(t.id, setTimeout(async () => {
+    pinTimers.delete(t.id);
+    const text = tourTopText(t);
+    if (t.chat.pin) { await tgQ('editMessageText', { chat_id: t.chat.id, message_id: t.chat.pin, text, parse_mode: 'HTML', reply_markup: tourPlayKb(t) }); return; }
+    const m = await tgQ('sendMessage', { chat_id: t.chat.id, text, parse_mode: 'HTML', reply_markup: tourPlayKb(t), disable_notification: true });
+    if (m && m.message_id) { t.chat.pin = m.message_id; save(); await tgQ('pinChatMessage', { chat_id: t.chat.id, message_id: m.message_id, disable_notification: true }); }
+  }, 4000));
+}
+function tourChatPost(t, text) {
+  if (!t.chat || !t.chat.id || !CFG.token) return;
+  tgQ('sendMessage', { chat_id: t.chat.id, text, parse_mode: 'HTML', reply_markup: tourPlayKb(t) });
+}
+// после того как игрок u обновил лучший результат в турнире t; oldB — таблица до этого
+function tourAfter(t, u, oldB) {
+  const P = placesOf(t), me = u.id;
+  const ob = oldB.filter(r => r.best > 0), nb = tourBoard(t).filter(r => r.best > 0);
+  const oR = new Map(ob.map((r, i) => [r.id, i + 1])), nR = new Map(nb.map((r, i) => [r.id, i + 1]));
+  const r0 = oR.get(me) || null, r1 = nR.get(me);
+  // себе: поднялся выше места, с которого когда-то упал — снова сообщаем об обгонах
+  const mp = t.players[me]; if (mp && mp.nt && r1 < mp.nt) delete mp.nt;
+  // обогнанным — в личку, по разу
+  for (const [id, was] of oR) {
+    if (id === me) continue;
+    const now = nR.get(id); if (!(now > was)) continue;
+    const p = t.players[id]; if (!p || p.nt) continue;
+    p.nt = was;
+    if (!CFG.token || !/^\d+$/.test(id)) continue;
+    const ahead = nb[now - 2], gap = ahead ? ahead.best - p.best + 1 : 0, lost = was <= P && now > P;
+    const pzWas = prizeFor(t, was), pzNow = prizeFor(t, now);
+    tgQ('sendMessage', { chat_id: +id, parse_mode: 'HTML', reply_markup: tourPlayKb(t),
+      text: `${te('down')} <b>Тебя обогнали в турнире «${esc(t.title)}»</b>\n<b>${esc(u.name)}</b> — ${mm(mp.best)}. Ты был ${was}-м, теперь ${now}-й.` +
+        (lost ? `\n${te('gift')} Ты выпал из призов${pzWas ? `: «${esc(pzWas)}» уходит сопернику` : ''}.` :
+          now <= P && pzWas && pzNow && pzWas !== pzNow ? `\n${te('gift')} Теперь твой приз — «${esc(pzNow)}» вместо «${esc(pzWas)}».` : '') +
+        (gap ? `\n${te('target')} До ${now - 1}-го места — ${mm(gap)}.` : '') + `\n\nОтыграешься? ${te('point')}` });
+  }
+  if (t.chat && t.chat.id) {
+    const lead0 = ob[0], best = mp ? mp.best : 0, now = Date.now();
+    if (r1 === 1 && (!lead0 || lead0.id !== me)) {
+      const pz = prizeFor(t, 1);
+      tourChatPost(t, `${te('crown')} <b>Новый лидер турнира — ${esc(u.name)}!</b>\nРезультат: ${mm(best)}${lead0 ? `. Прошлый лидер, ${esc(lead0.name)}, — ${mm(lead0.best)}` : ''}.` +
+        (pz ? `\n${te('gift')} Сейчас главный приз — ${esc(pz)} — забирает ${esc(u.name)}.` : '') + `\n\nКто собьёт? ${te('point')}`);
+      t.chat.recAt = now; t.chat.rec = best;
+    } else if (r1 === 1 && best >= (t.chat.rec || 0) * 1.08 && now - (t.chat.recAt || 0) > 90e3) {
+      tourChatPost(t, `${te('bolt')} <b>Новый рекорд турнира — ${mm(best)}!</b>\nЛидер ${esc(u.name)} улучшает свой же результат и уходит в отрыв.\n\nВыше сможешь? ${te('point')}`);
+      t.chat.recAt = now; t.chat.rec = best;
+    } else if (r1 <= P && (!r0 || r0 > P)) {
+      const out = ob[P - 1] && ob[P - 1].id !== me ? ob[P - 1] : null, pz = prizeFor(t, r1);
+      tourChatPost(t, `${te('up')} <b>В топе-${P} новенький — ${esc(u.name)}!</b>\n${r1}-е место, ${mm(best)}` + (out ? `. Из призов вылетает ${esc(out.name)}.` : '.') +
+        (pz ? `\n${te('gift')} Сейчас ${esc(u.name)} получит: ${esc(pz)}.` : '') + `\n\nОтбей место ${te('point')}`);
+    }
+    const key = nb.slice(0, P).map(r => r.id + ':' + r.best).join('|');
+    if (key !== t.chat.topKey) { t.chat.topKey = key; tourPinSoon(t); }
+  }
+  save();
+}
+
 function tourCard(t, u) {
   const me = u && t.players && t.players[u.id];
   const top = tourBoard(t)[0];
@@ -523,6 +629,8 @@ function tourCard(t, u) {
     leader: top && top.best ? { name: top.name, best: top.best } : null,
     channels: (t.channels || []).map(c => ({ username: c.username, title: c.title })),
     mine: !!(u && t.ownerId === u.id), places: placesOf(t),
+    chat: t.chat && t.chat.id ? (t.chat.title || 'чат') : null,
+    chatLink: u && t.ownerId === u.id && CFG.botUsername ? `https://t.me/${CFG.botUsername}?startgroup=tc_${t.id}&admin=pin_messages` : '',
   };
 }
 /* Обязательная подписка. Организатор указывает до трёх публичных каналов или
@@ -606,6 +714,13 @@ const tourLink = t => {
 };
 async function tourNotify(t) {
   if (!CFG.token) return;
+  if (t.chat && t.chat.id) {
+    const win = t.winners || [];
+    tourChatPost(t, `${te('party')} <b>Турнир «${esc(t.title)}» завершён!</b>\n\n` +
+      (win.length ? win.map((w, i) => `${i === 0 ? te('crown') : `${i + 1}.`} <b>${esc(w.name)}</b>${w.username ? ' @' + esc(w.username) : ''} — ${mm(w.best)}${prizeFor(t, i + 1) ? ' · ' + esc(prizeFor(t, i + 1)) : ''}`).join('\n') : 'Никто не прыгнул.') +
+      `\n\nСпасибо всем, кто прыгал! ${te('star')}`);
+    if (t.chat.pin) tgQ('editMessageText', { chat_id: t.chat.id, message_id: t.chat.pin, text: tourTopText(t), parse_mode: 'HTML', reply_markup: tourPlayKb(t) });
+  }
   const win = t.winners || [];
   const who = w => `${esc(w.name)}${w.username ? ' @' + esc(w.username) : ''} — ${w.best} м`;
   const list = win.length ? win.map((w, i) => `${i + 1}. ${who(w)}`).join('\n') : 'Никто не прыгнул.';
@@ -858,6 +973,7 @@ const api = {
     if (!t || t.hidden) return { ok: false, error: 'Турнир не найден' };
     const board = tourBoard(t).filter(r => r.best > 0);
     const i = board.findIndex(r => r.id === u.id);
+    if (CFG.token && !CFG.botUsername) await botId().catch(() => {});   // для ссылки «подключить чат»
     const skinOf = id => ((db.users[id] || {}).jump || {}).skin || 'original';
     return {
       ok: true, now: Date.now(), tour: tourCard(t, u), link: tourLink(t),
@@ -992,9 +1108,11 @@ const api = {
       const p = t.players && t.players[u.id];
       if (!p || t.hidden || t.done || run.t0 < t.startsAt || run.t0 > t.endsAt) continue;
       if (h > (p.best || 0)) {
-        const c = climbOf(tourBoard(t), u.id, p.best || 0, h);
+        const oldB = tourBoard(t);
+        const c = climbOf(oldB, u.id, p.best || 0, h);
         if (c) climb.push({ ...c, kind: 'tour', id: t.id, title: t.title });
         p.best = h; p.at = now; p.name = u.name;
+        try { tourAfter(t, u, oldB); } catch (e) { log('tourAfter', e.message); }
       }
       tours.push({ id: t.id, title: t.title, rank: tourRank(t, u.id), best: p.best || 0, players: Object.keys(t.players).length });
     }
@@ -1307,7 +1425,8 @@ const api = {
       const list = Object.values(db.tournaments).sort((a, b) => b.createdAt - a.createdAt).slice(0, 200)
         .map(t => ({ id: t.id, title: t.title, prize: t.prize, owner: t.ownerName, ownerId: t.ownerId, ownerUsername: t.ownerUsername,
           official: !!t.official, hidden: !!t.hidden, done: !!t.done, endsAt: t.endsAt, createdAt: t.createdAt,
-          players: Object.keys(t.players || {}).length, winners: t.winners || null, places: placesOf(t), startsAt: t.startsAt }));
+          players: Object.keys(t.players || {}).length, winners: t.winners || null, places: placesOf(t), startsAt: t.startsAt,
+          chat: t.chat && t.chat.id ? (t.chat.title || String(t.chat.id)) : null, prizes: [...Array(placesOf(t))].map((_, i) => prizeFor(t, i + 1)) }));
       return { ok: true, tours: list };
     }
     // правка идущего турнира: название, приз, число призовых мест, время окончания
@@ -1324,6 +1443,11 @@ const api = {
         if (v - t.startsAt > TOUR_MAX_DUR) return { ok: false, error: 'Турнир не может идти дольше 14 дней' };
         if (v !== t.endsAt) { t.endsAt = v; ch.push('конец'); }
       }
+      if (body.prizes !== undefined) {
+        const list = String(body.prizes || '').split(';').map(x => cleanText(x, 60)).filter(Boolean).slice(0, 10);
+        if (JSON.stringify(list) !== JSON.stringify(t.prizes || [])) { t.prizes = list.length ? list : undefined; ch.push('призы по местам'); if (t.chat) { t.chat.topKey = ''; tourPinSoon(t); } }
+      }
+      if (body.unchat && t.chat) { t.chat = null; ch.push('чат отвязан'); }
       if (!ch.length) return { ok: true, msg: 'Ничего не изменилось' };
       save(); log('tour edit', t.id, ch.join(', '));
       return { ok: true, msg: 'Сохранено: ' + ch.join(', ') };
@@ -1465,6 +1589,20 @@ async function onMessage(m) {
     if (u0 && u0.holder && (u0.holder.frogs || []).length) rows.push([{ text: 'Чат холдеров', url: CFG.holdersLink }]);
     await tg('sendMessage', { chat_id: chat.id, text: `${em('frog')} <b>SWAMP</b>\nЛягушки или коты — выбираешь при первом запуске.\nТапай, призывай новых и соединяй три в ряд.\n\nИгровой чат: ${CFG.chatLink}`, parse_mode: 'HTML',
       reply_markup: { inline_keyboard: rows } });
+  } else if (cmd === '/start' && !priv && /^tc_/.test(text.split(' ')[1] || '')) {
+    const t = db.tournaments[(text.split(' ')[1] || '').slice(3)];
+    const okUser = t && (String(t.ownerId) === String(m.from.id) || String(m.from.id) === String(CFG.adminId));
+    if (!t || t.done) { await tg('sendMessage', { chat_id: chat.id, text: 'Этот турнир уже закончился или не найден.' }); return; }
+    if (!okUser) { await tg('sendMessage', { chat_id: chat.id, text: 'Подключить чат к турниру может только его организатор.' }); return; }
+    t.chat = { id: chat.id, title: chat.title || 'чат' }; save();
+    await tgQ('sendMessage', { chat_id: chat.id, parse_mode: 'HTML', reply_markup: tourPlayKb(t),
+      text: `${te('mega')} <b>Здесь идёт турнир «${esc(t.title)}» в Frog Jump!</b>\n\nБуду писать, когда кто-то становится лидером или врывается в призы, а в закрепе — живой топ. ` +
+        `В зачёт идёт лучший прыжок за время турнира ${te('point')}` });
+    t.chat.topKey = ''; tourPinSoon(t);
+    const me2 = await tg('getChatMember', { chat_id: chat.id, user_id: await botId() }).catch(() => null);
+    if (!me2 || !(me2.status === 'administrator' && me2.can_pin_messages !== false))
+      await tgQ('sendMessage', { chat_id: chat.id, text: 'Чтобы держать топ в закрепе, дайте мне право закреплять сообщения.' });
+    if (t.ownerId && /^\d+$/.test(String(t.ownerId))) tgQ('sendMessage', { chat_id: +t.ownerId, parse_mode: 'HTML', text: `${te('star')} Чат «${esc(chat.title || '')}» подключён к турниру «${esc(t.title)}».` });
   } else if (cmd === '/play' || (cmd === '/start' && !priv)) {
     await tg('sendMessage', { chat_id: chat.id, text: `${em('frog')} <b>SWAMP</b> — кликер + три в ряд с лягушками или котами. Жми и играй прямо здесь.`, parse_mode: 'HTML', reply_markup: playKb(priv) });
   } else if (cmd === '/top') {

@@ -800,6 +800,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
       <div class="t-podium" id="tourPodium"></div>
       <div class="t-me" id="tourStats"></div>
       <div class="t-chan" id="tourChan" hidden></div>
+      <div class="t-chan" id="tourChat" hidden></div>
       <div class="hub-label" id="tourBoardL">Таблица</div>
       <div class="tour-list" id="tourBoard"></div>
       <div class="t-info" id="tourInfo"></div>
@@ -2863,6 +2864,14 @@ function renderTour(miss){
       (missing.size?'<button class="btn sm" id="tourRecheck" style="width:100%;margin:2px 0 0">Я подписался — проверить</button>':'');
     chBox.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>{S.ui();openTg('https://t.me/'+b.dataset.ch);});
     const rc=$('#tourRecheck');if(rc)rc.onclick=()=>joinTour();
+  }
+  // организатору: чат розыгрыша — бот пишет туда лидеров и держит топ в закрепе
+  const tc=$('#tourChat');tc.hidden=!(t.mine&&!t.done);
+  if(!tc.hidden){
+    tc.innerHTML=t.chat
+      ?`<small>Чат турнира: <b>${esc(t.chat)}</b> — бот пишет туда новых лидеров и держит топ в закрепе</small><button class="btn ghost sm" id="tourChatBtn" style="width:100%;margin:2px 0 0">Подключить другой чат</button>`
+      :`<small><b>Движ в чате.</b> Добавь бота в чат розыгрыша: он будет писать, кто стал лидером и кто ворвался в призы, и держать топ в закрепе. Обогнанным придёт сообщение в личку.</small><button class="btn sm" id="tourChatBtn" style="width:100%;margin:2px 0 0">Подключить чат</button>`;
+    $('#tourChatBtn').onclick=()=>{S.ui();if(t.chatLink)openTg(t.chatLink);else toast('Нужен запущенный бот на сервере');};
   }
   // мелкий шрифт внизу: кто ведёт, сроки и правило одной строкой каждое
   $('#tourInfo').innerHTML=`
