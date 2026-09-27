@@ -1390,7 +1390,7 @@ window.FrogJumpInit=function(B){
     countUp($('#fjFinH'),h,.8,true);
     const tl=r.tours||[],box=$('#fjFinTours');
     box.hidden=!tl.length;
-    box.innerHTML=tl.map(t=>`<div><span>${esc(t.title)}</span><b>${t.noTour?'разгон не в зачёт':t.rank?t.rank+' из '+t.players:'—'}</b></div>`).join('');
+    box.innerHTML=tl.map(t=>`<div><span>${esc(t.title)}</span><b>${t.rank?t.rank+' из '+t.players:'—'}</b></div>`).join('');
     if(r.rank)$('#fjFinNote').textContent=`Место в общем рейтинге: ${r.rank}`;
   }
   $('#fjExit').onclick=()=>{SND.ui();finish();};
@@ -1482,8 +1482,7 @@ window.FrogJumpInit=function(B){
     $('#fjBoostGo').innerHTML=`Разогнаться · ${boostCost()} <img class="ic" src="icons/tgstar.png" alt="">`;
     const j=B.net().jump||{},half=Math.floor((j.best||0)/2);
     $('#fjBoostH').textContent=fmtM(half)+' м';
-    $('#fjBoostSub').innerHTML=`Забег начнётся сразу с ${fmtM(half)} м — это половина твоего рекорда ${fmtM(j.best||0)} м.<br>Мошки, рекорд и место в рейтинге считаются как обычно.`+
-      (j.boostNoTour?'<br><b>В зачёт турнира этот забег не пойдёт — с рекордом от 45 000 м разгон в турнирах не считается.</b>':'');
+    $('#fjBoostSub').innerHTML=`Забег начнётся сразу с ${fmtM(half)} м — это половина твоего рекорда ${fmtM(j.best||0)} м.<br>Мошки, рекорд и место в рейтинге считаются как обычно.`;
     $('#fjBoostOv').hidden=false;SND.card();
   }
   /* Разгон забираем только у сервера. Сразу после оплаты локальная копия ещё
