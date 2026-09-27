@@ -1596,8 +1596,16 @@ async function onMessage(m) {
     if (u0 && u0.holder && (u0.holder.frogs || []).length) rows.push([{ text: 'Чат холдеров', url: CFG.holdersLink }]);
     await tg('sendMessage', { chat_id: chat.id, text: `${em('frog')} <b>SWAMP</b>\nЛягушки или коты — выбираешь при первом запуске.\nТапай, призывай новых и соединяй три в ряд.\n\nИгровой чат: ${CFG.chatLink}`, parse_mode: 'HTML',
       reply_markup: { inline_keyboard: rows } });
-  } else if (cmd === '/start' && !priv && /^tc_/.test(text.split(' ')[1] || '')) {
-    const t = db.tournaments[(text.split(' ')[1] || '').slice(3)];
+  } else if (!priv && ((cmd === '/start' && /^tc_/.test(text.split(' ')[1] || '')) || cmd === '/tour' || cmd === '/turnir')) {
+    // привязка чата: бота добавили по кнопке (startgroup=tc_<id>) или организатор пишет
+    // в чате «/tour <id>» — так можно подключить чат, где ты не админ
+    const arg = (text.split(/\s+/)[1] || '').replace(/^.*startapp=/, '').replace(/^tc?_/, '').replace(/[^a-z0-9].*$/i, '');
+    let t = db.tournaments[arg];
+    if (!arg) {   // без номера — единственный идущий турнир этого организатора
+      const mine = Object.values(db.tournaments).filter(x => tourActive(x) && String(x.ownerId) === String(m.from.id));
+      if (mine.length === 1) t = mine[0];
+      else { await tg('sendMessage', { chat_id: chat.id, text: 'Напиши номер турнира: /tour 599b76 — он есть в турнире, в блоке «Движ в чате».' }); return; }
+    }
     const okUser = t && (String(t.ownerId) === String(m.from.id) || String(m.from.id) === String(CFG.adminId));
     if (!t || t.done) { await tg('sendMessage', { chat_id: chat.id, text: 'Этот турнир уже закончился или не найден.' }); return; }
     if (!okUser) { await tg('sendMessage', { chat_id: chat.id, text: 'Подключить чат к турниру может только его организатор.' }); return; }

@@ -2870,7 +2870,11 @@ function renderTour(miss){
   if(!tc.hidden){
     tc.innerHTML=t.chat
       ?`<small>Чат турнира: <b>${esc(t.chat)}</b> — бот пишет туда новых лидеров и держит топ в закрепе</small><button class="btn ghost sm" id="tourChatBtn" style="width:100%;margin:2px 0 0">Подключить другой чат</button>`
-      :`<small><b>Движ в чате.</b> Добавь бота в чат розыгрыша: он будет писать, кто стал лидером и кто ворвался в призы, и держать топ в закрепе. Обогнанным придёт сообщение в личку.</small><button class="btn sm" id="tourChatBtn" style="width:100%;margin:2px 0 0">Подключить чат</button>`;
+      :`<small><b>Движ в чате.</b> Добавь бота в чат розыгрыша: он будет писать, кто стал лидером и кто ворвался в призы, и держать топ в закрепе. Обогнанным придёт сообщение в личку.</small><button class="btn sm" id="tourChatBtn" style="width:100%;margin:2px 0 0">Подключить чат</button>
+        <small style="margin-top:4px">Бот уже в чате, но ты там не админ? Напиши в чат команду:</small>
+        <div class="ch"><span id="tourCmd">/tour@${esc(CFG.botName||'swampis_bot')} ${esc(t.id)}</span><button class="chip gold" id="tourCmdCopy">Копировать</button></div>`;
+    const cc=$('#tourCmdCopy');if(cc)cc.onclick=()=>{S.ui();const v=$('#tourCmd').textContent;
+      try{navigator.clipboard.writeText(v).then(()=>toast('Команда скопирована'),()=>toast(v,5000));}catch(e){toast(v,5000);}};
     $('#tourChatBtn').onclick=()=>{S.ui();if(t.chatLink)openTg(t.chatLink);else toast('Нужен запущенный бот на сервере');};
   }
   // мелкий шрифт внизу: кто ведёт, сроки и правило одной строкой каждое
