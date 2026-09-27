@@ -411,7 +411,7 @@ function renderTours(list){
       <td>${esc(t.owner||'')}${t.ownerUsername?' <span class="muted">@'+esc(t.ownerUsername)+'</span>':''}</td>
       <td class="num">${t.players}</td>
       <td class="num muted">${new Date(t.endsAt).toLocaleString('ru-RU')}</td>
-      <td style="font-size:12.5px">${win0(t)||`<span class="muted">мест: ${t.places||3}</span>`}</td>
+      <td style="font-size:12.5px">${win0(t)||`<span class="muted">мест: ${t.places||3}</span>`}${t.muteChat?'<div class="tag test">чат на паузе</div>':''}${t.muteDm?'<div class="tag test">лички выкл</div>':''}</td>
       <td style="white-space:nowrap">${t.done?'':'<button class="ghost sm" data-act="edit">Изменить</button> '}<button class="${t.hidden?'ghost':'bad'} sm" data-act="hide">${t.hidden?'Вернуть':'Скрыть'}</button></td>
     </tr>
     ${t.done?'':`<tr class="tedit" data-for="${esc(t.id)}" hidden><td colspan="7"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
@@ -419,7 +419,9 @@ function renderTours(list){
       <label style="flex:2 1 240px">Приз<input data-f="prize" maxlength="120" value="${esc(t.prize)}"></label>
       <label style="flex:0 0 120px">Призовых мест<select data-f="places">${[...Array(10)].map((_,i)=>`<option value="${i+1}"${i+1===(t.places||3)?' selected':''}>${i+1}</option>`).join('')}</select></label>
       <label style="flex:0 0 210px">Конец<input data-f="endsAt" type="datetime-local" value="${toLocalInput(t.endsAt)}"></label>
-      <label style="flex:1 1 100%">Призы по местам, через «;»<input data-f="prizes" value="${esc((t.prizes||[]).join('; '))}" placeholder="EasterEgg-112522; 100 звёзд; 50 звёзд"></label>
+      <label style="flex:1 1 100%">Призы по местам, через «;»<input data-f="prizes" value="${esc((t.prizes||[]).join('; '))}" placeholder="${esc((t.prizesAuto||[]).some(Boolean)?'сейчас из текста: '+t.prizesAuto.map(x=>x||'—').join('; '):'EasterEgg-112522; 100 звёзд; 50 звёзд')}"></label>
+      <label style="flex:0 0 auto;display:flex;align-items:center;gap:8px"><input type="checkbox" data-f="muteChat" style="width:auto"${t.muteChat?' checked':''}> Посты в чат на паузе</label>
+      <label style="flex:0 0 auto;display:flex;align-items:center;gap:8px"><input type="checkbox" data-f="muteDm" style="width:auto"${t.muteDm?' checked':''}> Не писать обогнанным в личку</label>
       <div class="muted" style="flex:1 1 100%">Чат турнира: ${t.chat?esc(t.chat)+' <button class="ghost sm" data-act="unchat">Отвязать</button>':'не подключён — организатор подключает кнопкой в турнире'}</div>
       <button class="sm" data-act="save">Сохранить</button></div></td></tr>`}`).join('')||'<tr><td class="muted">Турниров пока нет</td></tr>');
   $('#toursTbl').querySelectorAll('tr[data-tid]').forEach(tr=>{
@@ -429,7 +431,8 @@ function renderTours(list){
       box.querySelector('[data-act=save]').onclick=async()=>{
         const f=k=>box.querySelector(`[data-f=${k}]`).value;
         const endsAt=new Date(f('endsAt')).getTime();
-        const r=await api({act:'tourEdit',tid:tr.dataset.tid,title:f('title'),prize:f('prize'),places:+f('places'),endsAt,prizes:f('prizes')});
+        const ck=k=>box.querySelector(`[data-f=${k}]`).checked;
+        const r=await api({act:'tourEdit',tid:tr.dataset.tid,title:f('title'),prize:f('prize'),places:+f('places'),endsAt,prizes:f('prizes'),muteChat:ck('muteChat'),muteDm:ck('muteDm')});
         toast(r.ok?r.msg:(r.error||'Ошибка'));if(r.ok)load('tours');
       };
       const uc=box.querySelector('[data-act=unchat]');if(uc)uc.onclick=async()=>{const r=await api({act:'tourEdit',tid:tr.dataset.tid,unchat:1});toast(r.ok?r.msg:(r.error||'Ошибка'));load('tours');};

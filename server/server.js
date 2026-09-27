@@ -530,7 +530,8 @@ function prizeFor(t, place) {
   const src = String(t.prize || '');
   const re = /(\d+)\s*(?:-?[ейя]\s*)?мест[оа][\s:—–-]*([\s\S]*?)(?=\s*\d+\s*(?:-?[ейя]\s*)?мест[оа]|\s*—\s*получ|$)/gi;
   for (const m of src.matchAll(re)) if (+m[1] === place && m[2].trim()) return m[2].trim().replace(/[,;.\s]+$/, '');
-  return place <= placesOf(t) && !/\d\s*мест/i.test(src) ? src : '';
+  // места не расписаны — весь приз считаем призом за первое место, остальным не обещаем
+  return place === 1 && !/\d\s*мест/i.test(src) ? src : '';
 }
 const mm = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' м';
 const tourPlayKb = t => ({ inline_keyboard: [[{ text: EMO_BTN + 'Прыгать', url: tourLink(t) }]] });
@@ -561,7 +562,7 @@ function tourTopText(t) {
 }
 const pinTimers = new Map();
 function tourPinSoon(t) {
-  if (!t.chat || !t.chat.id || !CFG.token || pinTimers.has(t.id)) return;
+  if (!t.chat || !t.chat.id || !CFG.token || t.muteChat || pinTimers.has(t.id)) return;
   pinTimers.set(t.id, setTimeout(async () => {
     pinTimers.delete(t.id);
     const text = tourTopText(t);
@@ -571,7 +572,7 @@ function tourPinSoon(t) {
   }, 4000));
 }
 function tourChatPost(t, text) {
-  if (!t.chat || !t.chat.id || !CFG.token) return;
+  if (!t.chat || !t.chat.id || !CFG.token || t.muteChat) return;
   tgQ('sendMessage', { chat_id: t.chat.id, text, parse_mode: 'HTML', reply_markup: tourPlayKb(t) });
 }
 // после того как игрок u обновил лучший результат в турнире t; oldB — таблица до этого
@@ -588,7 +589,7 @@ function tourAfter(t, u, oldB) {
     const now = nR.get(id); if (!(now > was)) continue;
     const p = t.players[id]; if (!p || p.nt) continue;
     p.nt = was;
-    if (!CFG.token || !/^\d+$/.test(id)) continue;
+    if (!CFG.token || t.muteDm || !/^\d+$/.test(id)) continue;   // лички можно выключить в админке
     const ahead = nb[now - 2], gap = ahead ? ahead.best - p.best + 1 : 0, lost = was <= P && now > P;
     const pzWas = prizeFor(t, was), pzNow = prizeFor(t, now);
     tgQ('sendMessage', { chat_id: +id, parse_mode: 'HTML', reply_markup: tourPlayKb(t),
@@ -719,7 +720,7 @@ async function tourNotify(t) {
     tourChatPost(t, `${te('party')} <b>Турнир «${esc(t.title)}» завершён!</b>\n\n` +
       (win.length ? win.map((w, i) => `${i === 0 ? te('crown') : `${i + 1}.`} <b>${esc(w.name)}</b>${w.username ? ' @' + esc(w.username) : ''} — ${mm(w.best)}${prizeFor(t, i + 1) ? ' · ' + esc(prizeFor(t, i + 1)) : ''}`).join('\n') : 'Никто не прыгнул.') +
       `\n\nСпасибо всем, кто прыгал! ${te('star')}`);
-    if (t.chat.pin) tgQ('editMessageText', { chat_id: t.chat.id, message_id: t.chat.pin, text: tourTopText(t), parse_mode: 'HTML', reply_markup: tourPlayKb(t) });
+    if (t.chat.pin && !t.muteChat) tgQ('editMessageText', { chat_id: t.chat.id, message_id: t.chat.pin, text: tourTopText(t), parse_mode: 'HTML', reply_markup: tourPlayKb(t) });
   }
   const win = t.winners || [];
   const who = w => `${esc(w.name)}${w.username ? ' @' + esc(w.username) : ''} — ${w.best} м`;
@@ -1426,7 +1427,7 @@ const api = {
         .map(t => ({ id: t.id, title: t.title, prize: t.prize, owner: t.ownerName, ownerId: t.ownerId, ownerUsername: t.ownerUsername,
           official: !!t.official, hidden: !!t.hidden, done: !!t.done, endsAt: t.endsAt, createdAt: t.createdAt,
           players: Object.keys(t.players || {}).length, winners: t.winners || null, places: placesOf(t), startsAt: t.startsAt,
-          chat: t.chat && t.chat.id ? (t.chat.title || String(t.chat.id)) : null, prizes: [...Array(placesOf(t))].map((_, i) => prizeFor(t, i + 1)) }));
+          chat: t.chat && t.chat.id ? (t.chat.title || String(t.chat.id)) : null, muteChat: !!t.muteChat, muteDm: !!t.muteDm, prizes: t.prizes || null, prizesAuto: [...Array(placesOf(t))].map((_, i) => prizeFor(Object.assign({}, t, { prizes: null }), i + 1)) }));
       return { ok: true, tours: list };
     }
     // правка идущего турнира: название, приз, число призовых мест, время окончания
@@ -1448,6 +1449,12 @@ const api = {
         if (JSON.stringify(list) !== JSON.stringify(t.prizes || [])) { t.prizes = list.length ? list : undefined; ch.push('призы по местам'); if (t.chat) { t.chat.topKey = ''; tourPinSoon(t); } }
       }
       if (body.unchat && t.chat) { t.chat = null; ch.push('чат отвязан'); }
+      // аварийные выключатели: посты в чат и лички обогнанным, турнир при этом идёт дальше
+      if (body.muteChat !== undefined && !!body.muteChat !== !!t.muteChat) {
+        t.muteChat = !!body.muteChat; ch.push(t.muteChat ? 'посты в чат на паузе' : 'посты в чат включены');
+        if (!t.muteChat && t.chat) { t.chat.topKey = ''; tourPinSoon(t); }   // закреп догоняет текущий топ
+      }
+      if (body.muteDm !== undefined && !!body.muteDm !== !!t.muteDm) { t.muteDm = !!body.muteDm; ch.push(t.muteDm ? 'лички выключены' : 'лички включены'); }
       if (!ch.length) return { ok: true, msg: 'Ничего не изменилось' };
       save(); log('tour edit', t.id, ch.join(', '));
       return { ok: true, msg: 'Сохранено: ' + ch.join(', ') };
