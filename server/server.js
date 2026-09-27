@@ -668,21 +668,29 @@ async function resolveChannels(names) {
   return { list: res };
 }
 const subCache = new Map();
-async function isSubscribed(ch, uid) {
+async function isSubscribed(ch, uid, fresh) {
+  // «подписан» помним минуту, «не подписан» — несколько секунд: человек только что
+  // нажал «Открыть», подписался и сразу жмёт «проверить» — старый отказ его не пустит
   const k = ch.id + ':' + uid, c = subCache.get(k);
-  if (c && Date.now() - c.at < 60e3) return c.ok;
+  if (!fresh && c && Date.now() - c.at < (c.ok ? 60e3 : 4e3)) return c.ok;
   let ok = false;
   try {
     const m = await tg('getChatMember', { chat_id: ch.id, user_id: +uid });
     ok = ['creator', 'administrator', 'member'].includes(m.status) || (m.status === 'restricted' && m.is_member);
-  } catch (e) { ok = false; }
+  } catch (e) {
+    // ошибка — это не «не подписан»: чаще всего бот потерял права админа в канале.
+    // Игроков из-за этого не блокируем, а пишем в лог, чтобы организатор поправил права
+    const msg = String(e.message || '');
+    if (/user not found|participant_id_invalid|user_id_invalid/i.test(msg)) ok = false;
+    else { ok = true; log('sub check fail-open', ch.username || ch.id, msg); }
+  }
   subCache.set(k, { ok, at: Date.now() });
   return ok;
 }
-async function missingSubs(t, uid) {
+async function missingSubs(t, uid, fresh) {
   if (!CFG.token || !(t.channels || []).length) return [];
   const miss = [];
-  for (const ch of t.channels) if (!(await isSubscribed(ch, uid))) miss.push({ username: ch.username, title: ch.title });
+  for (const ch of t.channels) if (!(await isSubscribed(ch, uid, fresh))) miss.push({ username: ch.username, title: ch.title });
   return miss;
 }
 setInterval(() => { const t = Date.now(); for (const [k, c] of subCache) if (t - c.at > 600e3) subCache.delete(k); }, 600e3);
@@ -991,7 +999,7 @@ const api = {
     const t = db.tournaments[String(body.id || '')];
     if (!t || !tourActive(t)) return { ok: false, error: 'Турнир уже закончился' };
     if (!t.players[u.id]) {
-      const need = await missingSubs(t, u.id);
+      const need = await missingSubs(t, u.id, true);   // кнопка «проверить» — всегда свежий ответ Telegram
       if (need.length) return { ok: false, error: 'Сначала подпишись на каналы организатора', need };
       t.players[u.id] = { name: u.name, best: 0, at: 0, joinedAt: Date.now() }; save();
     }
