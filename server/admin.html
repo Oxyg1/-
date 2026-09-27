@@ -60,6 +60,12 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .muted{color:var(--mute)}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 18px;font-weight:800;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(-6px)}
+.an h2{font:900 17px Nunito,sans-serif;margin:22px 0 10px}
+.an .note{color:var(--mute);font-size:13px;margin:-4px 0 10px}
+.an td.c{text-align:center;font-variant-numeric:tabular-nums}
+.an .mini{display:inline-block;height:8px;border-radius:4px;background:var(--acc);vertical-align:middle;margin-right:6px;opacity:.85}
+.an .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+.an table{min-width:0}
 .danger{margin-top:24px;border:1px solid var(--bad);border-radius:14px;padding:14px 16px;background:rgba(255,107,129,.06)}
 .danger h3{margin:0 0 6px;font:900 15px Nunito,sans-serif;color:var(--bad)}
 .danger p{margin:0 0 10px;color:var(--mute);font-size:13.5px}
@@ -86,6 +92,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     <button data-tab="event">Ивент</button>
     <button data-tab="broadcast">Рассылка</button>
     <button data-tab="tours">Турниры</button>
+    <button data-tab="an">Аналитика</button>
   </div>
 
   <div id="tab-stats">
@@ -147,6 +154,21 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
         <button class="ghost sm" onclick="confirmAct('Обнулить счёт битвы недели (без выдачи наград)?',{act:'warReset'})">Обнулить битву</button>
         <button class="bad sm" onclick="confirmAct('Сбросить общий рекорд бесконечной серии?',{act:'endlessReset'})">Сбросить рекорд серии</button>
       </div>
+    </div>
+  </div>
+
+  <div id="tab-an" class="an" hidden>
+    <div class="tools"><button id="anCopy">Скопировать отчёт</button><button class="ghost" onclick="load('an')">Обновить</button><span class="muted" id="anMeta"></span></div>
+    <div class="cards" id="anCards"></div>
+    <h2>Удержание</h2><div class="note">Доля новичков дня, вернувшихся на 1-й, 3-й, 7-й… день. Точно — по дням активности (копятся с начала учёта); раньше — приблизительно, по последнему визиту (серым).</div>
+    <div class="cards" id="anRet"></div>
+    <div class="tbl"><table id="anCoh"></table></div>
+    <h2>По дням</h2><div class="tbl"><table id="anDays"></table></div>
+    <div class="grid2">
+      <div><h2>Воронка</h2><div class="tbl"><table id="anFun"></table></div></div>
+      <div><h2>Деньги по товарам</h2><div class="tbl"><table id="anItems"></table></div></div>
+      <div><h2>Рекорды Frog Jump</h2><div class="tbl"><table id="anBest"></table></div></div>
+      <div><h2>Источники (start_param)</h2><div class="tbl"><table id="anSrc"></table></div></div>
     </div>
   </div>
 
@@ -235,7 +257,7 @@ $('#key').onkeydown=e=>{if(e.key==='Enter')$('#enter').click();};
 (async()=>{ if(INIT&&await tryKey('',true)) return; if(KEY) tryKey(KEY,true); })();
 
 /* ---------- вкладки ---------- */
-const TABS=['stats','players','payments','event','broadcast','tours'];
+const TABS=['stats','players','payments','event','broadcast','tours','an'];
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
   TABS.forEach(t=>$('#tab-'+t).hidden=(t!==b.dataset.tab));
@@ -249,7 +271,54 @@ async function load(tab){
   if(tab==='event'){const r=await api({act:'stats'});if(r.ok)renderEvent(r.stats);}
   if(tab==='broadcast')bcPoll(true);
   if(tab==='tours'){const r=await api({act:'tours'});if(r.ok)renderTours(r.tours);}
+  if(tab==='an'){const r=await api({act:'analytics'});if(r.ok)renderAn(r.a);else toast(r.error||'Ошибка');}
 }
+
+/* ---------- аналитика ---------- */
+let AN=null;
+const pc=v=>v==null?'—':v+'%';
+function heat(v,max){if(v==null)return '';const k=Math.max(0,Math.min(1,v/max));return `background:rgba(255,210,63,${(.08+k*.5).toFixed(2)})`;}
+function renderAn(a){
+  AN=a;const T=a.totals;
+  $('#anMeta').textContent=`данные на ${new Date(a.generated).toLocaleString('ru-RU')} · дни активности копятся с ${a.trackingSince}`;
+  const c=[['Игроков',fmt(T.users),`premium: ${fmt(T.premium)}`],['DAU',fmt(T.dau),'за сутки'],['WAU',fmt(T.wau),'за 7 дней'],['MAU',fmt(T.mau),'за 30 дней'],
+    ['Липкость DAU/MAU',pc(T.stickiness),'сколько месячных заходят каждый день'],['Платящих',fmt(T.payers),`конверсия ${pc(T.conversion)}`],
+    ['Звёзд за 7 дней',fmt(T.stars7),`всего ${fmt(T.starsTotal)}`],['Звёзд за 30 дней',fmt(T.stars30),`ARPU ${T.arpu30} · ARPPU ${T.arppu30}`]];
+  $('#anCards').innerHTML=c.map(([t,v,sub])=>`<div class="card"><span>${t}</span><b>${v}</b><span>${sub}</span></div>`).join('');
+  $('#anRet').innerHTML=['d1','d3','d7','d14','d30'].map(k=>`<div class="card"><span>День ${k.slice(1)}</span><b>${pc(a.retention[k])}</b><span>за последние 60 дней</span></div>`).join('');
+  $('#anCoh').innerHTML='<tr><th>Когорта</th><th>Новых</th><th>D1</th><th>D3</th><th>D7</th><th>D14</th><th>D30</th></tr>'+
+    a.cohorts.slice().reverse().map(r=>`<tr${r.exact?'':' class="muted"'}><td>${r.day}${r.exact?'':' ≈'}</td><td class="num">${r.size}</td>${['d1','d3','d7','d14','d30'].map(k=>`<td class="c" style="${heat(r[k],60)}">${pc(r[k])}</td>`).join('')}</tr>`).join('');
+  const mx=k=>Math.max(1,...a.days.map(d=>d[k]||0));const bar=(v,m)=>v==null?'—':`<span class="mini" style="width:${Math.round(v/m*60)}px"></span>${fmt(v)}`;
+  $('#anDays').innerHTML='<tr><th>День</th><th>Новые</th><th>DAU</th><th>Забеги</th><th>Продолжения</th><th>Звёзды</th><th>Платили</th><th>Новые платящие</th></tr>'+
+    a.days.slice().reverse().map(d=>`<tr><td>${d.day}</td><td class="num">${bar(d.new,mx('new'))}</td><td class="num">${bar(d.dau,mx('dau'))}</td><td class="num">${bar(d.runs,mx('runs'))}</td><td class="num">${d.conts==null?'—':fmt(d.conts)}</td><td class="num">${bar(d.stars,mx('stars'))}</td><td class="num">${d.payers}</td><td class="num">${d.newPayers}</td></tr>`).join('');
+  $('#anFun').innerHTML='<tr><th>Шаг</th><th>Игроков</th><th>От всех</th></tr>'+a.funnel.map(f=>`<tr><td>${f.step}</td><td class="num">${fmt(f.n)}</td><td class="num"><span class="mini" style="width:${Math.round((f.pct||0)*.8)}px"></span>${pc(f.pct)}</td></tr>`).join('');
+  $('#anItems').innerHTML='<tr><th>Товар</th><th>Звёзд</th><th>Покупок</th><th>Покупателей</th></tr>'+(a.items.map(i=>`<tr><td>${esc(i.item)}</td><td class="num">${fmt(i.stars)}</td><td class="num">${i.count}</td><td class="num">${i.payers}</td></tr>`).join('')||'<tr><td class="muted">Платежей нет</td></tr>');
+  $('#anBest').innerHTML=`<tr><th>Рекорд</th><th>Игроков</th></tr>`+a.jump.buckets.map(b=>`<tr><td>${b.range} м</td><td class="num">${fmt(b.n)}</td></tr>`).join('')+
+    `<tr><td class="muted">медиана рекорда · забегов на игрока</td><td class="num">${fmt(a.jump.bestMedian)} м · ${a.jump.runsMedian}</td></tr>`;
+  $('#anSrc').innerHTML='<tr><th>Источник</th><th>Игроков</th><th>Играли</th><th>Вернулись</th><th>Платили</th></tr>'+a.sources.map(s=>`<tr><td>${esc(s.src)}</td><td class="num">${fmt(s.users)}</td><td class="num">${s.played}</td><td class="num">${s.back}</td><td class="num">${s.payers}</td></tr>`).join('');
+}
+// отчёт текстом — чтобы вставить в чат с разбором
+function anReport(a){
+  const T=a.totals,L=[];
+  L.push(`SWAMP · отчёт ${new Date(a.generated).toLocaleString('ru-RU')} (дни активности с ${a.trackingSince})`);
+  L.push(`Игроков ${T.users} · DAU ${T.dau} · WAU ${T.wau} · MAU ${T.mau} · DAU/MAU ${pc(T.stickiness)} · premium ${T.premium}`);
+  L.push(`Платящих ${T.payers} (${pc(T.conversion)}) · звёзд всего ${T.starsTotal} · 7д ${T.stars7} · 30д ${T.stars30} · ARPU30 ${T.arpu30} · ARPPU30 ${T.arppu30}`);
+  L.push(`Удержание (60д): D1 ${pc(a.retention.d1)} · D3 ${pc(a.retention.d3)} · D7 ${pc(a.retention.d7)} · D14 ${pc(a.retention.d14)} · D30 ${pc(a.retention.d30)}`);
+  L.push('','Когорты (день · новых · D1 D3 D7 D14 D30; ≈ — приблизительно):');
+  a.cohorts.forEach(r=>L.push(`${r.day}${r.exact?'':'≈'} · ${r.size} · ${['d1','d3','d7','d14','d30'].map(k=>pc(r[k])).join(' ')}`));
+  L.push('','По дням (день · новые · DAU · забеги · продолжения · звёзды · платили · новые платящие):');
+  a.days.filter(d=>d.new||d.dau||d.runs||d.stars).forEach(d=>L.push(`${d.day} · ${d.new} · ${d.dau??'—'} · ${d.runs??'—'} · ${d.conts??'—'} · ${d.stars} · ${d.payers} · ${d.newPayers}`));
+  L.push('','Воронка: '+a.funnel.map(f=>`${f.step} ${f.n} (${pc(f.pct)})`).join(' → '));
+  L.push('Товары: '+(a.items.map(i=>`${i.item} ${i.stars}★/${i.count} покупок/${i.payers} чел`).join('; ')||'нет'));
+  L.push(`Frog Jump: играли ${a.jump.players}, забегов ${a.jump.runsTotal}, медиана забегов ${a.jump.runsMedian}, медиана рекорда ${a.jump.bestMedian} м, топ ${a.jump.bestTop} м, с нарядами ${a.jump.skinsOwners}`);
+  L.push('Рекорды: '+a.jump.buckets.map(b=>`${b.range}: ${b.n}`).join(', '));
+  L.push(`Слияние: играли ${a.merge.players}, медиана уровня ${a.merge.maxLvMedian}`);
+  L.push(`Турниры: всего ${a.tournaments.total}, идут ${a.tournaments.active}, официальных ${a.tournaments.official}, уникальных участников ${a.tournaments.uniquePlayers}, в среднем ${a.tournaments.avgPlayers} на турнир`);
+  L.push('Источники: '+a.sources.map(s=>`${s.src} ${s.users} (играли ${s.played}, вернулись ${s.back}, платили ${s.payers})`).join('; '));
+  return L.join('\n');
+}
+document.addEventListener('click',e=>{if(e.target&&e.target.id==='anCopy'&&AN){const t=anReport(AN);
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('Отчёт скопирован — вставь его в чат'),()=>{const w=window.open('','_blank');if(w){w.document.body.innerText=t;}else prompt('Скопируй отчёт',t);});}});
 
 /* ---------- сводка ---------- */
 function renderStats(s){

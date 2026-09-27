@@ -254,16 +254,116 @@ function checkInitData(initData) {
   const h = crypto.createHmac('sha256', secret).update(dcs).digest('hex');
   if (h !== hash) return null;
   if (Date.now() / 1000 - (+p.get('auth_date') || 0) > DAY / 1000) return null;
-  try { return JSON.parse(p.get('user') || 'null'); } catch (e) { return null; }
+  try { const u = JSON.parse(p.get('user') || 'null'); if (u) u._sp = p.get('start_param') || ''; return u; } catch (e) { return null; }
 }
 function authUser(body, req) {
-  if (CFG.token) { const u = checkInitData(body.initData); if (u) return { id: String(u.id), name: u.first_name || u.username || 'Игрок', username: u.username || '', real: true }; }
+  if (CFG.token) { const u = checkInitData(body.initData); if (u) return { id: String(u.id), name: u.first_name || u.username || 'Игрок', username: u.username || '', real: true, sp: u._sp || '', prem: !!u.is_premium, lang: u.language_code || '' }; }
   if (CFG.dev && body.dev) { const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'x').split(',')[0].trim(); const id = 'dev-' + crypto.createHash('md5').update(ip).digest('hex').slice(0, 8); return { id, name: body.name || 'Dev', username: '', real: false }; }
   return null;
 }
+/* ---------- АНАЛИТИКА: дни активности и источник ----------
+   День считаем по Москве. У игрока храним номера дней, когда он заходил (последние
+   120) — из этого точное удержание по когортам. Источник — start_param первого
+   захода (турнир, реклама, чат), он не перезаписывается. */
+function analytics() {
+  const now = Date.now(), D = mskDay(now), since = mskDay(db.an.since);
+  const users = Object.values(db.users).filter(isRealPlayer);
+  const pays = (db.payments || []).filter(p => p.charge !== 'test' && db.users[p.id] && isRealPlayer(db.users[p.id]));
+  const dayStr = d => new Date(d * DAY - 3 * 3600e3 + 12 * 3600e3).toISOString().slice(5, 10);
+  const pct = (a, b) => b ? Math.round(a / b * 1000) / 10 : null;
+  const med = arr => { if (!arr.length) return 0; const s = arr.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+  const cDay = u => mskDay(u.created || u.lastSeen || now), lDay = u => mskDay(u.lastSeen || u.created || now);
+  // по дням за 30 дней
+  const firstPay = {}; for (const p of pays) if (!firstPay[p.id] || p.t < firstPay[p.id]) firstPay[p.id] = p.t;
+  const days = [];
+  for (let d = D - 29; d <= D; d++) {
+    const dp = pays.filter(p => mskDay(p.t) === d), ad = db.an.days[d] || {};
+    days.push({ day: dayStr(d), new: users.filter(u => cDay(u) === d).length,
+      dau: d >= since ? users.filter(u => (u.act || []).includes(d)).length : null,
+      runs: d >= since ? ad.runs || 0 : null, conts: d >= since ? ad.conts || 0 : null,
+      stars: dp.reduce((s, p) => s + (p.stars || 0), 0), payers: new Set(dp.map(p => p.id)).size,
+      newPayers: Object.values(firstPay).filter(t => mskDay(t) === d).length });
+  }
+  // активность за окна — по последнему визиту, это точно и для прошлого
+  const activeIn = n => users.filter(u => (u.lastSeen || 0) >= now - n * DAY).length;
+  const dau = activeIn(1), wau = activeIn(7), mau = activeIn(30);
+  // удержание по когортам: точное — по дням активности (с момента учёта), иначе приблизительное
+  const cohorts = [];
+  for (let c = D - 29; c <= D - 1; c++) {
+    const co = users.filter(u => cDay(u) === c); if (!co.length) continue;
+    const row = { day: dayStr(c), size: co.length, exact: c >= since };
+    for (const k of [1, 3, 7, 14, 30]) {
+      if (c + k > D) { row['d' + k] = null; continue; }
+      row['d' + k] = row.exact ? pct(co.filter(u => (u.act || []).includes(c + k)).length, co.length)
+        : pct(co.filter(u => lDay(u) >= c + k).length, co.length);   // «заходил хотя бы раз не раньше дня k»
+    }
+    cohorts.push(row);
+  }
+  // сводное удержание: взвешенно по когортам, где день k уже наступил
+  const retAvg = {};
+  for (const k of [1, 3, 7, 14, 30]) {
+    let n = 0, r = 0;
+    for (const u of users) { const c = cDay(u); if (c + k > D || c < D - 60) continue; n++;
+      if (c >= since ? (u.act || []).includes(c + k) : lDay(u) >= c + k) r++; }
+    retAvg['d' + k] = pct(r, n);
+  }
+  // деньги
+  const rev = n => pays.filter(p => p.t >= now - n * DAY).reduce((s, p) => s + (p.stars || 0), 0);
+  const payers = n => new Set(pays.filter(p => p.t >= now - n * DAY).map(p => p.id)).size;
+  const byItem = {};
+  for (const p of pays) { const k = String(p.item || '?').replace(/:.*$/, ''); const b = byItem[k] || (byItem[k] = { stars: 0, n: 0, users: new Set() }); b.stars += p.stars || 0; b.n++; b.users.add(p.id); }
+  const items = Object.entries(byItem).map(([k, b]) => ({ item: k, stars: b.stars, count: b.n, payers: b.users.size })).sort((a, b) => b.stars - a.stars);
+  const payerIds = new Set(pays.map(p => p.id));
+  // вовлечённость
+  const jp = users.filter(u => u.jump && u.jump.runs > 0);
+  const buckets = [[0, 500], [500, 1000], [1000, 3000], [3000, 6000], [6000, 10000], [10000, 20000], [20000, 50000], [50000, 1e12]]
+    .map(([a, b]) => ({ range: b > 1e11 ? `${a / 1000}k+` : `${a < 1000 ? a : a / 1000 + 'k'}–${b < 1000 ? b : b / 1000 + 'k'}`, n: jp.filter(u => (u.jump.best || 0) >= a && (u.jump.best || 0) < b).length }));
+  const mergers = users.filter(u => (u.merges || 0) > 0);
+  // воронка
+  const funnel = [
+    ['Открыли игру', users.length],
+    ['Сыграли в Frog Jump', jp.length],
+    ['5+ забегов', jp.filter(u => u.jump.runs >= 5).length],
+    ['20+ забегов', jp.filter(u => u.jump.runs >= 20).length],
+    ['Вернулись на другой день', users.filter(u => (u.act || []).length >= 2 || lDay(u) > cDay(u)).length],
+    ['Заплатили', payerIds.size],
+  ].map(([k, n]) => ({ step: k, n, pct: pct(n, users.length) }));
+  // турниры
+  const tours = Object.values(db.tournaments || {});
+  const tourPlayers = new Set(); tours.forEach(t => Object.keys(t.players || {}).forEach(id => tourPlayers.add(id)));
+  // источники
+  const src = {};
+  for (const u of users) { const k = (u.src || '(без метки)').replace(/^t_.*/, 'турнир (t_…)').slice(0, 40); const b = src[k] || (src[k] = { users: 0, payers: 0, played: 0, back: 0 });
+    b.users++; if (payerIds.has(u.id)) b.payers++; if (u.jump && u.jump.runs > 0) b.played++; if ((u.act || []).length >= 2 || lDay(u) > cDay(u)) b.back++; }
+  const sources = Object.entries(src).map(([k, b]) => ({ src: k, ...b })).sort((a, b) => b.users - a.users).slice(0, 20);
+  const r30 = rev(30), p30 = payers(30);
+  return {
+    generated: new Date(now).toISOString(), trackingSince: new Date(db.an.since).toISOString().slice(0, 10),
+    totals: { users: users.length, dau, wau, mau, stickiness: pct(dau, mau), premium: users.filter(u => u.prem).length,
+      payers: payerIds.size, conversion: pct(payerIds.size, users.length), starsTotal: pays.reduce((s, p) => s + (p.stars || 0), 0),
+      stars7: rev(7), stars30: r30, arpu30: mau ? Math.round(r30 / mau * 100) / 100 : 0, arppu30: p30 ? Math.round(r30 / p30 * 10) / 10 : 0 },
+    retention: retAvg, cohorts, days, items, funnel,
+    jump: { players: jp.length, runsTotal: jp.reduce((s, u) => s + (u.jump.runs || 0), 0), runsMedian: med(jp.map(u => u.jump.runs || 0)),
+      bestMedian: med(jp.map(u => u.jump.best || 0)), bestTop: Math.max(0, ...jp.map(u => u.jump.best || 0)), buckets,
+      skinsOwners: jp.filter(u => (u.jump.skins || []).length).length },
+    merge: { players: mergers.length, maxLvMedian: med(mergers.map(u => u.maxLv || 1)) },
+    tournaments: { total: tours.length, active: tours.filter(t => !t.done && t.endsAt > now).length, official: tours.filter(t => t.official).length,
+      uniquePlayers: tourPlayers.size, avgPlayers: tours.length ? Math.round(tours.reduce((s, t) => s + Object.keys(t.players || {}).length, 0) / tours.length * 10) / 10 : 0 },
+    sources,
+  };
+}
+const mskDay = t => Math.floor(((t || Date.now()) + 3 * 3600e3) / DAY);
+if (!db.an) db.an = { since: Date.now(), days: {} };
+function anDay(d) { return db.an.days[d] || (db.an.days[d] = { runs: 0, conts: 0, boosts: 0, opens: 0 }); }
 function getUser(a) {
+  const isNew = !db.users[a.id];
   const u = db.users[a.id] || (db.users[a.id] = { id: a.id, name: a.name, username: a.username, maxLv: 1, score: 0, merges: 0, taps: 0, coins: 0, inv: {}, wild: 0, created: Date.now() });
-  u.name = a.name || u.name; u.username = a.username || u.username; u.lastSeen = Date.now(); return u;
+  u.name = a.name || u.name; u.username = a.username || u.username; u.lastSeen = Date.now();
+  if (isNew) { u.src = a.sp || ''; if (a.lang) u.lang = a.lang; }
+  if (a.prem) u.prem = true;
+  const d = mskDay(); const act = u.act || (u.act = []);
+  if (act[act.length - 1] !== d) { act.push(d); if (act.length > 120) act.splice(0, act.length - 120); anDay(d).opens++; }
+  return u;
 }
 
 /* ---------- HOLDER CHECK (getUserGifts) ---------- */
@@ -955,6 +1055,7 @@ const api = {
       base = Math.floor((j.best || 0) / 2);
     }
     const t0 = Math.max(Date.now(), (j.lastT0 || 0) + 1);
+    { const ad = anDay(mskDay()); if (body.cont) ad.conts++; else { ad.runs++; if (body.boost) ad.boosts++; } }
     save();
     // рекорды соперников по всем турнирам игрока: клиент рисует их линии на высоте
     // рекорда и держит в пилюле ближайший результат выше
@@ -1338,6 +1439,7 @@ const api = {
     const all = Object.values(db.users);
     const act = body.act || 'stats';
 
+    if (act === 'analytics') return { ok: true, a: analytics() };
     if (act === 'stats') {
       const paid = db.payments.reduce((s, p) => s + (p.stars || 0), 0);
       return {
