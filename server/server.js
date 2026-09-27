@@ -803,12 +803,15 @@ function jumpTop(n = 20) {
     .slice(0, n)
     .map((u, i) => ({ rank: i + 1, id: u.id, name: u.name, best: u.jump.best, skin: u.jump.skin || 'original' }));
 }
+// разгон стоит тем дороже, чем выше рекорд: 20★ при 6 000 м (порог предложения), 100★ с 50 000 м.
+// Иначе за те же 20★ игрок с рекордом 50 000 м сразу стартует с 25 000
+const boostPrice = u => { const b = (jumpRec(u).best || 0); return Math.max(20, Math.min(100, Math.round((20 + Math.max(0, b - 6000) / 44000 * 80) / 5) * 5)); };
 const jumpState = u => {
   const j = u ? jumpRec(u) : null;
   return {
     record: db.jump.record || null, best: j ? j.best || 0 : 0, flies: j ? j.flies || 0 : 0, runs: j ? j.runs || 0 : 0,
     skin: j ? (j.skin || 'original') : 'original', skins: j ? (j.skins || []) : [],
-    shield: j ? (j.shield || 0) : 0, boost: j ? (j.boost || 0) : 0,
+    shield: j ? (j.shield || 0) : 0, boost: j ? (j.boost || 0) : 0, boostPrice: u ? boostPrice(u) : 20,
     // сколько нарядов игрок может позволить себе прямо сейчас — по этому числу
     // хаб зажигает ненавязчивую точку «появилось что-то новое»
     canBuy: u ? skinsFor(u).filter(s => !s.owned && s.flies && s.flies <= (j.flies || 0)).length : 0,
@@ -1187,6 +1190,7 @@ const api = {
     let price = it.price;
     if (it.donate || it.warPush) { price = Math.round(+body.amount || 0); if (price < 1 || price > 500) return { ok: false, error: 'Сумма от 1 до 500 звёзд' }; }
     if (body.item === 'revive') price = revivePrice(u);   // цену возврата считает сервер, а не клиент
+    if (body.item === 'jumpBoost') price = boostPrice(u);   // и цену разгона — от рекорда
     // reviveReturn — фикс-цена из SHOP выше, дальше не трогаем
     if (!CFG.token) return { ok: false, error: 'Сервер без BOT_TOKEN: платежи недоступны' };
     const nonce = crypto.randomBytes(4).toString('hex');

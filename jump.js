@@ -1476,7 +1476,10 @@ window.FrogJumpInit=function(B){
   // начало, и только один раз за сеанс — иначе это назойливая реклама
   let boostOffered=false,boostToken=null;
   function boostReady(){const j=B.net().jump||{};return (j.best||0)>=6000;}
+  // цена разгона приходит с сервера и растёт с рекордом (20–100★)
+  const boostCost=()=>((B.net().jump||{}).boostPrice)||20;
   function offerBoost(){
+    $('#fjBoostGo').innerHTML=`Разогнаться · ${boostCost()} <img class="ic" src="icons/tgstar.png" alt="">`;
     const j=B.net().jump||{},half=Math.floor((j.best||0)/2);
     $('#fjBoostH').textContent=fmtM(half)+' м';
     $('#fjBoostSub').innerHTML=`Забег начнётся сразу с ${fmtM(half)} м — это половина твоего рекорда ${fmtM(j.best||0)} м.<br>Мошки, рекорд и место в рейтинге считаются как обычно.`;
@@ -1490,7 +1493,7 @@ window.FrogJumpInit=function(B){
     const go=$('#fjBoostGo');
     $('#fjBoostOv').hidden=false;go.disabled=true;go.textContent='Разгоняемся…';$('#fjBoostSkip').hidden=true;
     boostToken=await startToken(false,false,true,justPaid?20:10);
-    go.disabled=false;go.innerHTML=`Разогнаться · 20 <img class="ic" src="icons/tgstar.png" alt="">`;$('#fjBoostSkip').hidden=false;
+    go.disabled=false;go.innerHTML=`Разогнаться · ${boostCost()} <img class="ic" src="icons/tgstar.png" alt="">`;$('#fjBoostSkip').hidden=false;
     $('#fjBoostOv').hidden=true;
     if(boostToken){start(lastBase);return true;}
     if(justPaid&&B.toast)B.toast('Оплата ещё идёт — разгон сработает в следующем забеге',4000);

@@ -3272,7 +3272,7 @@ function renderSkins(){
   if(skinTab==='stars'){
     const half=Math.floor((j.best||0)/2);
     grid.appendChild(svcCard('jumpShield','jump/bubble.png','Страховка','спасёт от первого падения',15,j.shield||0));
-    grid.appendChild(svcCard('jumpBoost','jump/dragonfly.png','Разгон',half?`старт сразу с ${fmtM(half)} м`:'старт с половины рекорда',20,j.boost||0));
+    grid.appendChild(svcCard('jumpBoost','jump/dragonfly.png','Разгон',half?`старт сразу с ${fmtM(half)} м`:'старт с половины рекорда',j.boostPrice||20,j.boost||0));
   }
   if(!list.length&&skinTab!=='stars'){grid.innerHTML='<div class="demo">'+(skinTab==='mine'?'Пока только обычная лягушка. Наряды — на соседних вкладках.':'Здесь всё уже твоё.')+'</div>';return;}
   list.forEach(s=>{
