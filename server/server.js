@@ -805,6 +805,7 @@ function jumpTop(n = 20) {
 }
 // разгон стоит тем дороже, чем выше рекорд: 20★ при 6 000 м (порог предложения), 100★ с 50 000 м.
 // Иначе за те же 20★ игрок с рекордом 50 000 м сразу стартует с 25 000
+const BOOST_TOUR_MAX = 45000;
 const boostPrice = u => { const b = (jumpRec(u).best || 0); return Math.max(20, Math.min(100, Math.round((20 + Math.max(0, b - 6000) / 44000 * 80) / 5) * 5)); };
 const jumpState = u => {
   const j = u ? jumpRec(u) : null;
@@ -812,6 +813,7 @@ const jumpState = u => {
     record: db.jump.record || null, best: j ? j.best || 0 : 0, flies: j ? j.flies || 0 : 0, runs: j ? j.runs || 0 : 0,
     skin: j ? (j.skin || 'original') : 'original', skins: j ? (j.skins || []) : [],
     shield: j ? (j.shield || 0) : 0, boost: j ? (j.boost || 0) : 0, boostPrice: u ? boostPrice(u) : 20,
+    boostNoTour: !!(u && (j.best || 0) >= BOOST_TOUR_MAX && Object.values(db.tournaments).some(t => tourActive(t) && t.players && t.players[u.id])),
     // сколько нарядов игрок может позволить себе прямо сейчас — по этому числу
     // хаб зажигает ненавязчивую точку «появилось что-то новое»
     canBuy: u ? skinsFor(u).filter(s => !s.owned && s.flies && s.flies <= (j.flies || 0)).length : 0,
@@ -947,13 +949,15 @@ const api = {
         if ((j.revPaid || 0) <= (j.revUsed || 0)) return { ok: false, error: 'wait' };
         j.revUsed = (j.revUsed || 0) + 1;
       }
-      base = j.lastH || 0;
+      base = j.lastH || 0;   // продолжение наследует j.noTour прошлого участка
     } else if (body.boost) {
       // разгон: начинаем сразу с половины личного рекорда
       if (!(j.boost > 0)) return { ok: false, error: 'wait' };
       j.boost--;
       base = Math.floor((j.best || 0) / 2);
-    }
+      // с рекордом от 45 000 м фора слишком велика — такой забег в турниры не идёт
+      j.noTour = (j.best || 0) >= BOOST_TOUR_MAX;
+    } else j.noTour = false;
     const t0 = Math.max(Date.now(), (j.lastT0 || 0) + 1);
     save();
     // рекорды соперников по всем турнирам игрока: клиент рисует их линии на высоте
@@ -1119,6 +1123,7 @@ const api = {
     for (const t of Object.values(db.tournaments)) {
       const p = t.players && t.players[u.id];
       if (!p || t.hidden || t.done || run.t0 < t.startsAt || run.t0 > t.endsAt) continue;
+      if (j.noTour) { tours.push({ id: t.id, title: t.title, rank: tourRank(t, u.id), best: p.best || 0, players: Object.keys(t.players).length, noTour: true }); continue; }
       if (h > (p.best || 0)) {
         const oldB = tourBoard(t);
         const c = climbOf(oldB, u.id, p.best || 0, h);
