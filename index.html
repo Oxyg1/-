@@ -3395,7 +3395,7 @@ async function init(){
   // По прямой ссылке сразу открываем нужное, хаб остаётся под ним
   if(startParam==='shop'){openHub();openShop();}
   else if(startParam&&startParam.startsWith('t_')){openHub();openTour(startParam.slice(2));}
-  else if(startParam==='jump'&&JUMP){openHub();JUMP.open();}
+  else if((startParam==='jump'||/^ad_/.test(startParam||''))&&JUMP){openHub();JUMP.open();}   // реклама ведёт сразу в игру, метка уходит в аналитику
   else openHub();
   sync(true).then(r=>{
     const frogs=(r&&r.holder&&r.holder.frogs)||[];
