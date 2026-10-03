@@ -1953,20 +1953,20 @@ async function onInline(q) {
   // заголовок — общая сумма звёзд по местам, если её можно посчитать
   const sum = pz.length ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].slice(0, P).reduce((acc, i) => { const m = String(prizeFor(t, i) || '').match(/^(\d[\d\s]*)\s*(★|⭐|звёзд|звезд)/i); return acc + (m ? +m[1].replace(/\s/g, '') : 0); }, 0) : 0;
   const head = sum ? `${sum} ЗВЁЗД` : String(t.prize).length < 30 ? String(t.prize).toUpperCase() : 'ПРИЗЫ';
-  const mk = em => `${em('gift')} <b>${e(head)} ЗА ПРЫЖКИ — БЕСПЛАТНО</b> ${em('party')}
+  // картинка уже показывает призы по местам и срок — в подписи только крючок и условие
+  const pr = t.promo;
+  const mk = em => `${em('gift')} <b>${e(head)} ЗА ПРЫЖКИ — БЕСПЛАТНО</b>
 
-без депа и без рефок: кто дальше прыгнет — тот забрал
-${em('trophy')} ${pz.length ? pz.join(' | ') : e(t.prize)}
-${em('time')} итоги ${e(end)} МСК
+без депа и без рефок: кто дальше прыгнет — тот забрал${pr ? '' : `
+${pz.length ? pz.join(' | ') : e(t.prize)}`}
 
 ${em('point')} Условие :: ${ch ? `подписка на ${e(ch)} + ` : ''}прыгнуть в SWAMP
-${em('bolt')} прыгай сколько хочешь — в зачёт идёт лучший`;
+${em('time')} итоги ${e(end)} МСК`;
   // премиум-эмодзи в самом инлайн-результате Telegram не пропускает — отправляем
   // с обычными, а сразу после публикации бот правит пост и ставит премиум
   const caption = mk(k => TE_FB[k]), capPrem = mk(te);
   const kb = { inline_keyboard: [[{ text: '🐸 Участвовать', url: link }]] };
   const id = (t.id + '-' + (label || 'x')).slice(0, 60);
-  const pr = t.promo;
   const result = pr
     ? Object.assign(pr.mp4 ? { type: 'mpeg4_gif', mpeg4_url: pr.url, mpeg4_width: pr.w, mpeg4_height: pr.h } : { type: 'gif', gif_url: pr.url, gif_width: pr.w, gif_height: pr.h },
       { id, thumbnail_url: pr.poster, thumbnail_mime_type: 'image/jpeg', title: t.title, caption, parse_mode: 'HTML', reply_markup: kb })
