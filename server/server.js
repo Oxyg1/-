@@ -1645,13 +1645,17 @@ const api = {
       for (const r of nb) {
         if (!/^\d+$/.test(r.id)) continue;
         const rk = r.best > 0 ? withRes.findIndex(x => x.id === r.id) + 1 : 0;
-        let line;
-        if (!rk) line = `Ты в турнире, но ещё не прыгал. ${edge ? `Чтобы попасть в призы, нужно ${mm(edge.best + 1)}.` : 'Призовые места пока свободны — первый же забег попадёт в таблицу.'}`;
-        else if (rk === 1) line = `Ты лидер — ${mm(r.best)}. ${withRes[1] ? `${esc(withRes[1].name)} отстаёт на ${mm(r.best - withRes[1].best)}, держи отрыв.` : ''}`;
-        else if (rk <= P) { const up = withRes[rk - 2]; line = `Ты ${rk}-й — ${mm(r.best)}, это призовое место${prizeFor(t, rk) ? ` (${esc(prizeFor(t, rk))})` : ''}. До ${rk - 1}-го — ${mm(up.best - r.best + 1)}.`; }
-        else line = `Ты ${rk}-й — ${mm(r.best)}. До ${P}-го места с призом — ${mm(edge.best - r.best + 1)}.`;
+        // мотивация через то, что можно потерять или вот-вот получить, и цена ошибки:
+        // продолжение за 10★ против приза — честное сравнение, без обещаний выигрыша
+        const pzOf = k => prizeFor(t, k), ch = pzOf(P) || 'приз';
+        let head, body2;
+        if (!rk) { head = `Ты в турнире, но ещё ни разу не прыгнул`; body2 = edge ? `${esc(ch)} за ${P}-е место сейчас держится на ${mm(edge.best)}. Это реально: половина игроков SWAMP уже прыгала дальше 2 000 м.` : `Призовые места пока свободны: любой забег сразу попадёт в призы.`; }
+        else if (rk === 1) { const r2 = withRes[1]; head = `Сейчас ${esc(pzOf(1) || 'главный приз')} — твои`; body2 = r2 && r.best - r2.best < r.best * .35 ? `Но ${esc(r2.name)} отстаёт всего на ${mm(r.best - r2.best)}. Один его удачный забег — и ты второй.` : `Держи отрыв до конца.`; }
+        else if (rk <= P) { const up = withRes[rk - 2], dn = withRes[P]; head = `Ты ${rk}-й и сейчас забираешь ${esc(pzOf(rk) || 'приз')}`; body2 = (dn && r.best - dn.best < r.best * .35 ? `${esc(dn.name)} за чертой призов отстаёт на ${mm(r.best - dn.best)} — тебя могут выбить в любой момент.` : '') + ` До ${rk - 1}-го места${pzOf(rk - 1) ? ` (${esc(pzOf(rk - 1))})` : ''} — ${mm(up.best - r.best + 1)}.`; }
+        else { head = `До ${esc(ch)} тебе не хватает ${mm(edge.best - r.best + 1)}`; body2 = `Ты ${rk}-й с ${mm(r.best)}, а ${P}-е место держится на ${mm(edge.best)}. Один хороший забег — и приз твой.`; }
+        const tip = rk ? `\n\n${te('bolt')} Сорвался на хорошей высоте — не начинай с нуля: продолжение с того же места стоит 10★.` : '';
         tgQ('sendMessage', { chat_id: +r.id, parse_mode: 'HTML', reply_markup: tourPlayKb(t),
-          text: `${te('time')} <b>До конца турнира «${esc(t.title)}» — ${leftTxt}</b>\n\n${line}\n\nСорвался на хорошем забеге — продолжай с той же высоты, а не с нуля ${te('point')}` });
+          text: `${te('time')} <b>${head}</b>\n\n${body2.trim()}${tip}\n\nДо конца турнира — ${leftTxt} ${te('point')}` });
         n++;
       }
       log('tour nudge', t.id, n);
