@@ -1953,14 +1953,17 @@ async function onInline(q) {
   // заголовок — общая сумма звёзд по местам, если её можно посчитать
   const sum = pz.length ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].slice(0, P).reduce((acc, i) => { const m = String(prizeFor(t, i) || '').match(/^(\d[\d\s]*)\s*(★|⭐|звёзд|звезд)/i); return acc + (m ? +m[1].replace(/\s/g, '') : 0); }, 0) : 0;
   const head = sum ? `${sum} ЗВЁЗД` : String(t.prize).length < 30 ? String(t.prize).toUpperCase() : 'ПРИЗЫ';
-  const caption = `${te('gift')} <b>${e(head)} ЗА ПРЫЖКИ — БЕСПЛАТНО</b> ${te('party')}
+  const mk = em => `${em('gift')} <b>${e(head)} ЗА ПРЫЖКИ — БЕСПЛАТНО</b> ${em('party')}
 
 без депа и без рефок: кто дальше прыгнет — тот забрал
-${te('trophy')} ${pz.length ? pz.join(' | ') : e(t.prize)}
-${te('time')} итоги ${e(end)} МСК
+${em('trophy')} ${pz.length ? pz.join(' | ') : e(t.prize)}
+${em('time')} итоги ${e(end)} МСК
 
-${te('point')} Условие :: ${ch ? `подписка на ${e(ch)} + ` : ''}прыгнуть в SWAMP
-${te('bolt')} прыгай сколько хочешь — в зачёт идёт лучший`;
+${em('point')} Условие :: ${ch ? `подписка на ${e(ch)} + ` : ''}прыгнуть в SWAMP
+${em('bolt')} прыгай сколько хочешь — в зачёт идёт лучший`;
+  // премиум-эмодзи в самом инлайн-результате Telegram не пропускает — отправляем
+  // с обычными, а сразу после публикации бот правит пост и ставит премиум
+  const caption = mk(k => TE_FB[k]), capPrem = mk(te);
   const kb = { inline_keyboard: [[{ text: '🐸 Участвовать', url: link }]] };
   const id = (t.id + '-' + (label || 'x')).slice(0, 60);
   const pr = t.promo;
@@ -1968,7 +1971,17 @@ ${te('bolt')} прыгай сколько хочешь — в зачёт идё�
     ? Object.assign(pr.mp4 ? { type: 'mpeg4_gif', mpeg4_url: pr.url, mpeg4_width: pr.w, mpeg4_height: pr.h } : { type: 'gif', gif_url: pr.url, gif_width: pr.w, gif_height: pr.h },
       { id, thumbnail_url: pr.poster, thumbnail_mime_type: 'image/jpeg', title: t.title, caption, parse_mode: 'HTML', reply_markup: kb })
     : { type: 'article', id, title: `Пост: ${t.title}`, description: label ? 'метка: ad_' + label : 'без метки — допиши имя канала', input_message_content: { message_text: caption, parse_mode: 'HTML' }, reply_markup: kb };
+  inlineCaps.set(id, { cap: capPrem, media: !!pr, kb, at: Date.now() });
   return tg('answerInlineQuery', { inline_query_id: q.id, results: [result], cache_time: 0, is_personal: true });
+}
+const inlineCaps = new Map();
+async function onChosenInline(c) {
+  const v = inlineCaps.get(c.result_id); if (!v || !c.inline_message_id) return;
+  try {
+    if (v.media) await tg('editMessageCaption', { inline_message_id: c.inline_message_id, caption: v.cap, parse_mode: 'HTML', reply_markup: v.kb });
+    else await tg('editMessageText', { inline_message_id: c.inline_message_id, text: v.cap, parse_mode: 'HTML', reply_markup: v.kb });
+  } catch (e) { log('inline premium edit', e.message); }
+  for (const [k, x] of inlineCaps) if (Date.now() - x.at > 3600e3) inlineCaps.delete(k);
 }
 async function poll() {
   let offset = 0;
@@ -1976,12 +1989,13 @@ async function poll() {
   try { await tg('setMyCommands', { commands: [{ command: 'play', description: 'Играть в SWAMP' }, { command: 'top', description: 'Топ пруда' }, { command: 'war', description: 'Битва: коты против лягушек' }] }); } catch (e) {}
   while (true) {
     try {
-      const ups = await tg('getUpdates', { offset, timeout: 30, allowed_updates: ['message', 'pre_checkout_query', 'my_chat_member', 'inline_query'] });
+      const ups = await tg('getUpdates', { offset, timeout: 30, allowed_updates: ['message', 'pre_checkout_query', 'my_chat_member', 'inline_query', 'chosen_inline_result'] });
       for (const up of ups) {
         offset = up.update_id + 1;
         try {
           if (up.pre_checkout_query) await tg('answerPreCheckoutQuery', { pre_checkout_query_id: up.pre_checkout_query.id, ok: true });
           else if (up.inline_query) await onInline(up.inline_query);
+          else if (up.chosen_inline_result) await onChosenInline(up.chosen_inline_result);
           else if (up.message) await onMessage(up.message);
         } catch (e) { log('update', e.message); }
       }
