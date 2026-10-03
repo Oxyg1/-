@@ -477,7 +477,7 @@ window.FrogJumpInit=function(B){
       flies_n:0,combo:0,comboT:-9,perfect:0,
       tray:[],lastLot:-1,rocket:0,dragon:0,shield:false,invul:0,tongue:null,
       nextEvent:rnd(7,10),lastEvent:'',mile:100,zone:0,bestCrossed:false,passed:new Set(),
-      reviveN:0,insUsed:false,jumps:0,springs:0,herons_n:0,perfMax:0,climbs:[],tours:null,rank:null,seg:{base:0,t0:0,f0:0,tokenP:null},
+      reviveN:0,insUsed:false,jumps:0,springs:0,herons_n:0,perfMax:0,dragons_n:0,merges_n:0,golds_n:0,comboMax:0,climbs:[],tours:null,rank:null,seg:{base:0,t0:0,f0:0,tokenP:null,s0:null},
     };
     // стартовая кувшинка — широкая, чтобы первый отскок был гарантирован
     r.pads.push(mkPad(W/2,0,150,'n'));r.pads[0].big=true;
@@ -496,11 +496,15 @@ window.FrogJumpInit=function(B){
       // доходил до 172 при высоте прыжка 212 — с учётом разбега вбок это было
       // почти невозможно, и дальше 3000 м игра превращалась в лотерею
       const m=r.genY/UNIT,d=Math.min(1,m/4200);
-      const gap=lerp(62,JUMP_H*.68,d)*rnd(.88,1.12);
+      // после 4,2 км сложность раньше застывала — кто проходил 4 км, мог прыгать
+      // бесконечно. Теперь до 25 км она медленно растёт дальше: шире разрывы, уже
+      // кувшинки, больше риска. К 25 км — почти предел, дальше снова потолок
+      const e=clamp((m-4200)/20800,0,1);
+      const gap=lerp(62,JUMP_H*.68,d)*(1+.08*e)*rnd(.88,1.12);
       r.genY+=gap;
-      const y=r.genY,w=lerp(84,64,d);
-      const pm=m<150?0:Math.min(.3,.1+(m-150)/3200);
-      const ps=m<300?0:Math.min(.16,.05+(m-300)/5200);
+      const y=r.genY,w=lerp(84,64,d)-8*e;
+      const pm=m<150?0:Math.min(.3,.1+(m-150)/3200)+.08*e;
+      const ps=m<300?0:Math.min(.16,.05+(m-300)/5200)+.06*e;
       const q=Math.random();
       let type=q<pm?'m':q<pm+ps?'s':'n';
       // две рискованные кувшинки подряд запрещены: связка «под тобой тонущая,
@@ -509,9 +513,9 @@ window.FrogJumpInit=function(B){
       r.lastRisk=type!=='n';
       const pad=mkPad(rnd(w/2+4,W-w/2-4),y,w,type);
       r.pads.push(pad);
-      if(type!=='s'&&(r.springRun>0||(m>=100&&Math.random()<.075))){
+      if(type!=='s'&&(r.springRun>0||(m>=100&&Math.random()<.075*(1-.4*e)))){
         pad.spring=1;pad.springX=rnd(-w*.22,w*.22);if(r.springRun>0)r.springRun--;
-      }else if(m>=400&&type==='n'&&y-r.lastHeron>1000&&Math.random()<.06){
+      }else if(m>=400&&type==='n'&&y-r.lastHeron>1000-400*e&&Math.random()<.06+.05*e){
         const h={pad,dead:false,x:pad.x,y:pad.y,vx:0,vy:0,rot:0,face:pad.x<W/2?1:-1,t:Math.random()*5};
         pad.heron=h;r.herons.push(h);r.lastHeron=y;
         // рядом с цаплей всегда есть куда сесть без боя
@@ -522,14 +526,16 @@ window.FrogJumpInit=function(B){
       if(m<300&&Math.random()<.45){const ww=w*.9;r.pads.push(mkPad(clamp(W-pad.x+rnd(-40,40),ww/2+4,W-ww/2-4),y-gap*.5,ww,'n'));}
       // гнилушка-обманка: никогда не единственная дорога наверх
       // гнилушка — приманка сбоку от настоящего пути, а не на нём
-      if(m>=600&&Math.random()<.15){
+      if(m>=600&&Math.random()<.15+.1*e){
         const rx=clamp(pad.x+(pad.x<W/2?1:-1)*rnd(90,150),30,W-30);
         r.pads.push(mkPad(rx,y-gap*.45,w,'r'));
       }
       if(Math.random()<.5)r.flies.push(mkFly(rnd(18,W-18),y-gap*rnd(.2,.8)));
-      if(m>=40&&Math.random()<.11)r.lots.push(mkLot(rnd(24,W-24),y+rnd(40,90),lotusColor(r)));
+      // выше 5 км стрекоз и лотосов всё меньше: к 20 км стрекоз втрое реже, лотосов на 40%
+      const hi=clamp((m-5000)/15000,0,1);
+      if(m>=40&&Math.random()<.11*(1-.4*hi))r.lots.push(mkLot(rnd(24,W-24),y+rnd(40,90),lotusColor(r)));
       if(m>=400&&Math.random()<.03)r.items.push({k:'b',x:pad.x,y:y+62,t:Math.random()*5});
-      if(m>=500&&Math.random()<.022)r.items.push({k:'d',x:rnd(40,W-40),y:y+86,t:Math.random()*5});
+      if(m>=500&&Math.random()<.022*lerp(1,.33,hi))r.items.push({k:'d',x:rnd(40,W-40),y:y+86,t:Math.random()*5});
     }
   }
   const mkFly=(x,y,o={})=>Object.assign({x,y,t:Math.random()*6,taken:false,aimed:false,gold:false,vx:0},o);
@@ -601,7 +607,7 @@ window.FrogJumpInit=function(B){
   }
   function catchFly(f){
     const r=run;f.taken=true;
-    r.combo=(r.t-r.comboT<1.5)?r.combo+1:1;r.comboT=r.t;
+    r.combo=(r.t-r.comboT<1.5)?r.combo+1:1;r.comboT=r.t;if(r.combo>r.comboMax)r.comboMax=r.combo;if(f.gold)r.golds_n++;
     const val=(f.gold?5:1)*(r.combo>=5?2:1);
     r.flies_n+=val;hudFlies();
     SND.gulp(r.combo);B.haptic.select();
@@ -627,7 +633,7 @@ window.FrogJumpInit=function(B){
     if(r.tray.length===3&&r.tray[0]===r.tray[1]&&r.tray[1]===r.tray[2])setTimeout(()=>{if(run===r&&r.alive)lotusMerge(l.c);},430);
   }
   function lotusMerge(c){
-    const r=run;
+    const r=run;r.merges_n++;
     kick(elTray,'merge');
     setTimeout(()=>{if(run!==r)return;elTray.classList.remove('merge');r.tray=[];trayRender();},520);
     r.rocket=2.4;r.invul=Math.max(r.invul,2.9);r.vy=VROCKET;
@@ -755,7 +761,10 @@ window.FrogJumpInit=function(B){
     }
     if(r.combo&&r.t-r.comboT>1.5){r.combo=0;comboRender();}
     // --- лотосы и предметы ---
-    if(r.alive){
+    // в полёте (стрекоза, слияние лотосов) бонусы не подбираются — иначе полёты
+    // цепляются друг за друга и топ пролетает километры, почти не прыгая
+    const flying=r.rocket>0||r.dragon>0;
+    if(r.alive&&!flying){
       const cxm=r.fx,cym=r.fy+FROG*.45;
       for(const l of r.lots){l.t+=dt;if(!l.taken){const dx=wdx(l.x,cxm),dy=l.y-cym;if(dx*dx+dy*dy<36*36)collectLotus(l);}}
       for(const it of r.items){
@@ -763,7 +772,7 @@ window.FrogJumpInit=function(B){
         const dx=wdx(it.x,cxm),dy=it.y-cym;if(dx*dx+dy*dy>38*38)continue;
         it.taken=true;
         if(it.k==='b'){r.shield=true;SND.shield();B.haptic.light();txt(it.x,it.y+10,'Щит',{c:'#bfefff'});}
-        else{r.dragon=3;r.invul=Math.max(r.invul,3.3);r.vy=VDRAGON;SND.dragon();B.haptic.medium();banner('Стрекоза!','несёт вверх');}
+        else{r.dragon=3;r.dragons_n++;r.invul=Math.max(r.invul,3.3);r.vy=VDRAGON;SND.dragon();B.haptic.medium();banner('Стрекоза!','несёт вверх');}
       }
     }
     // --- лягушка: пружинящая форма и наклон ---
@@ -956,7 +965,7 @@ window.FrogJumpInit=function(B){
   }
   function drawLotus(l){
     const x=l.x,y=Y(l.y+Math.sin(l.t*2)*3),c=LOTUS[l.c];
-    cx.fillStyle=c;cx.globalAlpha=.22+.12*Math.sin(l.t*4);cx.beginPath();cx.arc(x,y,20,0,7);cx.fill();cx.globalAlpha=1;
+    const a0=cx.globalAlpha;cx.fillStyle=c;cx.globalAlpha=a0*(.22+.12*Math.sin(l.t*4));cx.beginPath();cx.arc(x,y,20,0,7);cx.fill();cx.globalAlpha=a0;
     const li=LOTUS_IMG[l.c];
     if(has(li)){cx.save();cx.translate(x,y);cx.rotate(Math.sin(l.t)*.12);blit(li,0,0,34);cx.restore();return;}
     cx.save();cx.translate(x,y);cx.rotate(Math.sin(l.t)*.15);
@@ -1062,8 +1071,11 @@ window.FrogJumpInit=function(B){
     drawLines(r);
     for(const p of r.pads){const y=Y(p.y);if(y>-30&&y<VH+40&&!p.broken)drawPadObj(p);}
     for(const h of r.herons){const y=Y(h.y);if(y>-80&&y<VH+80)drawHeron(h);}
-    for(const l of r.lots){const y=Y(l.y);if(y>-30&&y<VH+30)drawLotus(l);}
-    for(const it of r.items){const y=Y(it.y);if(y>-30&&y<VH+30)drawItem(it);}
+    // в полёте бонусы полупрозрачные — видно, что сейчас их не взять
+    const flyA=r.rocket>0||r.dragon>0?.4:1;
+    for(const l of r.lots){const y=Y(l.y);if(y>-30&&y<VH+30){cx.globalAlpha=flyA;drawLotus(l);}}
+    for(const it of r.items){const y=Y(it.y);if(y>-30&&y<VH+30){cx.globalAlpha=flyA;drawItem(it);}}
+    cx.globalAlpha=1;
     for(const f of r.flies){if(f.taken)continue;const y=Y(f.y);if(y>-20&&y<VH+20)drawFly(f);}
     drawParts(r,false);
     drawTongue(r);
@@ -1173,13 +1185,18 @@ window.FrogJumpInit=function(B){
     const flies=r.flies_n-seg.f0;
     const ms=Math.round((r.t-seg.t0)*1000);
     seg.f0=r.flies_n;
+    // счётчики отрезка — для профиля игрока (после продолжения считаем заново)
+    const cur={j:r.jumps,sp:r.springs,he:r.herons_n,dr:r.dragons_n,me:r.merges_n,go:r.golds_n},z=seg.s0||{};
+    const st={};for(const k in cur)st[k]=cur[k]-(z[k]||0);
+    st.pf=r.perfMax;st.cm=r.comboMax;st.cause=r.cause||'';
+    seg.s0=cur;
     if(height>(pref.best||0))pref.best=height;
     if(!hasApi()){pref.flies=(pref.flies||0)+flies;savePref();return {ok:true,local:true,earned:flies,jump:{best:pref.best,flies:pref.flies}};}
     const tok=await seg.tokenP;
     savePref();
     if(!tok)return {ok:false,error:'offline'};
     try{
-      const res=await B.api('jumpEnd',{run:tok,height,flies,ms});
+      const res=await B.api('jumpEnd',{run:tok,height,flies,ms,st});
       if(res&&res.ok){B.applyJump(res);if(res.jump){pref.best=Math.max(pref.best,res.jump.best||0);savePref();}}
       return res;
     }catch(e){return {ok:false,error:'offline'};}
@@ -1200,7 +1217,10 @@ window.FrogJumpInit=function(B){
     const rn=r.reviveN;
     $('#fjRevive').hidden=rn>=REVIVE_PRICES.length||h<20;
     $('#fjRevive').innerHTML=`Продолжить · ${REVIVE_PRICES[rn]} <img class="ic" src="icons/tgstar.png" alt="">`;
-    $('#fjAgain').className=$('#fjRevive').hidden?'btn':'btn ghost';
+    const cheapRun=h<150;   // за 30 метров звёзды не просят — продолжение остаётся, но вторым
+    $('#fjRevive').className=cheapRun?'btn ghost':'btn';
+    $('#fjAgain').className=$('#fjRevive').hidden||cheapRun?'btn':'btn ghost';
+    if(cheapRun&&!$('#fjRevive').hidden)$('#fjAgain').after($('#fjRevive'));else $('#fjRevive').after($('#fjAgain'));
     $('#fjOverTours').hidden=true;$('#fjClimb').hidden=true;$('#fjFin').hidden=true;
     $('#fjOver').hidden=false;SND.card();
     countUp($('#fjOverH'),h,.9,true);countUp($('#fjOverF'),earnedNow,.7,false);
@@ -1348,7 +1368,7 @@ window.FrogJumpInit=function(B){
     // продолжение запрашиваем только после того, как сервер принял первую часть:
     // иначе он возьмёт за основу высоту прошлого забега
     const prev=overRes||Promise.resolve();
-    r.seg={base:Math.floor(r.maxY/UNIT),t0:r.t,f0:r.flies_n,tokenP:prev.catch(()=>{}).then(()=>startToken(true,byInsurance))};
+    r.seg={base:Math.floor(r.maxY/UNIT),t0:r.t,f0:r.flies_n,s0:r.seg.s0,tokenP:prev.catch(()=>{}).then(()=>startToken(true,byInsurance))};
     $('#fjOver').hidden=true;
     if(!byInsurance)banner('Продолжаем!','лягушка снова на кувшинке',true);
     SND.spring();B.haptic.success();
@@ -1475,14 +1495,17 @@ window.FrogJumpInit=function(B){
   // Разгон предлагаем только тем, кому надоело каждый раз проходить знакомое
   // начало, и только один раз за сеанс — иначе это назойливая реклама
   let boostOffered=false,boostToken=null;
-  function boostReady(){const j=B.net().jump||{};return (j.best||0)>=6000;}
+  const boostRefH=j=>j.boostRef!=null?j.boostRef:(j.best||0);   // в турнире — результат в турнире, иначе рекорд
+  function boostReady(){const j=B.net().jump||{};return boostRefH(j)>=6000;}
   // цена разгона приходит с сервера и растёт с рекордом (20–100★)
   const boostCost=()=>((B.net().jump||{}).boostPrice)||20;
   function offerBoost(){
     $('#fjBoostGo').innerHTML=`Разогнаться · ${boostCost()} <img class="ic" src="icons/tgstar.png" alt="">`;
-    const j=B.net().jump||{},half=Math.floor((j.best||0)/2);
+    const j=B.net().jump||{},ref=boostRefH(j),half=Math.floor(ref/2);
     $('#fjBoostH').textContent=fmtM(half)+' м';
-    $('#fjBoostSub').innerHTML=`Забег начнётся сразу с ${fmtM(half)} м — это половина твоего рекорда ${fmtM(j.best||0)} м.<br>Мошки, рекорд и место в рейтинге считаются как обычно.`;
+    $('#fjBoostSub').innerHTML=j.boostTour
+      ?`Забег начнётся с ${fmtM(half)} м — это половина твоего результата в турнире «${esc(j.boostTour)}» (${fmtM(ref)} м).<br>В турнире разгон считается от турнирного результата, а не от рекорда — так честно для всех.`
+      :`Забег начнётся сразу с ${fmtM(half)} м — это половина твоего рекорда ${fmtM(j.best||0)} м.<br>Мошки, рекорд и место в рейтинге считаются как обычно.`;
     $('#fjBoostOv').hidden=false;SND.card();
   }
   /* Разгон забираем только у сервера. Сразу после оплаты локальная копия ещё

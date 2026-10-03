@@ -257,7 +257,7 @@ function checkInitData(initData) {
   try { const u = JSON.parse(p.get('user') || 'null'); if (u) u._sp = p.get('start_param') || ''; return u; } catch (e) { return null; }
 }
 function authUser(body, req) {
-  if (CFG.token) { const u = checkInitData(body.initData); if (u) return { id: String(u.id), name: u.first_name || u.username || 'Игрок', username: u.username || '', real: true, sp: u._sp || '', prem: !!u.is_premium, lang: u.language_code || '' }; }
+  if (CFG.token) { const u = checkInitData(body.initData); if (u) return { id: String(u.id), name: u.first_name || u.username || 'Игрок', username: u.username || '', real: true, sp: u._sp || String(body.sp || '').slice(0, 64) || (db.pendSrc && db.pendSrc[String(u.id)]) || '', prem: !!u.is_premium, lang: u.language_code || '' }; }
   if (CFG.dev && body.dev) { const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'x').split(',')[0].trim(); const id = 'dev-' + crypto.createHash('md5').update(ip).digest('hex').slice(0, 8); return { id, name: body.name || 'Dev', username: '', real: false }; }
   return null;
 }
@@ -333,7 +333,7 @@ function analytics() {
   const tourPlayers = new Set(); tours.forEach(t => Object.keys(t.players || {}).forEach(id => tourPlayers.add(id)));
   // источники
   const src = {};
-  for (const u of users) { const k = (u.src || '(без метки)').replace(/^t_.*/, 'турнир (t_…)').slice(0, 40); const b = src[k] || (src[k] = { users: 0, payers: 0, played: 0, back: 0 });
+  for (const u of users) { const k = (u.src || '(без метки)').replace(/^t_[a-z0-9]+-(.+)$/i, '$1').replace(/^t_.*/, 'турнир (t_…)').slice(0, 40); const b = src[k] || (src[k] = { users: 0, payers: 0, played: 0, back: 0 });
     b.users++; if (payerIds.has(u.id)) b.payers++; if (u.jump && u.jump.runs > 0) b.played++; if ((u.act || []).length >= 2 || lDay(u) > cDay(u)) b.back++; }
   const sources = Object.entries(src).map(([k, b]) => ({ src: k, ...b })).sort((a, b) => b.users - a.users).slice(0, 20);
   const r30 = rev(30), p30 = payers(30);
@@ -487,6 +487,67 @@ function rankOf(id) { const i = leaderboard().findIndex(u => u.id === id); retur
    больше предыдущего (у игрока забеги идут по очереди).
    base — высота, с которой начат отрезок: после оплаченного продолжения второй отрезок
    стартует с высоты, где оборвался первый, и лимиты считаются только на прирост. */
+/* ---------- СТАТИСТИКА ИГРОКА (профиль) ----------
+   Копится с каждого отрезка забега. Клиент присылает счётчики отрезка — прыжки,
+   пружины, цапли, стрекозы, слияния, серии; сервер режет их по времени отрезка,
+   чтобы накрутка не делала из профиля мусор. hist — последние 30 забегов */
+function jumpSt(j) {
+  return j.st || (j.st = { since: Date.now(), time: 0, climbed: 0, segs: 0, jumps: 0, springs: 0, herons: 0, dragons: 0, merges: 0, golds: 0,
+    perfMax: 0, comboMax: 0, fall: 0, heron: 0, revives: 0, boosts: 0, hist: [] });
+}
+function jumpStatAdd(j, raw, o) {
+  const st = jumpSt(j), x = raw && typeof raw === 'object' ? raw : {};
+  const n = (v, cap) => Math.max(0, Math.min(cap, Math.round(+v || 0)));
+  const jumps = n(x.j, o.sec * 4 + 10);
+  st.time += Math.round(o.sec); st.climbed += o.gain; st.segs++;
+  st.jumps += jumps; st.springs += n(x.sp, jumps); st.herons += n(x.he, jumps);
+  st.dragons += n(x.dr, o.sec / 2 + 2); st.merges += n(x.me, o.sec / 2 + 2); st.golds += n(x.go, o.sec + 2);
+  st.perfMax = Math.max(st.perfMax, n(x.pf, jumps)); st.comboMax = Math.max(st.comboMax, n(x.cm, 999));
+  if (x.cause === 'heron') st.heron++; else if (x.cause === 'fall') st.fall++;
+  // продолжение дописывает последний забег, обычный старт и разгон — новый
+  const last = st.hist[st.hist.length - 1];
+  if (o.kind === 'cont' && last && o.now - last.at < 20 * 60e3) { last.h = Math.max(last.h, o.h); last.sec += Math.round(o.sec); last.at = o.now; last.c = (last.c || 0) + 1; }
+  else { st.hist.push({ h: o.h, sec: Math.round(o.sec), at: o.now, b: o.base ? 1 : 0 }); if (st.hist.length > 30) st.hist.splice(0, st.hist.length - 30); }
+}
+// уровень как на FACEIT: 1–10 по личному рекорду
+const FLV = [0, 300, 700, 1200, 2000, 3000, 4500, 6500, 9000, 13000];
+const levelOf = b => { let l = 1; for (let i = 1; i < FLV.length; i++) if (b >= FLV[i]) l = i + 1; return l; };
+function profileOf(u, self) {
+  const j = u.jump || {}, st = j.st || null, now = Date.now();
+  const board = jumpBoard().sort((a, b) => b.best - a.best);
+  const ri = board.findIndex(r => r.id === u.id), best = j.best || 0;
+  const lv = levelOf(best);
+  const hist = st ? st.hist.slice(-20) : [];
+  const hs = hist.map(r => r.h), avg = hs.length ? Math.round(hs.reduce((a, b) => a + b, 0) / hs.length) : 0;
+  const med = hs.length ? hs.slice().sort((a, b) => a - b)[Math.floor(hs.length / 2)] : 0;
+  const week = (st ? st.hist : []).filter(r => r.at > now - 7 * DAY);
+  // турниры: где играл, места, призы
+  const tl = Object.values(db.tournaments || {}).filter(t => !t.hidden && t.players && t.players[u.id] && (t.players[u.id].best || 0) > 0);
+  let wins = 0, podiums = 0, bestPlace = null; const tours = [];
+  for (const t of tl) {
+    const rk = tourRank(t, u.id), P = placesOf(t), done = !!t.done || t.endsAt < now;
+    if (done && rk === 1) wins++;
+    if (done && rk && rk <= P) podiums++;
+    if (rk && (!bestPlace || rk < bestPlace)) bestPlace = rk;
+    tours.push({ id: t.id, title: t.title, rank: rk, players: Object.keys(t.players).length, best: t.players[u.id].best || 0, done, prize: done && rk && rk <= P ? prizeFor(t, rk) || '' : '', at: t.endsAt });
+  }
+  tours.sort((a, b) => (a.done - b.done) || b.at - a.at);
+  const days = (u.act || []).length;
+  return {
+    id: u.id, name: u.name || 'Игрок', skin: j.skin || 'original', self: !!self,
+    created: u.created || null, lastSeen: u.lastSeen || null, days,
+    level: lv, levelFrom: FLV[lv - 1], levelTo: FLV[lv] || null,
+    best, bestAt: j.bestAt || null, rank: ri >= 0 ? ri + 1 : null, players: board.length,
+    better: ri >= 0 && board.length > 1 ? Math.round((board.length - ri - 1) / (board.length - 1) * 100) : null,
+    runs: j.runs || 0, fliesTotal: j.total || 0, skins: (j.skins || []).length,
+    form: { avg, med, n: hs.length, week: week.length, weekBest: week.reduce((m, r) => Math.max(m, r.h), 0), hist: hist.map(r => ({ h: r.h, at: r.at, b: r.b || 0, c: r.c || 0 })) },
+    st: st ? { since: st.since, time: st.time, climbed: Math.round(st.climbed / 1000 * 10) / 10, jumps: st.jumps, springs: st.springs, herons: st.herons,
+      dragons: st.dragons, merges: st.merges, golds: st.golds, perfMax: st.perfMax, comboMax: st.comboMax, fall: st.fall, heron: st.heron,
+      ...(self ? { revives: st.revives, boosts: st.boosts } : {}) } : null,
+    tour: { played: tl.length, wins, podiums, bestPlace, list: tours.slice(0, 12) },
+    merge: { lv: u.maxLv || 1, score: u.score || 0, merges: u.merges || 0 },
+  };
+}
 function jumpRec(u) { return u.jump || (u.jump = { best: 0, flies: 0, runs: 0, total: 0, revPaid: 0, revUsed: 0, lastT0: 0, lastH: 0, lastAt: 0 }); }
 const jumpSign = str => crypto.createHmac('sha256', db.jump.secret).update(str).digest('hex').slice(0, 24);
 function jumpToken(uid, t0, base) { const p = `${uid}.${t0}.${base}`; return `${p}.${jumpSign(p)}`; }
@@ -905,13 +966,26 @@ function jumpTop(n = 20) {
 }
 // разгон стоит тем дороже, чем выше рекорд: 20★ при 6 000 м (порог предложения), 100★ с 50 000 м.
 // Иначе за те же 20★ игрок с рекордом 50 000 м сразу стартует с 25 000
-const boostPrice = u => { const b = (jumpRec(u).best || 0); return Math.max(20, Math.min(100, Math.round((20 + Math.max(0, b - 6000) / 44000 * 80) / 5) * 5)); };
+/* От чего считается разгон. Вне турниров — от рекорда за всё время. Если игрок
+   участвует в идущем турнире — от его результата В ЭТОМ турнире (в нескольких —
+   от меньшего): иначе прошлый рекорд 60 000 м за 100★ в один клик выигрывает
+   любой новый турнир. Рекорды при этом не обнуляются и ничего не теряют */
+function boostRef(u) {
+  const rec = jumpRec(u).best || 0;
+  const tl = Object.values(db.tournaments || {}).filter(t => tourActive(t) && t.players && t.players[u.id]);
+  if (!tl.length) return { ref: rec, tour: '' };
+  let ref = rec, tour = '';
+  for (const t of tl) { const b = t.players[u.id].best || 0; if (b < ref || !tour) { ref = Math.min(rec, b); tour = t.title; } }
+  return { ref, tour };
+}
+const boostPrice = u => { const b = boostRef(u).ref; return Math.max(20, Math.min(100, Math.round((20 + Math.max(0, b - 6000) / 44000 * 80) / 5) * 5)); };
 const jumpState = u => {
   const j = u ? jumpRec(u) : null;
   return {
     record: db.jump.record || null, best: j ? j.best || 0 : 0, flies: j ? j.flies || 0 : 0, runs: j ? j.runs || 0 : 0,
     skin: j ? (j.skin || 'original') : 'original', skins: j ? (j.skins || []) : [],
     shield: j ? (j.shield || 0) : 0, boost: j ? (j.boost || 0) : 0, boostPrice: u ? boostPrice(u) : 20,
+    ...(u ? (b => ({ boostRef: b.ref, boostTour: b.tour }))(boostRef(u)) : { boostRef: 0, boostTour: '' }),
     // сколько нарядов игрок может позволить себе прямо сейчас — по этому числу
     // хаб зажигает ненавязчивую точку «появилось что-то новое»
     canBuy: u ? skinsFor(u).filter(s => !s.owned && s.flies && s.flies <= (j.flies || 0)).length : 0,
@@ -1048,12 +1122,15 @@ const api = {
         j.revUsed = (j.revUsed || 0) + 1;
       }
       base = j.lastH || 0;
+      jumpSt(j).revives++;
     } else if (body.boost) {
       // разгон: начинаем сразу с половины личного рекорда
       if (!(j.boost > 0)) return { ok: false, error: 'wait' };
       j.boost--;
-      base = Math.floor((j.best || 0) / 2);
+      base = Math.floor(boostRef(u).ref / 2);
+      jumpSt(j).boosts++;
     }
+    j.kind = body.cont ? 'cont' : body.boost ? 'boost' : 'run';
     const t0 = Math.max(Date.now(), (j.lastT0 || 0) + 1);
     { const ad = anDay(mskDay()); if (body.cont) ad.conts++; else { ad.runs++; if (body.boost) ad.boosts++; } }
     save();
@@ -1180,6 +1257,13 @@ const api = {
     return { ok: true, jump: jumpState(u) };
   },
   // конец отрезка забега: проверяем правдоподобие, начисляем мошек, обновляем рекорды
+  async profile(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const me = getUser(a), id = String(body.id || me.id);
+    const u = db.users[id];
+    if (!u || (u.hidden && id !== me.id)) return { ok: false, error: 'Игрок не найден' };
+    return { ok: true, p: profileOf(u, id === me.id), levels: FLV };
+  },
   async jumpEnd(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     const u = getUser(a); const j = jumpRec(u);
@@ -1209,6 +1293,7 @@ const api = {
     j.flies = (j.flies || 0) + flies;
     j.total = (j.total || 0) + flies;
     if (!run.base) j.runs = (j.runs || 0) + 1;
+    jumpStatAdd(j, body.st, { h, gain, sec, flies, base: run.base, kind: j.kind || 'run', now });
     const prevBest = j.best || 0;
     const isBest = h > prevBest;
     const climb = [];
@@ -1403,6 +1488,8 @@ const api = {
     const markup = { inline_keyboard: [[{ text: 'Участвовать', url: tourLink(t) }]] };
     const res = { ok: true, url, poster, type: isMp4 ? 'mp4' : 'gif' };
     const W = Math.max(1, Math.min(2000, +body.w || 640)), H = Math.max(1, Math.min(2000, +body.h || 360));
+    // последняя карточка турнира — её отдаёт инлайн-режим для постов в каналах
+    t.promo = { url, poster, mp4: isMp4, w: W, h: H, at: Date.now() }; save();
     if (CFG.token && a.real) {
       try {
         const r = await tg('savePreparedInlineMessage', {
@@ -1705,6 +1792,9 @@ async function onMessage(m) {
   if (cmd === '/start' && priv) {
     const param = text.split(' ')[1] || '';
     const u0 = db.users[String(m.from.id)];
+    // метка из t.me/бот?start=ad_x: кнопка web_app не передаёт start_param в initData,
+    // поэтому запоминаем её до первого входа в игру
+    if (param && !u0) { db.pendSrc = db.pendSrc || {}; db.pendSrc[String(m.from.id)] = param.slice(0, 64); save(); }
     const rows = [[{ text: EMO_BTN + 'Играть', web_app: { url: CFG.appUrl + (param ? '?startapp=' + encodeURIComponent(param) : '') } }], [{ text: 'Игровой чат', url: CFG.chatLink }]];
     // ссылку на чат холдеров показываем только тем, у кого бот увидел лягушку
     if (u0 && u0.holder && (u0.holder.frogs || []).length) rows.push([{ text: 'Чат холдеров', url: CFG.holdersLink }]);
@@ -1842,17 +1932,56 @@ async function sendDigest(force) {
     if (pct >= 100 && !db.pond.rewarded) { db.pond.rewarded = true; for (const u of Object.values(db.users)) grant(u, 'boost1d', 0); save(); }
   } catch (e) { log('digest', e.message); }
 }
+/* ---------- ИНЛАЙН: рекламный пост в канал с кнопкой ----------
+   Админ канала пишет в поле поста «@бот faster» — получает видео турнира с готовым
+   текстом и кнопкой «Участвовать». Слово после имени бота — метка канала: ссылка
+   становится t_<id>-ad_<метка>, и аналитика засчитывает игроков этому каналу.
+   Можно указать и турнир: «@бот faster 599b76». Включается в BotFather: /setinline */
+async function onInline(q) {
+  const parts = String(q.query || '').trim().split(/\s+/).filter(Boolean);
+  const label = (parts[0] || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 24);
+  const live = Object.values(db.tournaments).filter(t => tourActive(t) && !t.hidden);
+  const t = (parts[1] && db.tournaments[parts[1]] && tourActive(db.tournaments[parts[1]])) ? db.tournaments[parts[1]]
+    : live.sort((a, b) => (b.official - a.official) || ((b.promo ? 1 : 0) - (a.promo ? 1 : 0)) || Object.keys(b.players || {}).length - Object.keys(a.players || {}).length)[0];
+  if (!t) return tg('answerInlineQuery', { inline_query_id: q.id, results: [], cache_time: 0, is_personal: true });
+  let link = tourLink(t); if (label) link = link.replace('startapp=t_' + t.id, 'startapp=t_' + t.id + '-ad_' + label);
+  const e = x => String(x).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const end = new Date(t.endsAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', weekday: 'long', hour: '2-digit', minute: '2-digit' });
+  const P = placesOf(t), med = ['🥇', '🥈', '🥉'];
+  const pz = []; for (let i = 1; i <= P; i++) { const v = prizeFor(t, i); if (v) pz.push(`${med[i - 1] || i + ' место'} ${e(v)}`); }
+  const ch = (t.channels || []).map(c => '@' + c.username).join(', ');
+  // заголовок — общая сумма звёзд по местам, если её можно посчитать
+  const sum = pz.length ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].slice(0, P).reduce((acc, i) => { const m = String(prizeFor(t, i) || '').match(/^(\d[\d\s]*)\s*(★|⭐|звёзд|звезд)/i); return acc + (m ? +m[1].replace(/\s/g, '') : 0); }, 0) : 0;
+  const head = sum ? `${sum} ЗВЁЗД` : String(t.prize).length < 30 ? String(t.prize).toUpperCase() : 'ПРИЗЫ';
+  const caption = `${te('gift')} <b>${e(head)} ЗА ПРЫЖКИ — БЕСПЛАТНО</b> ${te('party')}
+
+без депа и без рефок: кто дальше прыгнет — тот забрал
+${te('trophy')} ${pz.length ? pz.join(' | ') : e(t.prize)}
+${te('time')} итоги ${e(end)} МСК
+
+${te('point')} Условие :: ${ch ? `подписка на ${e(ch)} + ` : ''}прыгнуть в SWAMP
+${te('bolt')} прыгай сколько хочешь — в зачёт идёт лучший`;
+  const kb = { inline_keyboard: [[{ text: '🐸 Участвовать', url: link }]] };
+  const id = (t.id + '-' + (label || 'x')).slice(0, 60);
+  const pr = t.promo;
+  const result = pr
+    ? Object.assign(pr.mp4 ? { type: 'mpeg4_gif', mpeg4_url: pr.url, mpeg4_width: pr.w, mpeg4_height: pr.h } : { type: 'gif', gif_url: pr.url, gif_width: pr.w, gif_height: pr.h },
+      { id, thumbnail_url: pr.poster, thumbnail_mime_type: 'image/jpeg', title: t.title, caption, parse_mode: 'HTML', reply_markup: kb })
+    : { type: 'article', id, title: `Пост: ${t.title}`, description: label ? 'метка: ad_' + label : 'без метки — допиши имя канала', input_message_content: { message_text: caption, parse_mode: 'HTML' }, reply_markup: kb };
+  return tg('answerInlineQuery', { inline_query_id: q.id, results: [result], cache_time: 0, is_personal: true });
+}
 async function poll() {
   let offset = 0;
   try { await tg('deleteWebhook', { drop_pending_updates: false }); } catch (e) {}
   try { await tg('setMyCommands', { commands: [{ command: 'play', description: 'Играть в SWAMP' }, { command: 'top', description: 'Топ пруда' }, { command: 'war', description: 'Битва: коты против лягушек' }] }); } catch (e) {}
   while (true) {
     try {
-      const ups = await tg('getUpdates', { offset, timeout: 30, allowed_updates: ['message', 'pre_checkout_query', 'my_chat_member'] });
+      const ups = await tg('getUpdates', { offset, timeout: 30, allowed_updates: ['message', 'pre_checkout_query', 'my_chat_member', 'inline_query'] });
       for (const up of ups) {
         offset = up.update_id + 1;
         try {
           if (up.pre_checkout_query) await tg('answerPreCheckoutQuery', { pre_checkout_query_id: up.pre_checkout_query.id, ok: true });
+          else if (up.inline_query) await onInline(up.inline_query);
           else if (up.message) await onMessage(up.message);
         } catch (e) { log('update', e.message); }
       }

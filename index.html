@@ -306,6 +306,14 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .hub-main div{flex:1;min-width:0;display:flex;flex-direction:column}
 .hub-main small{font-size:12.5px;font-weight:800;opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hub-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.7;margin-top:2px}
+.hub-live{flex:none;display:flex;align-items:center;gap:12px;width:100%;border:0;border-radius:18px;padding:12px 14px;text-align:left;color:#5a3b00;background:linear-gradient(#ffe36b,#f7b500);box-shadow:0 4px 0 var(--acc-dark),0 10px 18px rgba(0,0,0,.3);font-family:Nunito,system-ui,sans-serif;cursor:pointer}
+.hub-live:active{transform:translateY(2px);box-shadow:0 2px 0 var(--acc-dark)}
+.hub-live .ic{width:30px;height:30px;flex:none}
+.hub-live span{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.hub-live small{font-size:11px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;opacity:.75}
+.hub-live b{font-size:16px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hub-live em{font-style:normal;font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hub-live i{font-style:normal;font:900 15px Nunito,system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap}
 .hub-jump{border-radius:20px;background:rgba(0,0,0,.3);overflow:hidden;position:relative;box-shadow:inset 0 2px 0 rgba(255,255,255,.08);flex:none}
 .hj-art{position:relative;height:150px;background:linear-gradient(to top,#b25e3c 0%,#e98a4f 28%,#f4b07a 46%,#9fd6f5 72%,#5f9fe0 100%);overflow:hidden}
 .hj-art .cl{position:absolute;height:14px;background:rgba(255,255,255,.6);border-radius:999px;animation:hjCloud 16s linear infinite}
@@ -393,6 +401,49 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .tb-dot{position:absolute;top:2px;left:calc(50% + 8px);width:10px;height:10px;border-radius:50%;background:#ff5d7a;box-shadow:0 0 0 2px #10402d;animation:ndPulse 1.4s ease-in-out infinite}
 /* подробный экран турнира */
 .tour-scroll{display:flex;flex-direction:column;gap:10px}
+/* ---------- профиль игрока ---------- */
+#prof{z-index:125}
+.pf{display:flex;flex-direction:column;gap:12px}
+.pf-top{display:flex;align-items:center;gap:12px}
+.pf-ava{position:relative;width:74px;height:74px;flex:none;border-radius:50%;background:rgba(0,0,0,.28);box-shadow:inset 0 0 0 3px var(--lv,#eee)}
+.pf-ava img{position:absolute;inset:8px;width:58px;height:58px;object-fit:contain;filter:drop-shadow(0 3px 2px rgba(0,0,0,.35))}
+.pf-who{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.pf-who b{font-size:21px;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pf-who small{font-size:12px;opacity:.72;line-height:1.3}
+.pf-lv{flex:none;display:flex;flex-direction:column;align-items:center;gap:2px}
+.pf-lv i{font-style:normal;width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:900 21px Nunito,system-ui,sans-serif;color:var(--lv);background:rgba(0,0,0,.35);box-shadow:inset 0 0 0 3px var(--lv)}
+.pf-lv small{font-size:10px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;opacity:.75}
+.pf-prog{display:flex;flex-direction:column;gap:5px;background:rgba(0,0,0,.2);border-radius:14px;padding:9px 12px}
+.pf-prog div{height:7px;border-radius:9px;background:rgba(0,0,0,.35);overflow:hidden}
+.pf-prog div i{display:block;height:100%;border-radius:9px;background:var(--lv)}
+.pf-prog small{font-size:12px;opacity:.8;display:flex;justify-content:space-between;gap:8px}
+.pf-hero{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.pf-hero div,.pf-grid div{background:rgba(0,0,0,.22);border-radius:14px;padding:8px 10px;min-width:0}
+.pf-hero span,.pf-grid span{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.68;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-hero b{display:block;font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pf-hero div:first-child{background:linear-gradient(rgba(255,210,63,.26),rgba(255,210,63,.1));box-shadow:inset 0 0 0 1px rgba(255,210,63,.45)}
+.pf-hero div:first-child b{color:var(--acc)}
+.pf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.pf-grid span{text-transform:none;letter-spacing:0;font-size:11.5px;font-weight:800;white-space:normal;line-height:1.2}
+.pf-grid b{display:block;font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-chart{background:rgba(0,0,0,.22);border-radius:14px;padding:10px 10px 6px;display:flex;flex-direction:column;gap:6px}
+.pf-bars{position:relative;height:84px;display:flex;align-items:flex-end;gap:3px}
+.pf-bars i{flex:1;min-width:0;max-width:26px;border-radius:4px 4px 1px 1px;background:rgba(255,255,255,.35)}
+.pf-bars i.rec{background:var(--acc)}
+.pf-bars i.bst{background:repeating-linear-gradient(45deg,rgba(255,255,255,.35) 0 4px,rgba(255,255,255,.16) 4px 8px)}
+.pf-bars u{position:absolute;left:0;right:0;border-top:1.5px dashed rgba(255,210,63,.7);text-decoration:none}
+.pf-chart small{font-size:11.5px;opacity:.72;display:flex;justify-content:space-between;gap:8px}
+.pf-split{display:flex;height:10px;border-radius:9px;overflow:hidden;background:rgba(0,0,0,.3)}
+.pf-split i{display:block;height:100%}
+.pf-legend{display:flex;justify-content:space-between;font-size:12px;opacity:.85;gap:8px}
+.pf-legend b{font-variant-numeric:tabular-nums}
+.pf-tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;background:rgba(0,0,0,.18);border-radius:12px;padding:8px 11px;border:0;color:#fff;text-align:left;font-family:inherit;width:100%}
+.pf-tr b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pf-tr small{font-size:11.5px;opacity:.72;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pf-tr .pl{grid-row:span 2;text-align:right;font:900 16px Nunito,system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.pf-tr .pl.gold{color:var(--acc)}
+.pf-note{font-size:11.5px;opacity:.6;text-align:center;line-height:1.35}
+[data-uid]{cursor:pointer}
 .t-hero{display:flex;gap:6px;align-items:stretch}
 .t-prize{flex:1;min-width:0;background:linear-gradient(90deg,rgba(255,210,63,.24),rgba(255,210,63,.08));border-radius:14px;padding:8px 12px;box-shadow:inset 0 0 0 1px rgba(255,210,63,.45)}
 .t-prize b{display:block;font-size:15px;line-height:1.25;word-break:break-word}
@@ -406,7 +457,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .t-pod.p1 img{width:68px;height:68px;animation:hjBob 2.4s ease-in-out infinite}
 .t-pod b{font-size:13px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .t-pod small{font-size:11.5px;opacity:.8;font-variant-numeric:tabular-nums}
-.t-pod .blk{width:100%;border-radius:12px 12px 4px 4px;display:flex;justify-content:center;padding-top:5px;font:900 20px Nunito;color:#5a3b00;box-shadow:inset 0 2px 0 rgba(255,255,255,.4)}
+.t-pod .blk{width:100%;border-radius:12px 12px 4px 4px;display:flex;justify-content:center;padding-top:5px;font:900 20px Nunito,system-ui,sans-serif;color:#5a3b00;box-shadow:inset 0 2px 0 rgba(255,255,255,.4)}
 .t-pod.p1 .blk{height:70px;background:linear-gradient(#ffe36b,#f7b500)}
 .t-pod.p2 .blk{height:50px;background:linear-gradient(#eef2f5,#bcc6cf)}
 .t-pod.p3 .blk{height:36px;background:linear-gradient(#e2a064,#b8702f)}
@@ -508,6 +559,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
   <rect x="6.8" y="17" width="10.4" height="3.4" rx="1.5" fill="#f5a800"/>
   <path d="M8.3 5.1h1.8v3.4a.9.9 0 1 1-1.8 0V5.1z" fill="#fff" opacity=".4"/>
 </symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="4.3" fill="#eaf6ee"/><path d="M3.8 20.4c.7-4.2 4-6.6 8.2-6.6s7.5 2.4 8.2 6.6c.1.6-.3 1.1-.9 1.1H4.7c-.6 0-1-.5-.9-1.1z" fill="#eaf6ee"/></symbol>
 <symbol id="i-chat" viewBox="0 0 24 24">
   <path d="M12 3.6c-5.2 0-9.4 3.2-9.4 7.4 0 2.4 1.4 4.6 3.5 5.9-.2 1.2-.9 2.5-2 3.5 2-.1 4-.9 5.3-1.9.8.2 1.7.3 2.6.3 5.2 0 9.4-3.3 9.4-7.5S17.2 3.6 12 3.6z" fill="#eaf6ee"/>
   <path d="M8.2 11h.01M12 11h.01M15.8 11h.01" stroke="#2c7a52" stroke-width="2.7" stroke-linecap="round"/>
@@ -710,10 +762,12 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 <div id="hub" class="overlay hidden">
   <div class="hub-shell">
     <div class="head hub-head"><h2 id="hubHead">SWAMP</h2><div class="row" style="width:auto">
+      <button class="iconbtn" id="hubProf" title="Мой профиль"><svg class="ic "><use href="#i-user"></use></svg></button>
       <button class="iconbtn" id="hubChat" title="Чат"><svg class="ic "><use href="#i-chat"></use></svg></button>
     </div></div>
     <div class="hub-panes">
       <section class="hub-pane on" data-pane="games"><div class="scroll">
+      <button class="hub-live" id="hubLive" hidden></button>
       <div class="hub-jump">
         <div class="hj-art" id="hjArt">
           <i class="cl" style="width:60px;top:16px;animation-delay:-4s"></i>
@@ -788,6 +842,12 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
   </div>
 </div>
 
+<div id="prof" class="overlay hidden">
+  <div class="card" style="height:92dvh">
+    <div class="head"><h2>Профиль</h2><button class="iconbtn" id="profClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
+    <div class="scroll pf" id="profBody"></div>
+  </div>
+</div>
 <div id="tour" class="overlay hidden">
   <div class="card" style="height:92dvh">
     <div class="head"><h2 id="tourTitle">Турнир</h2><button class="iconbtn" id="tourClose" title="Закрыть"><svg class="ic "><use href="#i-close"></use></svg></button></div>
@@ -1039,6 +1099,8 @@ const haptic={
 };
 const openTg=url=>{if(TG&&tgv('6.1'))TG.openTelegramLink(url);else window.open(url,'_blank');};
 const tgUser=(TG&&TG.initDataUnsafe&&TG.initDataUnsafe.user)||null;
+// метка запуска: из прямой ссылки t.me/бот/app?startapp=… или из кнопки бота (?startapp=… в адресе)
+const START_P=(TG&&TG.initDataUnsafe&&TG.initDataUnsafe.start_param)||(()=>{try{return new URLSearchParams(location.search).get('startapp')||'';}catch(e){return '';}})();
 const myName=tgUser?(tgUser.first_name||tgUser.username||'Игрок'):'Ты';
 
 /* ---------- STATE ---------- */
@@ -1408,7 +1470,7 @@ let toastT=null;function toast(t,ms=1800){const el=$('#toast');el.textContent=t;
 const net={online:false,me:null,top:[],pond:{count:0,goal:CFG.pondGoal},war:null,endless:null,endlessTop:[],jump:null,jumpTop:[],holder:null,lastSync:0};
 async function api(path,body){
   if(!CFG.api)throw new Error('no api');
-  const r=await fetch(CFG.api+'/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({initData:TG?TG.initData:'',dev:!inTG},body||{}))});
+  const r=await fetch(CFG.api+'/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({initData:TG?TG.initData:'',dev:!inTG,sp:START_P},body||{}))});
   if(!r.ok)throw new Error('api '+r.status);
   return r.json();
 }
@@ -2325,7 +2387,7 @@ function renderJumpTop(){
   if(!rows.length){list.innerHTML='<div class="demo">В Frog Jump ещё никто не прыгал. Сыграй — и будешь первым в таблице.</div>';return;}
   const meId=net.me?net.me.id:null;
   rows.forEach(r=>{
-    const d=document.createElement('div');d.className='lb'+((meId&&r.id===meId)?' me':'');
+    const d=document.createElement('div');d.className='lb'+((meId&&r.id===meId)?' me':'');if(r.id)d.dataset.uid=r.id;
     const medal=r.rank<=3?ic('medal','m'+r.rank):r.rank;
     d.innerHTML=`<div class="rk ${r.rank<=3?'top':''}">${medal}</div><img alt=""><div class="nm">${esc(r.name||'Игрок')}<small>Frog Jump</small></div><div class="sc">${fmtM(r.best)} м</div>`;
     thumb('frogs/original').then(u=>d.querySelector('img').src=u).catch(()=>{});
@@ -2338,7 +2400,7 @@ function renderEndlessTop(){
   if(!rows.length){list.innerHTML='<div class="demo">Серий пока никто не заканчивал. Запусти бесконечный режим в коллекции или после финала.</div>';return;}
   const meId=net.me?net.me.id:null;
   rows.forEach(r=>{
-    const d=document.createElement('div');d.className='lb'+((meId&&r.id===meId)?' me':'');
+    const d=document.createElement('div');d.className='lb'+((meId&&r.id===meId)?' me':'');if(r.id)d.dataset.uid=r.id;
     const medal=r.rank<=3?ic('medal','m'+r.rank):r.rank;
     const sp=SPECIES[r.sp]||SP;
     d.innerHTML=`<div class="rk ${r.rank<=3?'top':''}">${medal}</div><img alt=""><div class="nm">${esc(r.name||'Игрок')}<small>${r.best} уровень · ${fmt(r.score||0)} очков</small></div><div class="sc">${r.best}</div>`;
@@ -2529,7 +2591,7 @@ async function resolveSpecies(){
     if(legacy)sp='frog';
   }
   const known=!!SPECIES[sp];
-  if(!known)sp=await askSpecies();
+  if(!known)sp=/^(t_|ad_|jump)/.test(START_P||'')?'frog':await askSpecies();
   setSpecies(sp);
   rememberSpecies(SP.key);
   applySpeciesUI();
@@ -2721,7 +2783,18 @@ function tourMarkSeen(){
   try{localStorage.setItem(TOUR_SEEN,JSON.stringify(seen));}catch(e){}
   tourDot();
 }
-function renderHubTours(){tourDot();if(hubPane==='tours')renderTours();}
+function renderHubTours(){tourDot();renderHubLive();if(hubPane==='tours')renderTours();}
+// главный идущий турнир — первым в хабе: в него и ведёт реклама
+function hubLiveTour(){
+  const all=[...(TOURS.mine||[]),...(TOURS.open||[])].filter(t=>!t.done&&t.endsAt>tnow());
+  return all.sort((a,b)=>(b.official-a.official)||(b.players-a.players))[0]||null;
+}
+function renderHubLive(){
+  const el=$('#hubLive');if(!el)return;const t=hubLiveTour();el.hidden=!t;if(!t)return;
+  el.dataset.tid=t.id;
+  el.innerHTML=`<svg class="ic"><use href="#i-tb-cup"></use></svg><span><small>${t.joined?(t.myRank?`ты ${t.myRank}-й из ${t.players}`:'ты участвуешь'):'идёт турнир'}</small><b>${esc(t.title)}</b><em>${esc(t.prize)}</em></span><i>${leftText(t.endsAt)}</i>`;
+}
+$('#hubLive').onclick=()=>{const id=$('#hubLive').dataset.tid;if(id){S.ui();haptic.light();openTour(id);}};
 function renderTours(){
   $('#tourTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.tt===tourTab));
   const body=$('#toursBody');
@@ -2837,10 +2910,10 @@ function renderTour(miss){
   // пьедестал: в законченном турнире — призёры (с учётом отписавшихся), иначе лидеры
   const P=t.places||3;
   $('#tourRule').innerHTML=`<svg class="ic"><use href="#i-trophy"></use></svg><span>${P===1?'Приз получит <b>лучший</b>':`Приз получат <b>${P} лучших</b>`} — в зачёт идёт лучший прыжок за время турнира${(t.channels||[]).length?', нужна подписка до конца':''}</span>`;
-  const podium=(t.done&&r.winners?r.winners:rows.slice(0,3)).map(x=>({name:x.name,best:x.best,skin:(rows.find(y=>y.id===x.id)||{}).skin||x.skin||'original'}));
+  const podium=(t.done&&r.winners?r.winners:rows.slice(0,3)).map(x=>({id:x.id,name:x.name,best:x.best,skin:(rows.find(y=>y.id===x.id)||{}).skin||x.skin||'original'}));
   $('#tourPodium').innerHTML=[1,0,2].map(i=>{
     const x=podium[i],cls='t-pod p'+(i+1)+(x?'':' empty')+(i+1>P?' nopz':'');
-    return `<div class="${cls}">${x?`<img data-skin="${esc(x.skin)}" alt="">`:'<img alt="">'}<b>${x?esc(x.name):'—'}</b><small>${x?fmtM(x.best)+' м':'свободно'}</small><div class="blk">${i+1}</div></div>`;
+    return `<div class="${cls}"${x&&x.id?` data-uid="${esc(x.id)}"`:''}>${x?`<img data-skin="${esc(x.skin)}" alt="">`:'<img alt="">'}<b>${x?esc(x.name):'—'}</b><small>${x?fmtM(x.best)+' м':'свободно'}</small><div class="blk">${i+1}</div></div>`;
   }).join('');
   $('#tourPodium').querySelectorAll('img[data-skin]').forEach(im=>thumb('frogs/'+im.dataset.skin).then(u=>im.src=u).catch(()=>{}));
   const me=r.me,st=$('#tourStats');
@@ -2848,6 +2921,7 @@ function renderTour(miss){
   st.hidden=!me;
   // вне призовой зоны важнее всего — сколько до последнего призового места
   const edge=me&&me.rank>P?rows[P-1]:null,toPrize=edge?edge.best-me.best+1:0;
+  if(me&&meId)st.dataset.uid=meId;
   if(me)st.innerHTML=`<span class="rk">${me.rank}</span><span class="nm">Ты<small>${fmtM(me.best)} м · ${me.rank<=P?'в призах':'вне призов'}</small></span>`+
     `<span class="gp">${me.rank===1?'<b>лидер</b>':edge?`<b>${fmtM(toPrize)} м</b><small>до ${P}-го места с призом</small>`:`<b>${fmtM(me.gap)} м</b><small>до ${me.rank-1}-го</small>`}</span>`;
   // обязательная подписка
@@ -2887,7 +2961,7 @@ function renderTour(miss){
   let html='';
   if(!rows.length)html='<div class="demo">Пока никто не прыгал — стань первым в таблице</div>';
   else if(!rest.length)html='<div class="demo">Все участники — на пьедестале</div>';
-  else html=rest.map(x=>`<div class="lb noimg${x.id===meId?' me':''}${x.rank<=P?' pz':''}"><div class="rk">${x.rank}</div><div class="nm">${esc(x.name||'Игрок')}</div><div class="sc">${fmtM(x.best)} м</div></div>`+
+  else html=rest.map(x=>`<div class="lb noimg${x.id===meId?' me':''}${x.rank<=P?' pz':''}" data-uid="${esc(x.id)}"><div class="rk">${x.rank}</div><div class="nm">${esc(x.name||'Игрок')}</div><div class="sc">${fmtM(x.best)} м</div></div>`+
     (x.rank===P&&P>3&&rest.some(y=>y.rank>P)?'<div class="pz-line">граница призов</div>':'')).join('');
   if(P<=3&&rest.length)html=`<div class="pz-line">дальше — без приза</div>`+html;
   // своё место видно всегда, даже если оно за пределами первой полусотни
@@ -2907,6 +2981,7 @@ async function joinTour(){
     toast((r&&r.error)||'Не получилось');return;
   }
   t.joined=true;S.buy();haptic.success();toast('Ты в турнире — лучший забег пойдёт в таблицу');
+  try{if(TG&&TG.requestWriteAccess&&TG.isVersionAtLeast&&TG.isVersionAtLeast('6.9'))TG.requestWriteAccess();}catch(e){}
   loadTours().then(renderHubTours);renderTour();
 }
 $('#tourPlay').onclick=async()=>{
@@ -3188,7 +3263,7 @@ function renderRating(){
     note.textContent=mine?`Ты ${mine.rank}-й · ${fmtM(mine.best)} м`:(j.best?`Твой рекорд ${fmtM(j.best)} м — поднажми, чтобы попасть в таблицу`:'Сыграй в Frog Jump — и ты в таблице');
     if(!rows.length){list.innerHTML='<div class="demo">В Frog Jump ещё никто не прыгал</div>';return;}
     rows.forEach(x=>{
-      const d=document.createElement('div');d.className='lb'+(x.id===meId?' me':'');
+      const d=document.createElement('div');d.className='lb'+(x.id===meId?' me':'');d.dataset.uid=x.id;
       d.innerHTML=`<div class="rk ${x.rank<=3?'top':''}">${x.rank<=3?ic('medal','m'+x.rank):x.rank}</div><img alt=""><div class="nm">${esc(x.name||'Игрок')}</div><div class="sc">${fmtM(x.best)} м</div>`;
       thumb('frogs/'+(x.skin||'original')).then(u=>d.querySelector('img').src=u).catch(()=>{});
       list.appendChild(d);
@@ -3198,7 +3273,7 @@ function renderRating(){
     note.textContent=net.me&&net.me.rank?`Ты ${net.me.rank}-й · ${fmt(net.me.score)} очков`:'Очки идут за каждое слияние';
     if(!rows.length){list.innerHTML='<div class="demo">Пока пусто</div>';return;}
     rows.forEach(x=>{
-      const d=document.createElement('div');d.className='lb'+(x.id===meId?' me':'');
+      const d=document.createElement('div');d.className='lb'+(x.id===meId?' me':'');if(x.id)d.dataset.uid=x.id;
       const rsp=x.sp||'frog',rL=rowLadder(rsp),lv=Math.max(1,Math.min(x.maxLv||1,rL.length));
       d.innerHTML=`<div class="rk ${x.rank<=3?'top':''}">${x.rank<=3?ic('medal','m'+x.rank):x.rank}</div><img alt=""><div class="nm">${esc(x.name||'Игрок')}<small>${rowFrogName(lv,x.holder,rsp)} · ур. ${lv}</small></div><div class="sc">${fmt(x.score||0)}</div>`;
       thumb(rowFrogAsset(lv,x.holder,rsp)).then(u=>d.querySelector('img').src=u).catch(()=>{});
@@ -3207,6 +3282,74 @@ function renderRating(){
   }
 }
 $('#rateTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(rateTab===b.dataset.rt)return;rateTab=b.dataset.rt;S.ui();haptic.select();renderRating();});
+
+/* ---------- ПРОФИЛЬ ИГРОКА ----------
+   Как на FACEIT: уровень 1–10 по рекорду, форма за последние забеги, общая
+   статистика, мастерство и турниры. Открывается тапом по игроку в любом рейтинге
+   или своей кнопкой в шапке хаба */
+const LV_COL=l=>l>=10?'#ff3b1f':l>=8?'#ff7a1a':l>=4?'#ffc800':l>=2?'#35e05a':'#e8eeea';
+const dur=sec=>{sec=Math.round(sec||0);const h=Math.floor(sec/3600),m=Math.floor(sec/60)%60;return h?`${h} ч ${m} м`:m?`${m} мин`:`${sec} с`;};
+const ago=t=>{if(!t)return '—';if(Date.now()-t<15*60e3)return 'сейчас в игре';const d=Math.floor((Date.now()-t)/864e5);return d<=0?'был сегодня':d===1?'был вчера':`был ${d} ${plural(d,'день','дня','дней')} назад`;};
+const dShort=t=>t?new Date(t).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}):'—';
+let profReq=0;
+async function openProfile(id){
+  if(!CFG.api){toast('Профили работают в Telegram с сервером');return;}
+  S.ui();haptic.light();
+  const box=$('#profBody');box.innerHTML='<div class="demo">Загрузка…</div>';$('#prof').classList.remove('hidden');
+  const my=++profReq;
+  const r=await api('profile',id?{id}:{}).catch(()=>null);
+  if(my!==profReq)return;
+  if(!r||!r.ok){box.innerHTML=`<div class="demo">${esc((r&&r.error)||'Не получилось загрузить профиль')}</div>`;return;}
+  renderProfile(r.p);
+}
+function renderProfile(p){
+  const box=$('#profBody'),col=LV_COL(p.level),f=p.form,st=p.st,T=p.tour;
+  box.style.setProperty('--lv',col);
+  const cell=(a,b)=>`<div><span>${a}</span><b>${b}</b></div>`;
+  const toNext=p.levelTo?Math.max(0,p.levelTo-p.best):0;
+  const prog=p.levelTo?Math.min(100,Math.round((p.best-p.levelFrom)/(p.levelTo-p.levelFrom)*100)):100;
+  // форма: столбики последних забегов; жёлтый — рекорд, штриховка — с разгона; пунктир — рекорд
+  const hs=f.hist,mx=Math.max(p.best,...hs.map(x=>x.h),1);
+  const bars=hs.length
+    ?`<div class="pf-bars">${hs.map(x=>`<i class="${p.best&&x.h>=p.best?'rec':x.b?'bst':''}" style="height:${Math.max(3,Math.round(x.h/mx*100))}%"></i>`).join('')}<u style="bottom:${Math.round(p.best/mx*100)}%"></u></div>`
+    :'<div class="demo" style="padding:14px 0">Забеги появятся здесь после первой игры</div>';
+  const deaths=st?(st.fall+st.heron):0,fp=deaths?Math.round(st.fall/deaths*100):0;
+  let h=`
+  <div class="pf-top">
+    <div class="pf-ava"><img id="profAva" alt=""></div>
+    <div class="pf-who"><b>${esc(p.name)}</b><small>${p.self?'Это ты · ':''}${ago(p.lastSeen)}<br>в игре с ${dShort(p.created)} · ${p.days} ${plural(p.days,'день','дня','дней')} активности</small></div>
+    <div class="pf-lv"><i>${p.level}</i><small>уровень</small></div>
+  </div>
+  <div class="pf-prog"><div><i style="width:${prog}%"></i></div><small><span>${p.levelTo?`до ${p.level+1}-го уровня — ${fmtM(toNext)} м`:'максимальный уровень'}</span><span>${fmtM(p.levelFrom)}${p.levelTo?' – '+fmtM(p.levelTo):'+'} м</span></small></div>
+  <div class="pf-hero">${cell('Рекорд',fmtM(p.best)+' м')}${cell('Место',p.rank?`${p.rank}<small style="font-size:12px;opacity:.7"> из ${p.players}</small>`:'—')}${cell('Лучше чем',p.better!=null?p.better+'%':'—')}</div>
+  <div class="hub-label">Форма${f.n?` · последние ${f.n} ${plural(f.n,'забег','забега','забегов')}`:''}</div>
+  <div class="pf-chart">${bars}<small><span>средний ${fmtM(f.avg)} · медиана ${fmtM(f.med)} м</span><span>рекорд — ${dShort(p.bestAt)}</span></small></div>
+  <div class="pf-grid">${cell('Забегов за неделю',fmtM(f.week))}${cell('Лучший за неделю',f.weekBest?fmtM(f.weekBest)+' м':'—')}${cell('Всего забегов',fmtM(p.runs))}</div>
+  <div class="hub-label">Общее</div>
+  <div class="pf-grid">${cell('Время в игре',st?dur(st.time):'—')}${cell('Набрано',st?st.climbed.toLocaleString('ru-RU')+' км':'—')}${cell('Прыжков',st?fmtM(st.jumps):'—')}${cell('Мошек',fmtM(p.fliesTotal))}${cell('Нарядов',p.skins)}${cell('Слияние',`ур. ${p.merge.lv}`)}</div>
+  <div class="hub-label">Мастерство</div>
+  <div class="pf-grid">${cell('Серия «Точно»',st&&st.perfMax>=2?'×'+st.perfMax:'—')}${cell('Лучшее комбо',st&&st.comboMax?'×'+st.comboMax:'—')}${cell('Цапель сбито',st?fmtM(st.herons):'—')}${cell('Стрекоз',st?fmtM(st.dragons):'—')}${cell('Слияний',st?fmtM(st.merges):'—')}${cell('Золотых мошек',st?fmtM(st.golds):'—')}</div>`;
+  if(deaths)h+=`
+  <div class="hub-label">Чем заканчиваются забеги</div>
+  <div class="pf-chart"><div class="pf-split"><i style="width:${fp}%;background:#7fd1ff"></i><i style="width:${100-fp}%;background:#ff7e6b"></i></div>
+  <div class="pf-legend"><span>Сорвался <b>${fp}%</b></span><span>Цапля <b>${100-fp}%</b></span></div></div>`;
+  h+=`
+  <div class="hub-label">Турниры</div>
+  <div class="pf-grid">${cell('Сыграно',T.played)}${cell('Побед',T.wins)}${cell('В призах',T.podiums)}</div>`;
+  if(T.list.length)h+=T.list.map(t=>`<button class="pf-tr" data-tid="${esc(t.id)}"><b>${esc(t.title)}</b><span class="pl${t.rank===1||t.prize?' gold':''}">${t.rank?t.rank+'-й':'—'}</span><small>${t.done?(t.prize?'приз: '+esc(t.prize):'завершён'):'идёт сейчас'} · ${t.players} ${plural(t.players,'участник','участника','участников')} · ${fmtM(t.best)} м</small></button>`).join('');
+  if(p.self&&st)h+=`<div class="pf-note">Видно только тебе: продолжений ${st.revives||0}, разгонов ${st.boosts||0}</div>`;
+  h+=`<div class="pf-note">${st?`Подробная статистика копится с ${dShort(st.since)}`:'Подробная статистика начнёт копиться со следующего забега'}</div>`;
+  box.innerHTML=h;box.scrollTop=0;
+  thumb('frogs/'+(p.skin||'original')).then(u=>{const im=$('#profAva');if(im)im.src=u;}).catch(()=>{});
+  box.querySelectorAll('[data-tid]').forEach(b=>b.onclick=()=>{S.ui();$('#prof').classList.add('hidden');openTour(b.dataset.tid);});
+}
+$('#profClose').onclick=()=>{S.ui();$('#prof').classList.add('hidden');};
+$('#hubProf').onclick=()=>openProfile(null);
+// тап по любому игроку в таблицах — его профиль
+document.addEventListener('click',e=>{
+  const el=e.target.closest&&e.target.closest('[data-uid]');if(!el||!el.dataset.uid||el.closest('#prof'))return;
+  openProfile(el.dataset.uid);
+});
 
 /* ---------- НИЖНЕЕ МЕНЮ ХАБА ---------- */
 const PANES=['games','tours','rating','wardrobe'],PANE_TITLE={games:'SWAMP',tours:'Турниры',rating:'Рейтинг',wardrobe:'Гардероб'};
@@ -3390,11 +3533,11 @@ async function init(){
   const fresh=await resolveSpecies();
   loaderSticker();
   await startGame();
-  const startParam=TG&&TG.initDataUnsafe&&TG.initDataUnsafe.start_param;
+  const startParam=START_P;
   // приложение открывается в хабе: оттуда выбирают слияние или Frog Jump.
   // По прямой ссылке сразу открываем нужное, хаб остаётся под ним
   if(startParam==='shop'){openHub();openShop();}
-  else if(startParam&&startParam.startsWith('t_')){openHub();openTour(startParam.slice(2));}
+  else if(startParam&&startParam.startsWith('t_')){openHub();openTour(startParam.slice(2).split('-')[0]);}   // t_<id>-ad_канал: турнир + метка рекламы
   else if((startParam==='jump'||/^ad_/.test(startParam||''))&&JUMP){openHub();JUMP.open();}   // реклама ведёт сразу в игру, метка уходит в аналитику
   else openHub();
   sync(true).then(r=>{
