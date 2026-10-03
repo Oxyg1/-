@@ -481,7 +481,7 @@ function renderTours(list){
       <td class="num">${t.players}</td>
       <td class="num muted">${new Date(t.endsAt).toLocaleString('ru-RU')}</td>
       <td style="font-size:12.5px">${win0(t)||`<span class="muted">мест: ${t.places||3}</span>`}${t.muteChat?'<div class="tag test">чат на паузе</div>':''}${t.muteDm?'<div class="tag test">лички выкл</div>':''}</td>
-      <td style="white-space:nowrap">${t.done?'':'<button class="ghost sm" data-act="edit">Изменить</button> '}<button class="${t.hidden?'ghost':'bad'} sm" data-act="hide">${t.hidden?'Вернуть':'Скрыть'}</button></td>
+      <td style="white-space:nowrap">${t.done?'':'<button class="ghost sm" data-act="edit">Изменить</button> <button class="ghost sm" data-act="nudge">Напомнить участникам</button> '}<button class="${t.hidden?'ghost':'bad'} sm" data-act="hide">${t.hidden?'Вернуть':'Скрыть'}</button></td>
     </tr>
     ${t.done?'':`<tr class="tedit" data-for="${esc(t.id)}" hidden><td colspan="7"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
       <label style="flex:1 1 180px">Название<input data-f="title" maxlength="40" value="${esc(t.title)}"></label>
@@ -506,6 +506,8 @@ function renderTours(list){
       };
       const uc=box.querySelector('[data-act=unchat]');if(uc)uc.onclick=async()=>{const r=await api({act:'tourEdit',tid:tr.dataset.tid,unchat:1});toast(r.ok?r.msg:(r.error||'Ошибка'));load('tours');};
     }
+    const nu=tr.querySelector('[data-act=nudge]');
+    if(nu)nu.onclick=async()=>{if(!confirm('Отправить каждому участнику личное сообщение: его место и сколько до приза?'))return;const r=await api({act:'tourNudge',tid:tr.dataset.tid});toast(r.ok?r.msg:(r.error||'Ошибка'));};
     const b=tr.querySelector('[data-act=hide]');
     if(b)b.onclick=async()=>{const r=await api({act:'tourHide',tid:tr.dataset.tid});toast(r.ok?r.msg:(r.error||'Ошибка'));load('tours');};
   });

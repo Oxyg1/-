@@ -1631,6 +1631,32 @@ const api = {
           chat: t.chat && t.chat.id ? (t.chat.title || String(t.chat.id)) : null, muteChat: !!t.muteChat, muteDm: !!t.muteDm, prizes: t.prizes || null, prizesAuto: [...Array(placesOf(t))].map((_, i) => prizeFor(Object.assign({}, t, { prizes: null }), i + 1)) }));
       return { ok: true, tours: list };
     }
+    // личная рассылка участникам: каждому его место и сколько до приза.
+    // Пишет только тем, кто разрешил боту личку; раз в 3 часа на турнир
+    if (act === 'tourNudge') {
+      const t = db.tournaments[String(body.tid || '')]; if (!t || !tourActive(t)) return { ok: false, error: 'Турнир не идёт' };
+      if (t.nudgeAt && Date.now() - t.nudgeAt < 3 * 3600e3 && !body.force) return { ok: false, error: 'Рассылка по этому турниру уже была меньше 3 часов назад' };
+      t.nudgeAt = Date.now(); save();
+      const P = placesOf(t), nb = tourBoard(t), withRes = nb.filter(r => r.best > 0);
+      const left = Math.max(0, t.endsAt - Date.now()), hh = Math.floor(left / 3600e3), mi = Math.floor(left / 60e3) % 60;
+      const leftTxt = hh ? `${hh} ч ${mi} мин` : `${mi} мин`;
+      const edge = withRes[P - 1];
+      let n = 0;
+      for (const r of nb) {
+        if (!/^\d+$/.test(r.id)) continue;
+        const rk = r.best > 0 ? withRes.findIndex(x => x.id === r.id) + 1 : 0;
+        let line;
+        if (!rk) line = `Ты в турнире, но ещё не прыгал. ${edge ? `Чтобы попасть в призы, нужно ${mm(edge.best + 1)}.` : 'Призовые места пока свободны — первый же забег попадёт в таблицу.'}`;
+        else if (rk === 1) line = `Ты лидер — ${mm(r.best)}. ${withRes[1] ? `${esc(withRes[1].name)} отстаёт на ${mm(r.best - withRes[1].best)}, держи отрыв.` : ''}`;
+        else if (rk <= P) { const up = withRes[rk - 2]; line = `Ты ${rk}-й — ${mm(r.best)}, это призовое место${prizeFor(t, rk) ? ` (${esc(prizeFor(t, rk))})` : ''}. До ${rk - 1}-го — ${mm(up.best - r.best + 1)}.`; }
+        else line = `Ты ${rk}-й — ${mm(r.best)}. До ${P}-го места с призом — ${mm(edge.best - r.best + 1)}.`;
+        tgQ('sendMessage', { chat_id: +r.id, parse_mode: 'HTML', reply_markup: tourPlayKb(t),
+          text: `${te('time')} <b>До конца турнира «${esc(t.title)}» — ${leftTxt}</b>\n\n${line}\n\nСорвался на хорошем забеге — продолжай с той же высоты, а не с нуля ${te('point')}` });
+        n++;
+      }
+      log('tour nudge', t.id, n);
+      return { ok: true, msg: `Отправляю ${n} участникам — дойдёт тем, кто открывал бота` };
+    }
     // правка идущего турнира: название, приз, число призовых мест, время окончания
     if (act === 'tourEdit') {
       const t = db.tournaments[String(body.tid || '')]; if (!t) return { ok: false, error: 'Нет такого турнира' };
