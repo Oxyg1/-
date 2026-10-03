@@ -1137,7 +1137,7 @@ const api = {
     // рекорды соперников по всем турнирам игрока: клиент рисует их линии на высоте
     // рекорда и держит в пилюле ближайший результат выше
     const tourRivals = Object.values(db.tournaments).filter(t => tourActive(t) && t.players[u.id]).map(t => ({
-      id: t.id, title: t.title, places: placesOf(t),
+      id: t.id, title: t.title, places: placesOf(t), endsAt: t.endsAt, prizes: [...Array(placesOf(t))].map((_, i) => prizeFor(t, i + 1) || ''),
       rows: tourBoard(t).filter(r => r.id !== u.id && r.best > 0).slice(0, 60).map(r => ({ id: r.id, name: r.name, best: r.best })),
     }));
     // все соперники общего рейтинга: линия каждого висит на высоте его рекорда

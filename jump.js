@@ -187,6 +187,11 @@ window.FrogJumpInit=function(B){
 #fj .fj-stats div:last-child:nth-child(odd){grid-column:span 2}
 #fj .fj-stats b{font-size:17px;font-weight:900;font-variant-numeric:tabular-nums}
 #fj .fj-ctours{width:100%;display:flex;flex-direction:column;gap:4px}
+#fj .fj-ctours .fj-th{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:rgba(255,210,63,.16);box-shadow:inset 0 0 0 1.5px rgba(255,210,63,.55);border-radius:12px;padding:8px 12px;text-align:left}
+#fj .fj-ctours .fj-th b{font-size:15px;color:#ffd23f}
+#fj .fj-ctours .fj-th small{font-size:12px;opacity:.85}
+#fj .fj-ctours .fj-th.in{background:rgba(120,230,140,.16);box-shadow:inset 0 0 0 1.5px rgba(140,240,160,.6)}
+#fj .fj-ctours .fj-th.in b{color:#9dffb0}
 #fj .fj-ctours div{display:flex;justify-content:space-between;gap:8px;font-size:13px;background:rgba(0,0,0,.22);border-radius:10px;padding:5px 10px}
 #fj .fj-ctours span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.85}
 #fj .fj-ctours b{white-space:nowrap}
@@ -1148,6 +1153,23 @@ window.FrogJumpInit=function(B){
   /* Турнирные соперники: их рекорды — пунктир на своей высоте, а пилюля под
      лотосами держит самую близкую цель среди всех турниров игрока */
   let tourR=[];
+  // ближайшая цель в идущих турнирах для высоты h (этого забега)
+  function tourHint(h){
+    let best=null;const now=Date.now();
+    for(const t of tourR||[]){
+      if(t.endsAt&&t.endsAt<now)continue;
+      const P=t.places||3,rows=(t.rows||[]).filter(r=>r.best>0);
+      const rank=rows.filter(r=>r.best>=h).length+1;
+      const left=t.endsAt?t.endsAt-now:0,hh=Math.floor(left/3600e3),mi=Math.floor(left/60e3)%60;
+      const lt=left?` · до конца ${hh?hh+' ч '+mi+' мин':mi+' мин'}`:'';
+      const pz=k=>(t.prizes||[])[k-1]||'';
+      let o;
+      if(rank<=P){const up=rows[rank-2];o={inPrize:true,gap:0,head:`Этот забег — ${rank}-е место${pz(rank)?' · '+pz(rank):''}`,sub:(up?`до ${rank-1}-го ещё ${fmtM(up.best-h+1)} м — продолжи, пока высота твоя`:'это лидерство — продолжи и уйди в отрыв')+lt};}
+      else{const edge=rows[P-1],gap=edge.best-h+1;o={inPrize:false,gap,head:`До ${P}-го места${pz(P)?' ('+pz(P)+')':''} — ${fmtM(gap)} м`,sub:`ты сейчас был бы ${rank}-м из ${rows.length+1}${lt}`};}
+      if(!best||o.gap<best.gap)best=o;
+    }
+    return best;
+  }
   const elTP=()=>$('#fjTPill');
   function updPill(r,m,force){
     const el=elTP();
@@ -1217,11 +1239,17 @@ window.FrogJumpInit=function(B){
     const rn=r.reviveN;
     $('#fjRevive').hidden=rn>=REVIVE_PRICES.length||h<20;
     $('#fjRevive').innerHTML=`Продолжить · ${REVIVE_PRICES[rn]} <img class="ic" src="icons/tgstar.png" alt="">`;
-    const cheapRun=h<150;   // за 30 метров звёзды не просят — продолжение остаётся, но вторым
+    // турнир: какое место дал бы этот забег и сколько до ближайшего призового.
+    // Продолжение главной кнопкой — когда до приза реально рукой подать
+    const th=tourHint(h);
+    const box=$('#fjOverTours');
+    if(th){box.innerHTML=`<div class="fj-th${th.inPrize?' in':''}"><b>${th.head}</b><small>${th.sub}</small></div>`;box.hidden=false;}
+    const near=th&&(th.inPrize||th.gap<=Math.max(400,h*.6));
+    const cheapRun=h<150&&!near;   // за 30 метров звёзды не просят — продолжение остаётся, но вторым
     $('#fjRevive').className=cheapRun?'btn ghost':'btn';
     $('#fjAgain').className=$('#fjRevive').hidden||cheapRun?'btn':'btn ghost';
     if(cheapRun&&!$('#fjRevive').hidden)$('#fjAgain').after($('#fjRevive'));else $('#fjRevive').after($('#fjAgain'));
-    $('#fjOverTours').hidden=true;$('#fjClimb').hidden=true;$('#fjFin').hidden=true;
+    if(!th)$('#fjOverTours').hidden=true;$('#fjClimb').hidden=true;$('#fjFin').hidden=true;
     $('#fjOver').hidden=false;SND.card();
     countUp($('#fjOverH'),h,.9,true);countUp($('#fjOverF'),earnedNow,.7,false);
     if(isBest){setTimeout(()=>{if(!$('#fjOver').hidden){SND.record();B.haptic.success();}},650);}
