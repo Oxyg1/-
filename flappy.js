@@ -464,9 +464,17 @@ window.FlappyFrogInit=function(B){
     for(const g of r.gates){
       const x=g.x-cam,y=gy(g,r.t),top=y-g.h/2,bot=y+g.h/2;
       if(x<-RW||x>W+RW)continue;
-      drawReed(x,top,true,zi);drawReed(x,bot,false,zi);
-      if(g.heron)drawHeron(g,x,bot);
+      drawReed(x,top,true,zi);
+      if(g.heron)drawHeron(g,x,bot);   // цапля выныривает из нижних зарослей — рисуем её под ними
+      drawReed(x,bot,false,zi);
     }
+    // камыши нарисованы при дневном свете — подкрашиваем их под время суток;
+    // лягушку и мошек рисуем поверх, чтобы они оставались яркими
+    const TINT=['rgba(0,0,0,0)','rgba(120,40,30,.16)','rgba(8,12,48,.42)','rgba(40,70,140,.08)'];
+    const ta=TINT[r.zoneFrom??r.zone],tb=TINT[r.zone];
+    cx.fillStyle=tb;cx.globalAlpha=r.zoneT;cx.fillRect(0,0,W,waterY);
+    if(r.zoneT<1){cx.fillStyle=ta;cx.globalAlpha=1-r.zoneT;cx.fillRect(0,0,W,waterY);}
+    cx.globalAlpha=1;
     // мошки
     for(const f of r.flyItems){if(f.done)continue;const x=f.x-cam,y=f.y+Math.sin(f.t*3)*4;
       if(f.gold){cx.fillStyle='rgba(255,210,63,.28)';cx.beginPath();cx.arc(x,y,13+Math.sin(f.t*6)*2,0,7);cx.fill();}
@@ -498,9 +506,11 @@ window.FlappyFrogInit=function(B){
   function drawReed(x,edge,top,zi){
     const k=top?'reed_top':'reed_bottom';
     if(has(k)){
-      const im=IMG[k],w=RW+28,h=w*im.naturalHeight/im.naturalWidth;
-      if(top)cx.drawImage(im,x-w/2,edge-h,w,h);else cx.drawImage(im,x-w/2,edge,w,h);
-      if(top&&edge-h>0){cx.drawImage(im,x-w/2,edge-2*h,w,h);}      // очень высокие — дорисовываем
+      // картинка тянется по высоте до края экрана; початки сверху и мох снизу
+      // чуть заходят в проход — граница столкновения остаётся по краю стеблей
+      const im=IMG[k],w=RW+30,h0=w*im.naturalHeight/im.naturalWidth;
+      if(top){const h=Math.max(h0,(edge+12)/.93);cx.drawImage(im,x-w/2,edge-h*.93,w,h);}
+      else{const h=Math.max(h0,(VH-edge+12)/.9);cx.drawImage(im,x-w/2,edge-h*.1,w,h);}
       return;
     }
     const c=reedColumn(top,zi),w=RW+28,h=c.height/(sc*dpr);
@@ -512,7 +522,7 @@ window.FlappyFrogInit=function(B){
     const warn=ph>1.25&&ph<1.75;
     const hx=x-10,hy=bot-6-reach;
     if(warn){cx.fillStyle='rgba(255,90,70,'+(.5+.5*Math.sin(tGlobal*20))+')';cx.font='900 22px Nunito,system-ui,sans-serif';cx.textAlign='center';cx.fillText('!',hx,bot-14);}
-    if(has('heron')){const im=IMG.heron,w=56,h=w*im.naturalHeight/im.naturalWidth;cx.drawImage(im,hx-w/2,hy-h*.25,w,h);return;}
+    if(has('heron')){const im=IMG.heron,w=70,h=w*im.naturalHeight/im.naturalWidth;cx.drawImage(im,hx-w*.62,hy-h*.12,w,h);return;}   // кончик клюва — в точке удара
     // шея и голова цапли, клюв вверх
     cx.strokeStyle='#e8eef2';cx.lineWidth=7;cx.lineCap='round';cx.beginPath();cx.moveTo(hx+6,bot+30);cx.quadraticCurveTo(hx+14,hy+18,hx,hy+6);cx.stroke();
     cx.fillStyle='#f4f8fa';cx.beginPath();cx.ellipse(hx,hy+4,8,7,0,0,7);cx.fill();
