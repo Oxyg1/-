@@ -13,6 +13,7 @@
 <script src="cats.js"></script>
 <script src="backdrops.js"></script>
 <script src="jump.js"></script>
+<script src="flappy.js"></script>
 <!--CONFIG-->
 <style>
 :root{
@@ -327,6 +328,15 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 @keyframes hjBob{50%{transform:translateY(-6px) rotate(12deg)}}
 @keyframes hjCloud{from{transform:translateX(-90px)}to{transform:translateX(440px)}}
 .hub-new{position:absolute;top:10px;left:10px;background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:900;box-shadow:0 2px 0 var(--acc-dark)}
+.hf-art{background:linear-gradient(to bottom,#7cc9e8 0%,#a7dbe0 55%,#3f9a6a 100%)}
+.hf-reed{position:absolute;width:30px;margin-left:-15px;background:linear-gradient(90deg,#1f6b3a,#5cbf5a 45%,#1f6b3a);border-radius:6px;animation:hfReed 3s linear infinite}
+.hf-t{top:0;border-radius:0 0 8px 8px}
+.hf-b{bottom:18px;border-radius:8px 8px 0 0}
+.hf-b::before{content:'';position:absolute;left:50%;top:-12px;width:9px;height:20px;margin-left:-4.5px;border-radius:6px;background:#6b3f1f}
+.hf-water{position:absolute;left:0;right:0;bottom:0;height:18px;background:linear-gradient(#2f7f86,#164c4f)}
+.hf-fr{position:absolute;width:56px;height:56px;left:30%;top:46px;margin-left:-28px;animation:hfFlap 1.1s ease-in-out infinite}
+@keyframes hfFlap{0%,100%{transform:translateY(8px) rotate(14deg)}35%{transform:translateY(-14px) rotate(-18deg)}}
+@keyframes hfReed{from{translate:0}to{translate:-36px}}
 .hj-info{padding:10px 14px 14px;display:flex;flex-direction:column;gap:3px}
 .hj-info .t{font-size:21px;font-weight:900}
 .hj-row{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;opacity:.92}
@@ -793,6 +803,23 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
         </div>
       </div>
       <div class="hub-jump">
+        <div class="hj-art hf-art">
+          <i class="cl" style="width:54px;top:18px;animation-delay:-6s"></i>
+          <i class="hf-reed hf-t" style="left:58%;height:34px"></i><i class="hf-reed hf-b" style="left:58%;height:58px"></i>
+          <i class="hf-reed hf-t" style="left:92%;height:56px"></i><i class="hf-reed hf-b" style="left:92%;height:34px"></i>
+          <img class="hf-fr" id="hfFrog" alt="">
+          <svg class="fl" style="left:76%;top:62px"><use href="#i-fly"></use></svg>
+          <i class="hf-water"></i>
+          <span class="hub-new" id="hfNew">Новое</span>
+        </div>
+        <div class="hj-info">
+          <div class="t">Flappy Frog</div>
+          <div class="hj-row"><span>Твой рекорд</span><b id="hfBest">—</b></div>
+          <div class="hj-row"><span id="hfRecName">Лучший в игре</span><b id="hfRec">—</b></div>
+          <button class="btn" id="hfPlay" style="margin-top:8px">Играть</button>
+        </div>
+      </div>
+      <div class="hub-jump">
         <div class="hj-art hm-art">
           <i class="hm-board"></i>
           <i class="hm-cell" style="margin-left:-75px"></i><i class="hm-cell hm-mid" style="margin-left:-23px"></i><i class="hm-cell" style="margin-left:29px"></i>
@@ -807,7 +834,6 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
         </div>
       </div>
       <div class="hub-soon">
-        <button data-soon="Flappy Frog"><svg class="ic "><use href="#i-lock"></use></svg>Flappy Frog<small>скоро</small></button>
         <button data-soon="Block Blast"><svg class="ic "><use href="#i-lock"></use></svg>Block Blast<small>скоро</small></button>
         <button data-soon="Сапёр"><svg class="ic "><use href="#i-lock"></use></svg>Сапёр<small>скоро</small></button>
       </div>
@@ -819,7 +845,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
         <button class="btn" id="tourNewBtn">Создать турнир · 25 <img class="ic" src="icons/tgstar.png" alt=""></button>
       </section>
       <section class="hub-pane" data-pane="rating">
-        <div class="segbar" id="rateTabs"><button data-rt="jump" class="on">Прыжки</button><button data-rt="merge">Слияние</button></div>
+        <div class="segbar" id="rateTabs"><button data-rt="jump" class="on">Прыжки</button><button data-rt="flap">Полёт</button><button data-rt="merge">Слияние</button></div>
         <div class="war-note" id="rateNote"></div>
         <div class="scroll" id="rateList"></div>
       </section>
@@ -1509,6 +1535,7 @@ function applyServer(r){
   net.online=true;net.me=r.me||null;net.top=r.top||[];if(r.pond)net.pond=r.pond;if(r.war)net.war=r.war;net.holder=r.holder||null;net.lastSync=now();
   if(r.endless)net.endless=r.endless;if(r.endlessTop)net.endlessTop=r.endlessTop;
   if(r.jump)net.jump=r.jump;if(r.jumpTop)net.jumpTop=r.jumpTop;
+  if(r.flap)net.flap=r.flap;if(r.flapTop)net.flapTop=r.flapTop;
   // оплаченный возврат серии приходит как предмет в инвентаре — тратим его сразу
   if(((r.inv&&r.inv.reviveLeft)||0)>0&&state.runOver)reviveRun();
   if(r.warResult)showWarResult(r.warResult);
@@ -2739,6 +2766,20 @@ const JUMP=window.FrogJumpInit?window.FrogJumpInit({
   onClose:()=>openHub(),
   buyJumpRevive,buyJumpItem,shareJump,
 }):null;
+const FLAP=window.FlappyFrogInit?window.FlappyFrogInit({
+  bake:(ref,size)=>bake(ref,size),
+  api:(p,b)=>api(p,b),
+  hasApi:()=>!!CFG.api,
+  net:()=>net,
+  applyFlap:r=>{if(r.flap)net.flap=r.flap;if(r.flapTop)net.flapTop=r.flapTop;if(r.jump)net.jump=r.jump;},
+  haptic,toast,
+  sfx:{voice,thud,note,audio,out:()=>{audio();return dry;}},
+  soundOn:()=>state.sound,
+  setSound:v=>{state.sound=!!v;save();updateHud();},
+  setActive:v=>{jumpOpen=!!v;},
+  onClose:()=>openHub(),
+  buyJumpItem,
+}):null;
 /* ---------- ТУРНИРЫ ----------
    Турнир — отдельная таблица лучших забегов за своё время. Один забег идёт во
    все турниры, где игрок участвует. В хабе у турниров своя вкладка; красная
@@ -2765,7 +2806,7 @@ async function loadTours(){
 function tourRow(t,showRank){
   const side=t.done?(t.myRank?`${t.myRank} место`:'итоги'):(showRank&&t.joined?(t.myRank?`${t.myRank} место`:'не прыгал'):`${t.players} ${plural(t.players,'участник','участника','участников')}`);
   return `<button class="tour-row${t.done?' done':''}${t.joined?' me':''}" data-tid="${esc(t.id)}">
-    <span class="tr-main"><b>${t.official?'<span class="tag-off">SWAMP</span>':''}${esc(t.title)}${(t.channels||[]).length?'<span class="tag-ch">подписка</span>':''}</b><small>${(t.places||3)===1?'1 место':'топ-'+(t.places||3)} · ${esc(t.prize)}</small></span>
+    <span class="tr-main"><b>${t.official?'<span class="tag-off">SWAMP</span>':''}${t.mode==='flap'?'<span class="tag-ch">полёт</span>':''}${esc(t.title)}${(t.channels||[]).length?'<span class="tag-ch">подписка</span>':''}</b><small>${(t.places||3)===1?'1 место':'топ-'+(t.places||3)} · ${esc(t.prize)}</small></span>
     <span class="tr-side"><b>${side}</b><small>${t.done?'завершён':leftText(t.endsAt)}</small></span>
   </button>`;
 }
@@ -2809,6 +2850,8 @@ function renderTours(){
 function openTours(tab){openHub();showPane('tours');if(tab){tourTab=tab;renderTours();}}
 function renderTourForm(){
   $('#tourNewBody').innerHTML=`<div class="tour-form">
+    <label>Игра</label>
+    <div class="segbar" id="tfMode"><button data-m="jump" class="on">Frog Jump</button><button data-m="flap">Flappy Frog</button></div>
     <label for="tfTitle">Название<i id="tfTitleN"></i></label>
     <input id="tfTitle" maxlength="40" placeholder="Прыжок выходных">
     <label for="tfPrize">Приз<i id="tfPrizeN"></i></label>
@@ -2858,6 +2901,7 @@ function renderTourForm(){
   $('#tfPlaces').getPlaces=()=>places;updPl();
   updEnd();
   $('#tfGo').onclick=createTour;
+  $('#tfMode').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.ui();haptic.select();$('#tfMode').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));});
 }
 function openTourNew(){renderTourForm();$('#tourNew').classList.remove('hidden');S.ui();haptic.light();}
 async function createTour(){
@@ -2867,7 +2911,8 @@ async function createTour(){
   if(prize.length<3){toast('Опиши приз');$('#tfPrize').focus();return;}
   S.ui();
   const go=$('#tfGo');go.disabled=true;go.textContent=channels?'Проверяем каналы…':'Создаём…';
-  const r=await api('tourCreate',{title,prize,dur,channels,places:$('#tfPlaces').getPlaces()}).catch(()=>null);
+  const mode=(($('#tfMode').querySelector('.on')||{}).dataset||{}).m||'jump';
+  const r=await api('tourCreate',{title,prize,dur,channels,mode,places:$('#tfPlaces').getPlaces()}).catch(()=>null);
   go.disabled=false;go.innerHTML=`Создать за ${TOURS.fee||25} <img class="ic" src="icons/tgstar.png" alt="">`;
   if(!r||!r.ok){toast((r&&r.error)||'Сервер не отвечает',4000);return;}
   const done=async tid=>{$('#tourNew').classList.add('hidden');await loadTours();tourTab='mine';renderTours();openTour(tid);};
@@ -2909,11 +2954,11 @@ function renderTour(miss){
   tourClock();
   // пьедестал: в законченном турнире — призёры (с учётом отписавшихся), иначе лидеры
   const P=t.places||3;
-  $('#tourRule').innerHTML=`<svg class="ic"><use href="#i-trophy"></use></svg><span>${P===1?'Приз получит <b>лучший</b>':`Приз получат <b>${P} лучших</b>`} — в зачёт идёт лучший прыжок за время турнира${(t.channels||[]).length?', нужна подписка до конца':''}</span>`;
+  $('#tourRule').innerHTML=`<svg class="ic"><use href="#i-trophy"></use></svg><span>${P===1?'Приз получит <b>лучший</b>':`Приз получат <b>${P} лучших</b>`} — в зачёт идёт ${t.mode==='flap'?'лучший полёт во Flappy Frog':'лучший прыжок'} за время турнира${(t.channels||[]).length?', нужна подписка до конца':''}</span>`;
   const podium=(t.done&&r.winners?r.winners:rows.slice(0,3)).map(x=>({id:x.id,name:x.name,best:x.best,skin:(rows.find(y=>y.id===x.id)||{}).skin||x.skin||'original'}));
   $('#tourPodium').innerHTML=[1,0,2].map(i=>{
     const x=podium[i],cls='t-pod p'+(i+1)+(x?'':' empty')+(i+1>P?' nopz':'');
-    return `<div class="${cls}"${x&&x.id?` data-uid="${esc(x.id)}"`:''}>${x?`<img data-skin="${esc(x.skin)}" alt="">`:'<img alt="">'}<b>${x?esc(x.name):'—'}</b><small>${x?fmtM(x.best)+' м':'свободно'}</small><div class="blk">${i+1}</div></div>`;
+    return `<div class="${cls}"${x&&x.id?` data-uid="${esc(x.id)}"`:''}>${x?`<img data-skin="${esc(x.skin)}" alt="">`:'<img alt="">'}<b>${x?esc(x.name):'—'}</b><small>${x?tUnit(t,x.best):'свободно'}</small><div class="blk">${i+1}</div></div>`;
   }).join('');
   $('#tourPodium').querySelectorAll('img[data-skin]').forEach(im=>thumb('frogs/'+im.dataset.skin).then(u=>im.src=u).catch(()=>{}));
   const me=r.me,st=$('#tourStats');
@@ -2922,8 +2967,8 @@ function renderTour(miss){
   // вне призовой зоны важнее всего — сколько до последнего призового места
   const edge=me&&me.rank>P?rows[P-1]:null,toPrize=edge?edge.best-me.best+1:0;
   if(me&&meId)st.dataset.uid=meId;
-  if(me)st.innerHTML=`<span class="rk">${me.rank}</span><span class="nm">Ты<small>${fmtM(me.best)} м · ${me.rank<=P?'в призах':'вне призов'}</small></span>`+
-    `<span class="gp">${me.rank===1?'<b>лидер</b>':edge?`<b>${fmtM(toPrize)} м</b><small>до ${P}-го места с призом</small>`:`<b>${fmtM(me.gap)} м</b><small>до ${me.rank-1}-го</small>`}</span>`;
+  if(me)st.innerHTML=`<span class="rk">${me.rank}</span><span class="nm">Ты<small>${tUnit(t,me.best)} · ${me.rank<=P?'в призах':'вне призов'}</small></span>`+
+    `<span class="gp">${me.rank===1?'<b>лидер</b>':edge?`<b>${tUnit(t,toPrize)}</b><small>до ${P}-го места с призом</small>`:`<b>${tUnit(t,me.gap)}</b><small>до ${me.rank-1}-го</small>`}</span>`;
   // обязательная подписка
   const ch=t.channels||[],chBox=$('#tourChan');
   chBox.hidden=!ch.length;
@@ -2955,17 +3000,17 @@ function renderTour(miss){
   $('#tourInfo').innerHTML=`
     <span>Организатор</span><b>${t.official?'SWAMP':(r.ownerUsername?'@'+esc(r.ownerUsername):esc(t.owner||'игрок'))}</b>
     <span>Сроки</span><b>${fmtDate(t.startsAt)} — ${fmtDate(t.endsAt)}</b>
-    <span>Правило</span><b>лучший забег за время турнира</b>
+    <span>Правило</span><b>${t.mode==='flap'?'лучший полёт во Flappy Frog':'лучший забег в Frog Jump'} за время турнира</b>
     <span>Приз</span><b>вручает организатор</b>`;
   const rest=rows.filter(x=>x.rank>3);
   let html='';
   if(!rows.length)html='<div class="demo">Пока никто не прыгал — стань первым в таблице</div>';
   else if(!rest.length)html='<div class="demo">Все участники — на пьедестале</div>';
-  else html=rest.map(x=>`<div class="lb noimg${x.id===meId?' me':''}${x.rank<=P?' pz':''}" data-uid="${esc(x.id)}"><div class="rk">${x.rank}</div><div class="nm">${esc(x.name||'Игрок')}</div><div class="sc">${fmtM(x.best)} м</div></div>`+
+  else html=rest.map(x=>`<div class="lb noimg${x.id===meId?' me':''}${x.rank<=P?' pz':''}" data-uid="${esc(x.id)}"><div class="rk">${x.rank}</div><div class="nm">${esc(x.name||'Игрок')}</div><div class="sc">${tUnit(t,x.best)}</div></div>`+
     (x.rank===P&&P>3&&rest.some(y=>y.rank>P)?'<div class="pz-line">граница призов</div>':'')).join('');
   if(P<=3&&rest.length)html=`<div class="pz-line">дальше — без приза</div>`+html;
   // своё место видно всегда, даже если оно за пределами первой полусотни
-  if(me&&me.rank>3&&!rows.some(x=>x.id===meId))html+=`<div class="tour-sep">…</div><div class="lb noimg me"><div class="rk">${me.rank}</div><div class="nm">${esc(myName)}</div><div class="sc">${fmtM(me.best)} м</div></div>`;
+  if(me&&me.rank>3&&!rows.some(x=>x.id===meId))html+=`<div class="tour-sep">…</div><div class="lb noimg me"><div class="rk">${me.rank}</div><div class="nm">${esc(myName)}</div><div class="sc">${tUnit(t,me.best)}</div></div>`;
   $('#tourBoard').innerHTML=html;
   $('#tourBoardL').hidden=!rest.length;
   $('#tourBoardL').textContent=`Таблица · ${t.players} ${plural(t.players,'участник','участника','участников')}`;
@@ -2990,7 +3035,7 @@ $('#tourPlay').onclick=async()=>{
   // забег засчитается во все турниры, где игрок участвует
   S.ui();haptic.medium();
   $('#tour').classList.add('hidden');closeHub();
-  if(JUMP)JUMP.open();
+  if(t.mode==='flap'){if(FLAP)FLAP.open();}else if(JUMP)JUMP.open();
 };
 /* ---------- анонс турнира: анимированная карточка → GIF → пост в канал ----------
    Карточка — чистая функция фазы 0..1 (петля 3.2 с): лягушки по очереди прыгают на
@@ -3268,6 +3313,16 @@ function renderRating(){
       thumb('frogs/'+(x.skin||'original')).then(u=>d.querySelector('img').src=u).catch(()=>{});
       list.appendChild(d);
     });
+  }else if(rateTab==='flap'){
+    const rows=RATE.flapTop||[],f=net.flap||{},mine=rows.find(x=>x.id===meId);
+    note.textContent=mine?`Ты ${mine.rank}-й · ${mine.best} ${ptsW(mine.best)}`:(f.best?`Твой рекорд ${f.best} ${ptsW(f.best)} — поднажми, чтобы попасть в таблицу`:'Сыграй во Flappy Frog — и ты в таблице');
+    if(!rows.length){list.innerHTML='<div class="demo">Во Flappy Frog ещё никто не летал</div>';return;}
+    rows.forEach(x=>{
+      const d=document.createElement('div');d.className='lb'+(x.id===meId?' me':'');d.dataset.uid=x.id;
+      d.innerHTML=`<div class="rk ${x.rank<=3?'top':''}">${x.rank<=3?ic('medal','m'+x.rank):x.rank}</div><img alt=""><div class="nm">${esc(x.name||'Игрок')}</div><div class="sc">${x.best} ${ptsW(x.best)}</div>`;
+      thumb('frogs/'+(x.skin||'original')).then(u=>d.querySelector('img').src=u).catch(()=>{});
+      list.appendChild(d);
+    });
   }else{
     const rows=RATE.top||[];
     note.textContent=net.me&&net.me.rank?`Ты ${net.me.rank}-й · ${fmt(net.me.score)} очков`:'Очки идут за каждое слияние';
@@ -3508,7 +3563,16 @@ function renderHub(){
   $('#hubFlies').textContent=fmtM(CFG.api?(j.flies||0):(JUMP?JUMP.localFlies():0));
   skinsDot();
   $('#hubNew').hidden=!!best;
+  const f=net.flap||{},fr=f.record||((net.flapTop||[])[0]?{name:net.flapTop[0].name,best:net.flapTop[0].best}:null);
+  $('#hfBest').textContent=f.best?`${f.best} ${ptsW(f.best)}`:'ещё не летал';
+  $('#hfRecName').textContent=fr?`Лучший · ${fr.name||'игрок'}`:'Лучший в игре';
+  $('#hfRec').textContent=fr?`${fr.best} ${ptsW(fr.best)}`:'—';
+  $('#hfNew').hidden=!!f.best;
+  thumb('frogs/'+((net.jump||{}).skin||'original')).then(u=>{$('#hfFrog').src=u;}).catch(()=>{});
 }
+const ptsW=n=>{const x=n%10,y=n%100;return x===1&&y!==11?'очко':x>=2&&x<=4&&(y<12||y>14)?'очка':'очков';};
+// результат в единицах турнира: метры прыжков или очки полёта
+const tUnit=(t,n)=>t&&t.mode==='flap'?`${fmtM(n)} ${ptsW(Math.floor(n||0))}`:`${fmtM(n)} м`;
 function openHub(){
   try{localStorage.setItem(HUB_SEEN,'1');}catch(e){}
   const dot=$('#btnGames .newdot');if(dot)dot.remove();
@@ -3525,6 +3589,10 @@ $('#hubChat').onclick=()=>{S.ui();openTg(CFG.chat);};
 $('#hubPlay').onclick=()=>{
   if(!JUMP){toast('Игра не загрузилась — обнови приложение');return;}
   S.ui();haptic.medium();closeHub();JUMP.open();
+};
+$('#hfPlay').onclick=()=>{
+  if(!FLAP){toast('Игра не загрузилась — обнови приложение');return;}
+  S.ui();haptic.medium();closeHub();FLAP.open();
 };
 $('#hub').querySelectorAll('[data-soon]').forEach(b=>b.onclick=()=>{S.ui();haptic.select();toast(`Готовим ${b.dataset.soon} — следи за новостями в чате`);});
 try{if(!localStorage.getItem(HUB_SEEN))$('#btnGames').insertAdjacentHTML('beforeend','<i class="newdot"></i>');}catch(e){}

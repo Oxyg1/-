@@ -81,6 +81,8 @@ const SHOP = {
   reviveReturn: { title: 'Вернуть серию (при входе)', desc: 'Разовая скидка — поле стало тупиком, пока приложение было закрыто', price: 15 },
   jumpRevive: { title: 'Продолжить прыжок', desc: 'Frog Jump: продолжить забег с той же высоты', price: 10 },
   jumpRevive2: { title: 'Продолжить ещё раз', desc: 'Frog Jump: второе продолжение в этом забеге', price: 25 },
+  flapRevive: { title: 'Продолжить полёт', desc: 'Flappy Frog: продолжить с того же места', price: 10 },
+  flapRevive2: { title: 'Продолжить ещё раз', desc: 'Flappy Frog: второе продолжение в этом полёте', price: 25 },
   jumpShield: { title: 'Страховка прыгуна', desc: 'Frog Jump: первое падение не оборвёт забег', price: 15 },
   jumpBoost: { title: 'Разгон', desc: 'Frog Jump: начать забег с половины своего рекорда', price: 20 },
 };
@@ -142,6 +144,7 @@ function grant(user, item, amount) {
     case 'sub': inv.subUntil = Math.max(inv.subUntil || 0, t) + 30 * DAY; break;
     case 'donate': inv.donated = (inv.donated || 0) + amount; db.pond.stars += amount; db.pond.count += amount * 10; db.pond.donors[user.id] = (db.pond.donors[user.id] || 0) + amount; break;
     case 'jumpRevive': case 'jumpRevive2': { const j = jumpRec(user); j.revPaid = (j.revPaid || 0) + 1; break; }
+    case 'flapRevive': case 'flapRevive2': { const f = flapRec(user); f.revPaid = (f.revPaid || 0) + 1; break; }
     case 'jumpShield': { const j = jumpRec(user); j.shield = (j.shield || 0) + 1; break; }
     case 'jumpBoost': { const j = jumpRec(user); j.boost = (j.boost || 0) + 1; break; }
     case 'revive': case 'reviveReturn': { const e = user.endless || (user.endless = {}); e.cont = (e.cont || 0) + 1; inv.reviveLeft = (inv.reviveLeft || 0) + 1; break; }
@@ -529,7 +532,7 @@ function profileOf(u, self) {
     if (done && rk === 1) wins++;
     if (done && rk && rk <= P) podiums++;
     if (rk && (!bestPlace || rk < bestPlace)) bestPlace = rk;
-    tours.push({ id: t.id, title: t.title, rank: rk, players: Object.keys(t.players).length, best: t.players[u.id].best || 0, done, prize: done && rk && rk <= P ? prizeFor(t, rk) || '' : '', at: t.endsAt });
+    tours.push({ id: t.id, title: t.title, mode: isFlapTour(t) ? 'flap' : 'jump', rank: rk, players: Object.keys(t.players).length, best: t.players[u.id].best || 0, done, prize: done && rk && rk <= P ? prizeFor(t, rk) || '' : '', at: t.endsAt });
   }
   tours.sort((a, b) => (a.done - b.done) || b.at - a.at);
   const days = (u.act || []).length;
@@ -551,6 +554,24 @@ function profileOf(u, self) {
 function jumpRec(u) { return u.jump || (u.jump = { best: 0, flies: 0, runs: 0, total: 0, revPaid: 0, revUsed: 0, lastT0: 0, lastH: 0, lastAt: 0 }); }
 const jumpSign = str => crypto.createHmac('sha256', db.jump.secret).update(str).digest('hex').slice(0, 24);
 function jumpToken(uid, t0, base) { const p = `${uid}.${t0}.${base}`; return `${p}.${jumpSign(p)}`; }
+/* ---------- FLAPPY FROG ----------
+   Свой рекорд и свои продолжения, а мошки и наряды — общие с Frog Jump.
+   Токен забега подписан тем же секретом, но с префиксом «f», чтобы токен
+   прыжков нельзя было сдать как полёт и наоборот */
+function flapRec(u) { return u.flap || (u.flap = { best: 0, runs: 0, revPaid: 0, revUsed: 0, lastT0: 0, lastS: 0, lastAt: 0, total: 0 }); }
+const flapToken = (uid, t0, base) => jumpToken('f' + uid, t0, base);
+const flapParse = tok => { const r = jumpParse(tok); if (!r || r.uid[0] !== 'f') return null; r.uid = r.uid.slice(1); return r; };
+const flapBoard = () => Object.values(db.users).filter(x => isRealPlayer(x) && x.flap && x.flap.best > 0).map(x => ({ id: x.id, name: x.name, best: x.flap.best }));
+function flapTop(n = 20) {
+  return Object.values(db.users).filter(u => isRealPlayer(u) && u.flap && u.flap.best > 0)
+    .sort((a, b) => b.flap.best - a.flap.best || (a.flap.bestAt || 0) - (b.flap.bestAt || 0)).slice(0, n)
+    .map((u, i) => ({ rank: i + 1, id: u.id, name: u.name, best: u.flap.best, skin: (u.jump && u.jump.skin) || 'original' }));
+}
+const flapState = u => { const f = u ? flapRec(u) : null; return { record: db.flapRecord || null, best: f ? f.best || 0 : 0, runs: f ? f.runs || 0 : 0 }; };
+const isFlapTour = t => t && t.mode === 'flap';
+// единицы результата в турнире: метры прыжков или очки полёта
+const ptsW = n => { const x = n % 10, y = n % 100; return x === 1 && y !== 11 ? 'очко' : x >= 2 && x <= 4 && (y < 12 || y > 14) ? 'очка' : 'очков'; };
+const tu = (t, n) => isFlapTour(t) ? `${Math.round(n)} ${ptsW(Math.round(n))}` : mm(n);
 function jumpParse(tok) {
   const m = String(tok || '').match(/^([^.]+)\.(\d+)\.(\d+)\.([0-9a-f]{24})$/);
   if (!m) return null;
@@ -716,7 +737,7 @@ function tourTopText(t) {
   const rows = [];
   for (let i = 0; i < P; i++) {
     const r = top[i], pz = prizeFor(t, i + 1);
-    rows.push(`${i === 0 ? te('crown') : `${i + 1}.`} ${r ? `<b>${esc(r.name)}</b> — ${mm(r.best)}` : '<i>свободно</i>'}${pz ? ` · ${esc(pz)}` : ''}`);
+    rows.push(`${i === 0 ? te('crown') : `${i + 1}.`} ${r ? `<b>${esc(r.name)}</b> — ${tu(t, r.best)}` : '<i>свободно</i>'}${pz ? ` · ${esc(pz)}` : ''}`);
   }
   if (t.done) return `${te('trophy')} <b>Турнир «${esc(t.title)}» завершён</b>\n\n${rows.join('\n')}\n\nУчастников: ${Object.keys(t.players || {}).length}`;
   return `${te('trophy')} <b>Турнир «${esc(t.title)}» — топ-${P} сейчас</b>\n\n${rows.join('\n')}\n\n${te('time')} До ${end} (МСК) · участников: ${Object.keys(t.players || {}).length}\nПрыгай и выбивай из топа ${te('point')}`;
@@ -754,24 +775,24 @@ function tourAfter(t, u, oldB) {
     const ahead = nb[now - 2], gap = ahead ? ahead.best - p.best + 1 : 0, lost = was <= P && now > P;
     const pzWas = prizeFor(t, was), pzNow = prizeFor(t, now);
     tgQ('sendMessage', { chat_id: +id, parse_mode: 'HTML', reply_markup: tourPlayKb(t),
-      text: `${te('down')} <b>Тебя обогнали в турнире «${esc(t.title)}»</b>\n<b>${esc(u.name)}</b> — ${mm(mp.best)}. Ты был ${was}-м, теперь ${now}-й.` +
+      text: `${te('down')} <b>Тебя обогнали в турнире «${esc(t.title)}»</b>\n<b>${esc(u.name)}</b> — ${tu(t, mp.best)}. Ты был ${was}-м, теперь ${now}-й.` +
         (lost ? `\n${te('gift')} Ты выпал из призов${pzWas ? `: «${esc(pzWas)}» уходит сопернику` : ''}.` :
           now <= P && pzWas && pzNow && pzWas !== pzNow ? `\n${te('gift')} Теперь твой приз — «${esc(pzNow)}» вместо «${esc(pzWas)}».` : '') +
-        (gap ? `\n${te('target')} До ${now - 1}-го места — ${mm(gap)}.` : '') + `\n\nОтыграешься? ${te('point')}` });
+        (gap ? `\n${te('target')} До ${now - 1}-го места — ${tu(t, gap)}.` : '') + `\n\nОтыграешься? ${te('point')}` });
   }
   if (t.chat && t.chat.id) {
     const lead0 = ob[0], best = mp ? mp.best : 0, now = Date.now();
     if (r1 === 1 && (!lead0 || lead0.id !== me)) {
       const pz = prizeFor(t, 1);
-      tourChatPost(t, `${te('crown')} <b>Новый лидер турнира — ${esc(u.name)}!</b>\nРезультат: ${mm(best)}${lead0 ? `. Прошлый лидер, ${esc(lead0.name)}, — ${mm(lead0.best)}` : ''}.` +
+      tourChatPost(t, `${te('crown')} <b>Новый лидер турнира — ${esc(u.name)}!</b>\nРезультат: ${tu(t, best)}${lead0 ? `. Прошлый лидер, ${esc(lead0.name)}, — ${tu(t, lead0.best)}` : ''}.` +
         (pz ? `\n${te('gift')} Сейчас главный приз — ${esc(pz)} — забирает ${esc(u.name)}.` : '') + `\n\nКто собьёт? ${te('point')}`);
       t.chat.recAt = now; t.chat.rec = best;
     } else if (r1 === 1 && best >= (t.chat.rec || 0) * 1.08 && now - (t.chat.recAt || 0) > 90e3) {
-      tourChatPost(t, `${te('bolt')} <b>Новый рекорд турнира — ${mm(best)}!</b>\nЛидер ${esc(u.name)} улучшает свой же результат и уходит в отрыв.\n\nВыше сможешь? ${te('point')}`);
+      tourChatPost(t, `${te('bolt')} <b>Новый рекорд турнира — ${tu(t, best)}!</b>\nЛидер ${esc(u.name)} улучшает свой же результат и уходит в отрыв.\n\nВыше сможешь? ${te('point')}`);
       t.chat.recAt = now; t.chat.rec = best;
     } else if (r1 <= P && (!r0 || r0 > P)) {
       const out = ob[P - 1] && ob[P - 1].id !== me ? ob[P - 1] : null, pz = prizeFor(t, r1);
-      tourChatPost(t, `${te('up')} <b>В топе-${P} новенький — ${esc(u.name)}!</b>\n${r1}-е место, ${mm(best)}` + (out ? `. Из призов вылетает ${esc(out.name)}.` : '.') +
+      tourChatPost(t, `${te('up')} <b>В топе-${P} новенький — ${esc(u.name)}!</b>\n${r1}-е место, ${tu(t, best)}` + (out ? `. Из призов вылетает ${esc(out.name)}.` : '.') +
         (pz ? `\n${te('gift')} Сейчас ${esc(u.name)} получит: ${esc(pz)}.` : '') + `\n\nОтбей место ${te('point')}`);
     }
     const key = nb.slice(0, P).map(r => r.id + ':' + r.best).join('|');
@@ -784,7 +805,7 @@ function tourCard(t, u) {
   const me = u && t.players && t.players[u.id];
   const top = tourBoard(t)[0];
   return {
-    id: t.id, title: t.title, prize: t.prize, owner: t.ownerName, official: !!t.official,
+    id: t.id, title: t.title, prize: t.prize, owner: t.ownerName, official: !!t.official, mode: isFlapTour(t) ? 'flap' : 'jump',
     startsAt: t.startsAt, endsAt: t.endsAt, done: !!t.done,
     players: Object.keys(t.players || {}).length,
     joined: !!me, myBest: me ? me.best || 0 : 0, myRank: me ? tourRank(t, u.id) : null,
@@ -862,7 +883,7 @@ function tourStart(d) {
   db.tournaments[id] = {
     id, title: d.title, prize: d.prize, ownerId: d.ownerId, ownerName: d.ownerName, ownerUsername: d.ownerUsername || '',
     official: !!d.official, createdAt: now, startsAt: now, endsAt: now + d.dur, players: {}, done: false, channels: d.channels || [],
-    places: placesOf(d),
+    places: placesOf(d), ...(d.mode === 'flap' ? { mode: 'flap' } : {}),
   };
   save();
   log('tournament', id, d.title, d.official ? '(официальный)' : 'от ' + d.ownerId);
@@ -887,7 +908,7 @@ async function tourNotify(t) {
   if (t.chat && t.chat.id) {
     const win = t.winners || [];
     tourChatPost(t, `${te('party')} <b>Турнир «${esc(t.title)}» завершён!</b>\n\n` +
-      (win.length ? win.map((w, i) => `${i === 0 ? te('crown') : `${i + 1}.`} <b>${esc(w.name)}</b>${w.username ? ' @' + esc(w.username) : ''} — ${mm(w.best)}${prizeFor(t, i + 1) ? ' · ' + esc(prizeFor(t, i + 1)) : ''}`).join('\n') : 'Никто не прыгнул.') +
+      (win.length ? win.map((w, i) => `${i === 0 ? te('crown') : `${i + 1}.`} <b>${esc(w.name)}</b>${w.username ? ' @' + esc(w.username) : ''} — ${tu(t, w.best)}${prizeFor(t, i + 1) ? ' · ' + esc(prizeFor(t, i + 1)) : ''}`).join('\n') : 'Никто не прыгнул.') +
       `\n\nСпасибо всем, кто прыгал! ${te('star')}`);
     if (t.chat.pin && !t.muteChat) tgQ('editMessageText', { chat_id: t.chat.id, message_id: t.chat.pin, text: tourTopText(t), parse_mode: 'HTML', reply_markup: tourPlayKb(t) });
   }
@@ -972,7 +993,7 @@ function jumpTop(n = 20) {
    любой новый турнир. Рекорды при этом не обнуляются и ничего не теряют */
 function boostRef(u) {
   const rec = jumpRec(u).best || 0;
-  const tl = Object.values(db.tournaments || {}).filter(t => tourActive(t) && t.players && t.players[u.id]);
+  const tl = Object.values(db.tournaments || {}).filter(t => tourActive(t) && !isFlapTour(t) && t.players && t.players[u.id]);
   if (!tl.length) return { ref: rec, tour: '' };
   let ref = rec, tour = '';
   for (const t of tl) { const b = t.players[u.id].best || 0; if (b < ref || !tour) { ref = Math.min(rec, b); tour = t.title; } }
@@ -1102,9 +1123,9 @@ const api = {
     if (body.warAck && u.warPending && String(body.warAck) === String(u.warPending.week)) delete u.warPending;
     // maxLv/merges текущего вида нужны клиенту как подстраховка: если у него
     // пустой сейв (новое устройство, облако недоступно), он восстановит уровень
-    return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score, maxLv: rec.maxLv || 1, merges: rec.merges || 0, spScore: rec.score || 0 }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, war: warState(u), warResult: u.warPending || null, endless: endlessState(u), endlessTop: endlessTop(20), jump: jumpState(u), jumpTop: jumpTop(20), holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
+    return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score, maxLv: rec.maxLv || 1, merges: rec.merges || 0, spScore: rec.score || 0 }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, war: warState(u), warResult: u.warPending || null, endless: endlessState(u), endlessTop: endlessTop(20), jump: jumpState(u), jumpTop: jumpTop(20), flap: flapState(u), flapTop: flapTop(20), holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
   },
-  async leaderboard() { pondCheck(); warCheck(); return { ok: true, top: topRows(50), pond: { count: db.pond.count, goal: CFG.pondGoal }, war: warState(null), endlessTop: endlessTop(50), endless: endlessState(null), jumpTop: jumpTop(50), jump: jumpState(null) }; },
+  async leaderboard() { pondCheck(); warCheck(); return { ok: true, top: topRows(50), pond: { count: db.pond.count, goal: CFG.pondGoal }, war: warState(null), endlessTop: endlessTop(50), endless: endlessState(null), jumpTop: jumpTop(50), jump: jumpState(null), flapTop: flapTop(50), flap: flapState(null) }; },
   // старт забега (или его продолжения после оплаты) — выдаём подписанный номер
   async jumpStart(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
@@ -1136,7 +1157,7 @@ const api = {
     save();
     // рекорды соперников по всем турнирам игрока: клиент рисует их линии на высоте
     // рекорда и держит в пилюле ближайший результат выше
-    const tourRivals = Object.values(db.tournaments).filter(t => tourActive(t) && t.players[u.id]).map(t => ({
+    const tourRivals = Object.values(db.tournaments).filter(t => tourActive(t) && !isFlapTour(t) && t.players[u.id]).map(t => ({
       id: t.id, title: t.title, places: placesOf(t), endsAt: t.endsAt, prizes: [...Array(placesOf(t))].map((_, i) => prizeFor(t, i + 1) || ''),
       rows: tourBoard(t).filter(r => r.id !== u.id && r.best > 0).slice(0, 60).map(r => ({ id: r.id, name: r.name, best: r.best })),
     }));
@@ -1203,7 +1224,7 @@ const api = {
     // без токена (разработка) проверить нечем — принимаем как есть
     if (CFG.token && pc.list.length) { const rc = await resolveChannels(pc.list); if (rc.error) return { ok: false, error: rc.error }; channels = rc.list; }
     const pid = crypto.randomBytes(6).toString('hex');
-    db.tourDrafts[pid] = { at: Date.now(), ownerId: u.id, ownerName: u.name, ownerUsername: u.username || '', title, prize, dur, channels, places: placesOf({ places: body.places }) };
+    db.tourDrafts[pid] = { at: Date.now(), ownerId: u.id, ownerName: u.name, ownerUsername: u.username || '', title, prize, dur, channels, places: placesOf({ places: body.places }), mode: body.mode === 'flap' ? 'flap' : 'jump' };
     save();
     // без Telegram (локальная разработка) оплату не спрашиваем — сразу запускаем
     if (!CFG.token) { const t = tourActivate(pid); return { ok: true, started: t.id }; }
@@ -1257,6 +1278,72 @@ const api = {
     return { ok: true, jump: jumpState(u) };
   },
   // конец отрезка забега: проверяем правдоподобие, начисляем мошек, обновляем рекорды
+  async flapStart(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    if (rateLimited('flap:' + a.id, 90, 3600e3)) return { ok: false, error: 'Слишком часто' };
+    const u = getUser(a), f = flapRec(u);
+    let base = 0;
+    if (body.cont) {
+      if (Date.now() - (f.lastAt || 0) > 10 * 60e3) return { ok: false, error: 'Полёт уже закрыт' };
+      if ((f.revPaid || 0) <= (f.revUsed || 0)) return { ok: false, error: 'wait' };
+      f.revUsed = (f.revUsed || 0) + 1; base = f.lastS || 0;
+    }
+    const t0 = Math.max(Date.now(), (f.lastT0 || 0) + 1);
+    { const ad = anDay(mskDay()); if (body.cont) ad.flapConts = (ad.flapConts || 0) + 1; else ad.flaps = (ad.flaps || 0) + 1; }
+    save();
+    const tourRivals = Object.values(db.tournaments).filter(t => tourActive(t) && isFlapTour(t) && t.players[u.id]).map(t => ({
+      id: t.id, title: t.title, places: placesOf(t), endsAt: t.endsAt, prizes: [...Array(placesOf(t))].map((_, i) => prizeFor(t, i + 1) || ''),
+      rows: tourBoard(t).filter(r => r.id !== u.id && r.best > 0).slice(0, 60).map(r => ({ id: r.id, name: r.name, best: r.best })),
+    }));
+    return { ok: true, run: flapToken(u.id, t0, base), base, flap: flapState(u), tourRivals };
+  },
+  async flapEnd(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const u = getUser(a), f = flapRec(u), j = jumpRec(u);
+    const run = flapParse(body.run);
+    if (!run || run.uid !== u.id) return { ok: false, error: 'run' };
+    if (run.t0 <= (f.lastT0 || 0)) return { ok: false, error: 'Этот полёт уже засчитан' };
+    const now = Date.now();
+    const sec = Math.max(0, Math.min(+body.ms || 0, now - run.t0 + 3000)) / 1000;
+    // проход камышей — не чаще чем раз в ~1,1 с; мошек — не больше трёх на проход
+    const raw = Math.max(0, Math.round(+body.score || 0));
+    const cap = Math.round(sec / 1.05 + 2);
+    let gain = Math.max(0, raw - run.base);
+    if (gain > cap) { u.flags = (u.flags || 0) + 1; gain = cap; }
+    const sc = run.base + gain;
+    let flies = Math.max(0, Math.round(+body.flies || 0));
+    const fcap = gain * 3 + 10; if (flies > fcap) { u.flags = (u.flags || 0) + 1; flies = fcap; }
+    f.lastT0 = run.t0; f.lastS = sc; f.lastAt = now;
+    if (!run.base) f.runs = (f.runs || 0) + 1;
+    // мошки общие с Frog Jump и под тем же часовым потолком
+    const hour = Math.floor(now / 3600e3);
+    if (j.hour !== hour) { j.hour = hour; j.hourFlies = 0; }
+    flies = Math.min(flies, Math.max(0, 900 - (j.hourFlies || 0)));
+    j.hourFlies = (j.hourFlies || 0) + flies; j.flies = (j.flies || 0) + flies; j.total = (j.total || 0) + flies; f.total = (f.total || 0) + flies;
+    const prevBest = f.best || 0, isBest = sc > prevBest;
+    const climb = [];
+    if (isBest && isRealPlayer(u)) { const c = climbOf(flapBoard(), u.id, prevBest, sc); if (c) climb.push({ ...c, kind: 'global', title: 'Рейтинг Flappy Frog' }); }
+    if (isBest) { f.best = sc; f.bestAt = now; }
+    const tours = [];
+    for (const t of Object.values(db.tournaments)) {
+      const p = t.players && t.players[u.id];
+      if (!p || !isFlapTour(t) || t.hidden || t.done || run.t0 < t.startsAt || run.t0 > t.endsAt) continue;
+      if (sc > (p.best || 0)) {
+        const oldB = tourBoard(t);
+        const c = climbOf(oldB, u.id, p.best || 0, sc);
+        if (c) climb.push({ ...c, kind: 'tour', id: t.id, title: t.title });
+        p.best = sc; p.at = now; p.name = u.name;
+        try { tourAfter(t, u, oldB); } catch (e) { log('tourAfter', e.message); }
+      }
+      tours.push({ id: t.id, title: t.title, rank: tourRank(t, u.id), best: p.best || 0, players: Object.keys(t.players).length });
+    }
+    let isRecord = false;
+    const r0 = db.flapRecord;
+    if (isRealPlayer(u) && (!r0 || sc > r0.best)) { isRecord = true; db.flapRecord = { id: u.id, name: u.name, best: sc, at: now }; }
+    save();
+    const top = flapTop(50), rank = top.findIndex(r => r.id === u.id) + 1 || null;
+    return { ok: true, score: sc, earned: flies, isBest, prevBest, isRecord, rank, flap: flapState(u), flapTop: top.slice(0, 20), jump: jumpState(u), climb, tours };
+  },
   async profile(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     const me = getUser(a), id = String(body.id || me.id);
@@ -1304,7 +1391,7 @@ const api = {
     const tours = [];
     for (const t of Object.values(db.tournaments)) {
       const p = t.players && t.players[u.id];
-      if (!p || t.hidden || t.done || run.t0 < t.startsAt || run.t0 > t.endsAt) continue;
+      if (!p || isFlapTour(t) || t.hidden || t.done || run.t0 < t.startsAt || run.t0 > t.endsAt) continue;
       if (h > (p.best || 0)) {
         const oldB = tourBoard(t);
         const c = climbOf(oldB, u.id, p.best || 0, h);
@@ -1626,7 +1713,7 @@ const api = {
       tourFinalize();
       const list = Object.values(db.tournaments).sort((a, b) => b.createdAt - a.createdAt).slice(0, 200)
         .map(t => ({ id: t.id, title: t.title, prize: t.prize, owner: t.ownerName, ownerId: t.ownerId, ownerUsername: t.ownerUsername,
-          official: !!t.official, hidden: !!t.hidden, done: !!t.done, endsAt: t.endsAt, createdAt: t.createdAt,
+          official: !!t.official, mode: isFlapTour(t) ? 'flap' : 'jump', hidden: !!t.hidden, done: !!t.done, endsAt: t.endsAt, createdAt: t.createdAt,
           players: Object.keys(t.players || {}).length, winners: t.winners || null, places: placesOf(t), startsAt: t.startsAt,
           chat: t.chat && t.chat.id ? (t.chat.title || String(t.chat.id)) : null, muteChat: !!t.muteChat, muteDm: !!t.muteDm, prizes: t.prizes || null, prizesAuto: [...Array(placesOf(t))].map((_, i) => prizeFor(Object.assign({}, t, { prizes: null }), i + 1)) }));
       return { ok: true, tours: list };
@@ -1649,10 +1736,10 @@ const api = {
         // продолжение за 10★ против приза — честное сравнение, без обещаний выигрыша
         const pzOf = k => prizeFor(t, k), ch = pzOf(P) || 'приз';
         let head, body2;
-        if (!rk) { head = `Ты в турнире, но ещё ни разу не прыгнул`; body2 = edge ? `${esc(ch)} за ${P}-е место сейчас держится на ${mm(edge.best)}. Это реально: половина игроков SWAMP уже прыгала дальше 2 000 м.` : `Призовые места пока свободны: любой забег сразу попадёт в призы.`; }
-        else if (rk === 1) { const r2 = withRes[1]; head = `Сейчас ${esc(pzOf(1) || 'главный приз')} — твои`; body2 = r2 && r.best - r2.best < r.best * .35 ? `Но ${esc(r2.name)} отстаёт всего на ${mm(r.best - r2.best)}. Один его удачный забег — и ты второй.` : `Держи отрыв до конца.`; }
-        else if (rk <= P) { const up = withRes[rk - 2], dn = withRes[P]; head = `Ты ${rk}-й и сейчас забираешь ${esc(pzOf(rk) || 'приз')}`; body2 = (dn && r.best - dn.best < r.best * .35 ? `${esc(dn.name)} за чертой призов отстаёт на ${mm(r.best - dn.best)} — тебя могут выбить в любой момент.` : '') + ` До ${rk - 1}-го места${pzOf(rk - 1) ? ` (${esc(pzOf(rk - 1))})` : ''} — ${mm(up.best - r.best + 1)}.`; }
-        else { head = `До ${esc(ch)} тебе не хватает ${mm(edge.best - r.best + 1)}`; body2 = `Ты ${rk}-й с ${mm(r.best)}, а ${P}-е место держится на ${mm(edge.best)}. Один хороший забег — и приз твой.`; }
+        if (!rk) { head = `Ты в турнире, но ещё ни разу не прыгнул`; body2 = edge ? `${esc(ch)} за ${P}-е место сейчас держится на ${tu(t, edge.best)}. ${isFlapTour(t) ? 'Это реально — полёт длится меньше минуты.' : 'Это реально: половина игроков SWAMP уже прыгала дальше 2 000 м.'}` : `Призовые места пока свободны: любой забег сразу попадёт в призы.`; }
+        else if (rk === 1) { const r2 = withRes[1]; head = `Сейчас ${esc(pzOf(1) || 'главный приз')} — твои`; body2 = r2 && r.best - r2.best < r.best * .35 ? `Но ${esc(r2.name)} отстаёт всего на ${tu(t, r.best - r2.best)}. Один его удачный забег — и ты второй.` : `Держи отрыв до конца.`; }
+        else if (rk <= P) { const up = withRes[rk - 2], dn = withRes[P]; head = `Ты ${rk}-й и сейчас забираешь ${esc(pzOf(rk) || 'приз')}`; body2 = (dn && r.best - dn.best < r.best * .35 ? `${esc(dn.name)} за чертой призов отстаёт на ${tu(t, r.best - dn.best)} — тебя могут выбить в любой момент.` : '') + ` До ${rk - 1}-го места${pzOf(rk - 1) ? ` (${esc(pzOf(rk - 1))})` : ''} — ${tu(t, up.best - r.best + 1)}.`; }
+        else { head = `До ${esc(ch)} тебе не хватает ${tu(t, edge.best - r.best + 1)}`; body2 = `Ты ${rk}-й с ${tu(t, r.best)}, а ${P}-е место держится на ${tu(t, edge.best)}. Один хороший забег — и приз твой.`; }
         const tip = rk ? `\n\n${te('bolt')} Сорвался на хорошей высоте — не начинай с нуля: продолжение с того же места стоит 10★.` : '';
         tgQ('sendMessage', { chat_id: +r.id, parse_mode: 'HTML', reply_markup: tourPlayKb(t),
           text: `${te('time')} <b>${head}</b>\n\n${body2.trim()}${tip}\n\nДо конца турнира — ${leftTxt} ${te('point')}` });
@@ -1701,7 +1788,7 @@ const api = {
       const pc = parseChannels(body.channels); if (pc.error) return { ok: false, error: pc.error };
       let channels = pc.list.map(n => ({ id: '@' + n, username: n, title: '@' + n }));
       if (CFG.token && pc.list.length) { const rc = await resolveChannels(pc.list); if (rc.error) return { ok: false, error: rc.error }; channels = rc.list; }
-      const t = tourStart({ title, prize, dur, channels, places: body.places, official: true, ownerId: CFG.adminId || 'admin', ownerName: 'SWAMP' });
+      const t = tourStart({ title, prize, dur, channels, places: body.places, mode: body.mode, official: true, ownerId: CFG.adminId || 'admin', ownerName: 'SWAMP' });
       return { ok: true, msg: 'Официальный турнир запущен', link: tourLink(t) };
     }
     if (act === 'endlessReset') {
@@ -1889,7 +1976,7 @@ async function onPayment(m) {
   save();
   log('payment', u.id, item, stars);
   const it = shopItem(item, spOf(u));
-  if (item === 'jumpRevive' || item === 'jumpRevive2') return;   // игрок уже продолжает забег — сообщение в личку только отвлечёт
+  if (item === 'jumpRevive' || item === 'jumpRevive2' || item === 'flapRevive' || item === 'flapRevive2') return;   // игрок уже продолжает забег — сообщение в личку только отвлечёт
   // организатору сразу отдаём ссылку, по которой звать участников
   if (item.startsWith('tour:')) {
     const d = db.tourDrafts[item.slice(5)], t = d && d.tid && db.tournaments[d.tid];
@@ -1985,12 +2072,12 @@ async function onInline(q) {
   const head = sum ? `${sum} ЗВЁЗД` : String(t.prize).length < 30 ? String(t.prize).toUpperCase() : 'ПРИЗЫ';
   // картинка уже показывает призы по местам и срок — в подписи только крючок и условие
   const pr = t.promo;
-  const mk = em => `${em('gift')} <b>${e(head)} ЗА ПРЫЖКИ — БЕСПЛАТНО</b>
+  const mk = em => `${em('gift')} <b>${e(head)} ЗА ${isFlapTour(t) ? 'ПОЛЁТ' : 'ПРЫЖКИ'} — БЕСПЛАТНО</b>
 
-без депа и без рефок: кто дальше прыгнет — тот забрал${pr ? '' : `
+без депа и без рефок: ${isFlapTour(t) ? 'кто дальше пролетит' : 'кто дальше прыгнет'} — тот забрал${pr ? '' : `
 ${pz.length ? pz.join(' | ') : e(t.prize)}`}
 
-${em('point')} Условие :: ${ch ? `подписка на ${e(ch)} + ` : ''}прыгнуть в SWAMP
+${em('point')} Условие :: ${ch ? `подписка на ${e(ch)} + ` : ''}${isFlapTour(t) ? 'пролететь во Flappy Frog' : 'прыгнуть в SWAMP'}
 ${em('time')} итоги ${e(end)} МСК`;
   // премиум-эмодзи в самом инлайн-результате Telegram не пропускает — отправляем
   // с обычными, а сразу после публикации бот правит пост и ставит премиум
