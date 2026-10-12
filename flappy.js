@@ -708,6 +708,12 @@ window.FlappyFrogInit=function(B){
   // пиксельный стикер наряда — для карточки в хабе
   function pixelFrog(slug){return B.bake('frogs/'+(slug||'original'),256).then(c=>{const p=pixelate(c,36);if(!p)throw 0;
     const o=document.createElement('canvas');o.width=o.height=36;o.getContext('2d').drawImage(p,0,0);return o.toDataURL();});}
+  // только локально: доступ к забегу и журнал звуков — для записи промо-ролика
+  if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)){
+    window.__ffRun=()=>run;window.__ffEv=[];
+    window.__ffSkin=k=>{const n=B.net();(n.jump=n.jump||{}).skin=k;frogSlug='';loadFrog();};window.__ffFrogUrl=()=>frogImg?frogImg.toDataURL():'';
+    for(const k in SND){const f=SND[k];SND[k]=(...a)=>{window.__ffEv.push({k,a,t:Date.now()});return f(...a);};}
+  }
   return {open:openGame,close,isOpen:()=>open,pixelFrog,hubArt};
 };
 })();
