@@ -572,7 +572,7 @@ window.FlappyFrogInit=function(B){
     // язык — ступенчатая линия
     if(r.tongue){const f=r.tongue.f,k=Math.min(1,r.tongue.t/.13),x0=q(r.x-cam+14),y0=q(r.y+4),x1=q(lerp(r.x-cam+14,f.x-cam,k)),y1=q(lerp(r.y+4,f.y,k));
       const n=Math.max(Math.abs(x1-x0),Math.abs(y1-y0),1);for(let i=0;i<=n;i++)R('#ff7ea0',Math.round(lerp(x0,x1,i/n))-1,Math.round(lerp(y0,y1,i/n))-1,2,2);}
-    drawFrog(r.x-cam,r.y,r);
+    r.fx=(r.x-cam)/PX;r.fy=r.y/PX;   // лягушку дорисует blit поверх
     // упал — над лягушкой нимб, как в оригинале
     if(!r.alive&&r.y>=waterY-15){const hx=q(r.x-cam),hy=q(r.y)-27+(Math.sin(tGlobal*3)>0?0:1);
       R('#b8860b',hx-7,hy,14,4);R('#ffd23f',hx-6,hy,12,1);R('#ffd23f',hx-7,hy+1,2,2);R('#ffd23f',hx+5,hy+1,2,2);R('#ffd23f',hx-6,hy+3,12,1);R('#fff6c9',hx-3,hy,4,1);}
@@ -583,7 +583,9 @@ window.FlappyFrogInit=function(B){
     cx.setTransform(1,0,0,1,0,0);cx.imageSmoothingEnabled=false;
     cx.fillStyle='#0c3a2a';cx.fillRect(0,0,cv.width,cv.height);
     const sx=(r.shake?rnd(-r.shake,r.shake):0)*sc*dpr,sy=(r.shake?rnd(-r.shake,r.shake)*.6:0)*sc*dpr;
-    cx.drawImage(lo,0,0,PW,PH,Math.round(offX*dpr+sx),Math.round(sy),Math.round(fieldW*dpr),Math.round(PH*PX*sc*dpr));
+    const ox=Math.round(offX*dpr+sx),oy=Math.round(sy),k=fieldW*dpr/PW;
+    cx.drawImage(lo,0,0,PW,PH,ox,oy,Math.round(fieldW*dpr),Math.round(PH*PX*sc*dpr));
+    drawFrog(cx,ox,oy,k,r,r.fx,r.fy);
   }
   function hills(off,base,amp,col,fr,seed){
     for(let x=0;x<PW;x+=2){const t=(x*PX+off)*fr;const y=q(base-amp*(.55+.25*Math.sin(t+seed)+.2*Math.sin(t*2.7+seed*2)));R(col,x,y,2,PH-y);R('rgba(255,255,255,.12)',x,y,2,1);}
@@ -634,12 +636,17 @@ window.FlappyFrogInit=function(B){
     if(fl){R(wc,px-3,py-4,2,3);R(wc,px,py-4,2,3);}else{R(wc,px-4,py-2,3,2);R(wc,px+1,py-2,3,2);}
     R(gold?'#f7b500':'#2b2f3a',px-2,py-1,4,3);R(gold?'#f7b500':'#2b2f3a',px+2,py-1,2,2);R('#e0405f',px+3,py-1,1,1);
   }
-  function drawFrog(x,y,r){
+  /* лягушка рисуется поверх уже растянутого мира, на экранном холсте:
+     спрайт поворачивается целиком, как жёсткая картинка из квадратиков,
+     и его пиксели не перестраиваются на каждом наклоне.
+     g — холст, ox/oy — где на нём левый верхний угол мира, k — экранных точек на пиксель */
+  function drawFrog(g,ox,oy,k,r,fx,fy){
     if(r.inv>0&&Math.floor(tGlobal*14)%2)return;
-    lx.save();lx.translate(q(x),q(y));lx.rotate(Math.round(r.rot/(Math.PI/16))*(Math.PI/16));lx.scale(-1,1);   // стикеры смотрят влево — разворачиваем по полёту   // наклон шагами, без «мыла»
-    if(frogImg)lx.drawImage(frogImg,-18,-18,36,36);
-    else{R('#5cc27a',-12,-9,24,18);R('#fff',2,-12,8,8);R('#000',6,-9,3,3);}
-    lx.restore();
+    g.save();g.imageSmoothingEnabled=false;
+    g.translate(ox+fx*k,oy+fy*k);g.rotate(r.rot);g.scale(-k,k);   // стикеры смотрят влево — разворачиваем по полёту
+    if(frogImg)g.drawImage(frogImg,-18,-18,36,36);
+    else{g.fillStyle='#5cc27a';g.fillRect(-12,-9,24,18);}
+    g.restore();
   }
 
   /* ---------- цикл ---------- */
@@ -692,8 +699,10 @@ window.FlappyFrogInit=function(B){
     if(ng&&d.y>ng.y+8&&d.vy>0)d.vy=FLAP*.6;
     d.rot=clamp(d.vy/700,-.5,.9);
     drawWorld();
-    if(c.width!==PW||c.height!==PH){c.width=PW;c.height=PH;}
-    const g=c.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(lo,0,0);
+    const cw=Math.round(c.clientWidth*Math.min(2,window.devicePixelRatio||1)),ch=Math.round(cw*PH/PW);
+    if(c.width!==cw||c.height!==ch){c.width=cw;c.height=ch;}
+    const g=c.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(lo,0,0,cw,ch);
+    drawFrog(g,0,0,cw/PW,d,d.fx,d.fy);
     VH=sv.VH;waterY=sv.waterY;run=sv.run;
   }
   // пиксельный стикер наряда — для карточки в хабе
