@@ -323,7 +323,7 @@ window.FlappyFrogInit=function(B){
     }else if(!r.started){
       r.y=(r.hoverY??VH*.42)+Math.sin(tGlobal*3)*8;   // ждём первого тапа — лягушка парит на месте
     }else{
-      r.dead+=dt;r.vy=Math.min(r.vy+G*dt,900);r.y=Math.min(r.y+r.vy*dt,waterY+30);r.rot+=dt*6;
+      r.dead+=dt;r.vy=Math.min(r.vy+G*dt,900);r.y=Math.min(r.y+r.vy*dt,waterY-14);r.rot=Math.min(Math.PI/2,r.rot+dt*7);   // клюёт носом вниз и падает на воду, без кручения
     }
     r.sq*=Math.pow(.02,dt);
     if(r.alive)r.rot=lerp(r.rot,clamp(r.vy/900,-.45,.9),Math.min(1,dt*10));
@@ -573,6 +573,9 @@ window.FlappyFrogInit=function(B){
     if(r.tongue){const f=r.tongue.f,k=Math.min(1,r.tongue.t/.13),x0=q(r.x-cam+14),y0=q(r.y+4),x1=q(lerp(r.x-cam+14,f.x-cam,k)),y1=q(lerp(r.y+4,f.y,k));
       const n=Math.max(Math.abs(x1-x0),Math.abs(y1-y0),1);for(let i=0;i<=n;i++)R('#ff7ea0',Math.round(lerp(x0,x1,i/n))-1,Math.round(lerp(y0,y1,i/n))-1,2,2);}
     drawFrog(r.x-cam,r.y,r);
+    // упал — над лягушкой нимб, как в оригинале
+    if(!r.alive&&r.y>=waterY-15){const hx=q(r.x-cam),hy=q(r.y)-27+(Math.sin(tGlobal*3)>0?0:1);
+      R('#b8860b',hx-7,hy,14,4);R('#ffd23f',hx-6,hy,12,1);R('#ffd23f',hx-7,hy+1,2,2);R('#ffd23f',hx+5,hy+1,2,2);R('#ffd23f',hx-6,hy+3,12,1);R('#fff6c9',hx-3,hy,4,1);}
   }
   function blit(){
     const r=run;
