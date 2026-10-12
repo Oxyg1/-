@@ -92,6 +92,34 @@ window.FlappyFrogInit=function(B){
 #ff .ff-th small{font-size:12px;opacity:.85}
 #ff .ff-th.in{background:rgba(120,230,140,.16);box-shadow:inset 0 0 0 1.5px rgba(140,240,160,.6)}
 #ff .ff-th.in b{color:#9dffb0}
+/* пиксельный интерфейс: квадратные углы, жёсткие рамки без размытия, пиксельный шрифт для цифр и заголовков */
+#ff,#ff .ff-ov .card{--pxf:'Press Start 2P',monospace}
+#ff .ff-ib,#ff .ff-lily,#ff .ff-fl,#ff .ff-tap,#ff .ff-banner,#ff .ff-ov .card,#ff .btn,#ff .ff-earn,#ff .ff-th,#ff .ff-newrec{border-radius:0!important}
+#ff .ff-ib,#ff .ff-lily,#ff .ff-fl,#ff .ff-tap,#ff .ff-banner{background:#173a26;box-shadow:0 0 0 3px #0b1d12,inset 0 -3px 0 #0e2a1a,inset 0 3px 0 #2f6a43}
+#ff .ff-sc{font-family:var(--pxf);font-size:38px;font-weight:400;text-shadow:3px 3px 0 #0b1d12,-3px 0 0 #0b1d12,0 -3px 0 #0b1d12,3px 0 0 #0b1d12,0 3px 0 #0b1d12}
+#ff .ff-fl,#ff .ff-lily{font-family:var(--pxf);font-weight:400;font-size:12px}
+#ff .ff-lily{font-size:8px}
+#ff .ff-lily img,#ff .ff-ov img{image-rendering:pixelated}
+#ff .ff-tap{font-family:var(--pxf);font-weight:400;font-size:10px;padding:10px 14px;animation:ffBlink 1s steps(1) infinite;transform:translateX(-50%)}
+@keyframes ffBlink{50%{opacity:.45}}
+#ff .ff-banner{font-family:var(--pxf);font-weight:400;font-size:13px;line-height:1.5;padding:12px 16px}
+#ff .ff-banner small{font-family:Nunito,system-ui,sans-serif;font-size:12px}
+#ff .ff-banner.gold,#ff .ff-newrec{background:#f7b500;color:#3d2600;box-shadow:0 0 0 3px #5a3b00,inset 0 -3px 0 #c98a00,inset 0 3px 0 #ffe36b}
+#ff .ff-ov{background:rgba(3,25,17,.6)}
+#ff .ff-ov .card{background:#e8d9a8;color:#3a2a12;box-shadow:0 0 0 4px #3a2a12,inset 0 0 0 3px #f8efcc,8px 8px 0 4px rgba(0,0,0,.35);border:0}
+#ff .ff-ov .card h2{font-family:var(--pxf);font-weight:400;font-size:15px;line-height:1.5;color:#c4541f;text-shadow:2px 2px 0 #f8efcc}
+#ff .ff-ov .card .sub,#ff .ff-note{color:#5a4524;opacity:1}
+#ff .ff-big{font-family:var(--pxf);font-weight:400;font-size:40px;color:#fff;text-shadow:3px 3px 0 #3a2a12,-3px 0 0 #3a2a12,0 -3px 0 #3a2a12,3px 0 0 #3a2a12,0 3px 0 #3a2a12}
+#ff .ff-newrec{font-family:var(--pxf);font-weight:400;font-size:9px;padding:6px 10px}
+#ff .ff-earn{background:#d6c58e;box-shadow:inset 0 0 0 2px #b8a46a;font-family:var(--pxf);font-weight:400;font-size:13px;color:#3a2a12}
+#ff .ff-th{background:#f3e7bb;box-shadow:inset 0 0 0 2px #c4541f}
+#ff .ff-th b{color:#c4541f}#ff .ff-th small{color:#5a4524}
+#ff .ff-th.in{background:#dff0c0;box-shadow:inset 0 0 0 2px #3f8a3a}#ff .ff-th.in b{color:#2f6e2b}
+#ff .btn{font-family:var(--pxf)!important;font-weight:400!important;font-size:11px!important;line-height:1.4;background:#f26b2a!important;color:#fff!important;box-shadow:0 0 0 3px #3a2a12,inset 0 -4px 0 #b8461a,inset 0 3px 0 #ff9a5c!important;border:0!important;text-shadow:2px 2px 0 #7a2a0a;padding:14px 10px 16px}
+#ff .btn:active{transform:translateY(2px);box-shadow:0 0 0 3px #3a2a12,inset 0 3px 0 #b8461a!important}
+#ff .btn.ghost{background:#4f9a5a!important;box-shadow:0 0 0 3px #3a2a12,inset 0 -4px 0 #2f6a3a,inset 0 3px 0 #7fcf8a!important;text-shadow:2px 2px 0 #1f4a2a}
+#ff .card .row{gap:12px}
+#ff .card{gap:14px}
 `;
   document.head.appendChild(st);
 
@@ -627,6 +655,9 @@ window.FlappyFrogInit=function(B){
   }
   // только для локальной проверки: автопилот видит лягушку и ближайший проход
   if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))window.__ffDbg=()=>{if(!run)return null;const g=run.gates.find(g=>g.x>run.x-RW/2);return {y:run.y,vy:run.vy,alive:run.alive,score:run.score,cause:run.cause,started:run.started,gy:g?gy(g,run.t):null,gh:g?g.h:0,dx:g?g.x-run.x:0};};
-  return {open:openGame,close,isOpen:()=>open};
+  // пиксельный стикер наряда — для карточки в хабе
+  function pixelFrog(slug){return B.bake('frogs/'+(slug||'original'),256).then(c=>{const p=pixelate(c,36);if(!p)throw 0;
+    const o=document.createElement('canvas');o.width=o.height=36;o.getContext('2d').drawImage(p,0,0);return o.toDataURL();});}
+  return {open:openGame,close,isOpen:()=>open,pixelFrog};
 };
 })();
