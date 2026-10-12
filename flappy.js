@@ -520,7 +520,8 @@ window.FlappyFrogInit=function(B){
 
   const X0=()=>run.x-W*.3;   // левый край камеры в мире
   function zcol(k){const r=run,a=ZONES[r.zoneFrom??r.zone][k],b=ZONES[r.zone][k];return r.zoneT<1?mixA(a,b,r.zoneT):rgb(b);}
-  function draw(){
+  function draw(){drawWorld();blit();}
+  function drawWorld(){
     const r=run;
     PW=Math.round(W/PX);PH=Math.ceil(VH/PX);
     if(lo.width!==PW||lo.height!==PH){lo.width=PW;lo.height=PH;}
@@ -572,6 +573,9 @@ window.FlappyFrogInit=function(B){
     if(r.tongue){const f=r.tongue.f,k=Math.min(1,r.tongue.t/.13),x0=q(r.x-cam+14),y0=q(r.y+4),x1=q(lerp(r.x-cam+14,f.x-cam,k)),y1=q(lerp(r.y+4,f.y,k));
       const n=Math.max(Math.abs(x1-x0),Math.abs(y1-y0),1);for(let i=0;i<=n;i++)R('#ff7ea0',Math.round(lerp(x0,x1,i/n))-1,Math.round(lerp(y0,y1,i/n))-1,2,2);}
     drawFrog(r.x-cam,r.y,r);
+  }
+  function blit(){
+    const r=run;
     // на экран — без сглаживания
     cx.setTransform(1,0,0,1,0,0);cx.imageSmoothingEnabled=false;
     cx.fillStyle='#0c3a2a';cx.fillRect(0,0,cv.width,cv.height);
@@ -655,9 +659,41 @@ window.FlappyFrogInit=function(B){
   }
   // только для локальной проверки: автопилот видит лягушку и ближайший проход
   if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))window.__ffDbg=()=>{if(!run)return null;const g=run.gates.find(g=>g.x>run.x-RW/2);return {y:run.y,vy:run.vy,alive:run.alive,score:run.score,cause:run.cause,started:run.started,gy:g?gy(g,run.t):null,gh:g?g.h:0,dx:g?g.x-run.x:0};};
+  /* живая картинка для карточки в хабе: тот же пиксельный мир,
+     лягушка сама пролетает проходы. Крутится, только пока карточка видна */
+  let hubCv=null,hubRaf=0,hubLast=0,demo=null,demoKey='';
+  function hubArt(c){hubCv=c;loadFrog();if(!hubRaf)hubRaf=requestAnimationFrame(hubTick);}
+  function hubTick(ts){
+    hubRaf=0;const c=hubCv;
+    if(!c||!c.isConnected)return;
+    if(open||!c.offsetParent||document.hidden){hubLast=0;setTimeout(()=>{if(!hubRaf)hubRaf=requestAnimationFrame(hubTick);},400);return;}
+    hubRaf=requestAnimationFrame(hubTick);
+    const dt=hubLast?Math.min(.05,(ts-hubLast)/1000):0;hubLast=ts;
+    const sv={VH,waterY,run};
+    VH=Math.round(W*c.clientHeight/Math.max(1,c.clientWidth));waterY=VH-14;
+    const key=VH+'';
+    if(!demo||demoKey!==key){
+      demoKey=key;demo=mkRun(0);demo.started=true;demo.y=VH*.45;demo.pads=demo.pads.slice(0,3);
+      demo.clouds.forEach(k=>{k.y=rnd(VH*.06,VH*.3);});demo.motes=[];
+      for(let i=0;i<3;i++)demo.gates.push({x:W*.75+i*SPACING*.8,y:rnd(VH*.4,VH*.5),h:VH*.48,amp:0,ph:0,heron:null});
+    }
+    const d=demo;run=d;
+    d.t+=dt;tGlobal+=0;d.x+=95*dt;
+    const cam=d.x-W*.3;
+    for(const g of d.gates)if(g.x-cam<-RW){g.x=Math.max(...d.gates.map(x=>x.x))+SPACING*.8;g.y=rnd(VH*.38,VH*.52);}
+    // автопилот: взмах, когда опустились ниже центра следующего прохода
+    const ng=d.gates.filter(g=>g.x>d.x-RW*.4).sort((a,b)=>a.x-b.x)[0];
+    d.vy+=G*.55*dt;d.y+=d.vy*dt;
+    if(ng&&d.y>ng.y+8&&d.vy>0)d.vy=FLAP*.6;
+    d.rot=clamp(d.vy/700,-.5,.9);
+    drawWorld();
+    if(c.width!==PW||c.height!==PH){c.width=PW;c.height=PH;}
+    const g=c.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(lo,0,0);
+    VH=sv.VH;waterY=sv.waterY;run=sv.run;
+  }
   // пиксельный стикер наряда — для карточки в хабе
   function pixelFrog(slug){return B.bake('frogs/'+(slug||'original'),256).then(c=>{const p=pixelate(c,36);if(!p)throw 0;
     const o=document.createElement('canvas');o.width=o.height=36;o.getContext('2d').drawImage(p,0,0);return o.toDataURL();});}
-  return {open:openGame,close,isOpen:()=>open,pixelFrog};
+  return {open:openGame,close,isOpen:()=>open,pixelFrog,hubArt};
 };
 })();
