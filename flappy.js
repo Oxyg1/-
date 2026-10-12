@@ -626,12 +626,14 @@ window.FlappyFrogInit=function(B){
   function drawFly(x,y,gold,t){
     const px=q(x),py=q(y),fl=Math.sin(t*40)>0;
     if(gold&&Math.sin(t*6)>-.2){R('rgba(255,210,63,.35)',px-5,py-4,11,9);}
-    R('rgba(235,245,255,.85)',px-4,py-(fl?4:3),3,fl?3:2);R('rgba(235,245,255,.85)',px+2,py-(fl?4:3),3,fl?3:2);
-    R(gold?'#f7b500':'#2b2f3a',px-1,py-1,3,4);R('#e0405f',px-1,py-2,1,1);R('#e0405f',px+1,py-2,1,1);
+    // крылья растут из спинки и машут вверх-вниз, глаза — спереди на голове
+    const wc='rgba(235,245,255,.85)';
+    if(fl){R(wc,px-3,py-4,2,3);R(wc,px,py-4,2,3);}else{R(wc,px-4,py-2,3,2);R(wc,px+1,py-2,3,2);}
+    R(gold?'#f7b500':'#2b2f3a',px-2,py-1,4,3);R(gold?'#f7b500':'#2b2f3a',px+2,py-1,2,2);R('#e0405f',px+3,py-1,1,1);
   }
   function drawFrog(x,y,r){
     if(r.inv>0&&Math.floor(tGlobal*14)%2)return;
-    lx.save();lx.translate(q(x),q(y));lx.rotate(Math.round(r.rot/(Math.PI/16))*(Math.PI/16));   // наклон шагами, без «мыла»
+    lx.save();lx.translate(q(x),q(y));lx.rotate(Math.round(r.rot/(Math.PI/16))*(Math.PI/16));lx.scale(-1,1);   // стикеры смотрят влево — разворачиваем по полёту   // наклон шагами, без «мыла»
     if(frogImg)lx.drawImage(frogImg,-18,-18,36,36);
     else{R('#5cc27a',-12,-9,24,18);R('#fff',2,-12,8,8);R('#000',6,-9,3,3);}
     lx.restore();
