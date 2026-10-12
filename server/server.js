@@ -1050,6 +1050,52 @@ const CARDS = path.join(__dirname, 'cards'); fs.mkdirSync(CARDS, { recursive: tr
 // недокачанные части гифок живут 10 минут
 const uploads = new Map();
 setInterval(() => { const t = Date.now(); for (const [k, u] of uploads) if (t - u.at > 600e3) uploads.delete(k); }, 60e3);
+/* ---------- FLAPPY FROG: ПОЛЁТ С ДРУЗЬЯМИ ----------
+   Комнаты живут только в памяти: перезапуск сервера их сбрасывает, и это нормально —
+   комната нужна на один вечер. Сервер не считает физику: он раздаёт общее зерно
+   уровня и время старта, а игроки шлют свои координаты ~7 раз в секунду и видят
+   друг друга призраками. Результаты гонок в рейтинг и рекорды не идут */
+const ROOMS = new Map();
+const ROOM_MAXP = 8, ROOM_RACE_MS = 5 * 60e3, ROOM_IDLE_MS = 25e3;
+const roomCode = () => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c; do { c = [...Array(5)].map(() => A[crypto.randomInt(A.length)]).join(''); } while (ROOMS.has(c)); return c; };
+function roomWho(a) {
+  const u = db.users[a.id];
+  return { id: a.id, name: String((u && u.name) || a.name || 'Игрок').slice(0, 24), skin: (u && u.jump && u.jump.skin) || 'original' };
+}
+function roomView(r, me) {
+  const now = Date.now();
+  return {
+    id: r.id, host: r.host, me, state: r.state, round: r.round, seed: r.seed, startAt: r.startAt, now,
+    max: r.max, boost: r.boost, results: r.results || null,
+    players: [...r.players.values()].map(p => ({ id: p.id, name: p.name, skin: p.skin, inRace: !!p.inRace,
+      x: p.x || 0, y: p.y || 0, r: p.r || 0, a: p.a ? 1 : 0, s: p.s || 0, t: p.t || 0 })),
+  };
+}
+function roomSweep(r) {
+  const now = Date.now();
+  for (const p of r.players.values()) if (now - p.seen > ROOM_IDLE_MS) { r.players.delete(p.id); }
+  if (!r.players.size) { ROOMS.delete(r.id); return false; }
+  if (!r.players.has(r.host)) r.host = r.players.keys().next().value;
+  if (r.state === 'race') {
+    const racers = [...r.players.values()].filter(p => p.inRace);
+    const live = racers.filter(p => p.a || now < r.startAt + 1500);
+    if (!live.length || now - r.startAt > ROOM_RACE_MS) {
+      r.state = 'results';
+      r.results = racers.sort((a, b) => (b.s - a.s) || (b.x - a.x)).map((p, i) => ({ place: i + 1, id: p.id, name: p.name, skin: p.skin, s: p.s || 0, x: Math.round(p.x || 0) }));
+      log('room results', r.id, r.round, r.results.length);
+    }
+  }
+  return true;
+}
+setInterval(() => { for (const r of ROOMS.values()) roomSweep(r); }, 5000).unref();
+function roomGet(body, a) {
+  const r = ROOMS.get(String(body.room || '').toUpperCase());
+  if (!r) return { err: { ok: false, error: 'Комната закрыта — создай новую' } };
+  if (!roomSweep(r)) return { err: { ok: false, error: 'Комната закрыта — создай новую' } };
+  const p = r.players.get(a.id);
+  return { r, p };
+}
+
 const api = {
   async sync(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
@@ -1278,6 +1324,71 @@ const api = {
     return { ok: true, jump: jumpState(u) };
   },
   // конец отрезка забега: проверяем правдоподобие, начисляем мошек, обновляем рекорды
+  async roomCreate(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    if (rateLimited('roomc:' + a.id, 20, 3600e3)) return { ok: false, error: 'Слишком часто' };
+    if (ROOMS.size > 500) return { ok: false, error: 'Сервер занят, попробуй через минуту' };
+    // старые комнаты этого игрока закрываем: одна комната на человека
+    for (const r of ROOMS.values()) { r.players.delete(a.id); roomSweep(r); }
+    const id = roomCode(), now = Date.now();
+    const r = { id, host: a.id, state: 'lobby', round: 0, seed: 0, startAt: 0, created: now,
+      max: Math.max(2, Math.min(ROOM_MAXP, +body.max || 6)), boost: body.boost !== false, players: new Map() };
+    r.players.set(a.id, { ...roomWho(a), seen: now, joined: now });
+    ROOMS.set(id, r); log('room create', id, a.id);
+    return { ok: true, room: roomView(r, a.id) };
+  },
+  async roomJoin(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const { r, err } = roomGet(body, a); if (err) return err;
+    if (!r.players.has(a.id)) {
+      if (r.players.size >= r.max) return { ok: false, error: 'В комнате нет мест' };
+      for (const o of ROOMS.values()) if (o !== r && o.players.delete(a.id)) roomSweep(o);
+      r.players.set(a.id, { ...roomWho(a), seen: Date.now(), joined: Date.now() });
+    }
+    r.players.get(a.id).seen = Date.now();
+    return { ok: true, room: roomView(r, a.id) };
+  },
+  async roomSet(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const { r, p, err } = roomGet(body, a); if (err) return err;
+    if (!p || r.host !== a.id) return { ok: false, error: 'Настраивает только создатель' };
+    if (r.state === 'race') return { ok: false, error: 'Гонка уже идёт' };
+    if (body.max) r.max = Math.max(Math.max(2, r.players.size), Math.min(ROOM_MAXP, +body.max || r.max));
+    if (typeof body.boost === 'boolean') r.boost = body.boost;
+    return { ok: true, room: roomView(r, a.id) };
+  },
+  async roomStart(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const { r, p, err } = roomGet(body, a); if (err) return err;
+    if (!p || r.host !== a.id) return { ok: false, error: 'Начинает создатель комнаты' };
+    if (r.state === 'race') return { ok: true, room: roomView(r, a.id) };
+    if (r.players.size < 2 && !CFG.dev) return { ok: false, error: 'Позови хотя бы одного друга' };
+    const now = Date.now();
+    r.state = 'race'; r.round++; r.seed = crypto.randomInt(1, 2 ** 31 - 1); r.startAt = now + 4000; r.results = null;
+    for (const q of r.players.values()) Object.assign(q, { inRace: now - q.seen < 8000, x: 0, y: 0, r: 0, s: 0, a: 1, t: 0 });
+    { const ad = anDay(mskDay()); ad.flapRooms = (ad.flapRooms || 0) + 1; ad.flapRoomPlayers = (ad.flapRoomPlayers || 0) + r.players.size; }
+    log('room start', r.id, r.round, r.players.size);
+    return { ok: true, room: roomView(r, a.id) };
+  },
+  async roomTick(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const { r, p, err } = roomGet(body, a); if (err) return err;
+    if (!p) return { ok: false, error: 'Тебя нет в комнате', gone: true };
+    p.seen = Date.now();
+    if (r.state === 'race' && p.inRace && +body.round === r.round) {
+      const num = (v, lo, hi) => Math.max(lo, Math.min(hi, +v || 0));
+      p.x = num(body.x, 0, 1e7); p.y = num(body.y, -1, 2); p.r = num(body.rot, -3, 3); p.s = Math.round(num(body.s, 0, 1e5)); p.t = Date.now();
+      if (!body.a) p.a = 0;
+      roomSweep(r);
+    }
+    return { ok: true, room: roomView(r, a.id) };
+  },
+  async roomLeave(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const { r, err } = roomGet(body, a); if (err) return { ok: true };
+    r.players.delete(a.id); roomSweep(r);
+    return { ok: true };
+  },
   async flapStart(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
     if (rateLimited('flap:' + a.id, 90, 3600e3)) return { ok: false, error: 'Слишком часто' };

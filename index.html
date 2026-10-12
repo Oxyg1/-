@@ -331,6 +331,10 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .hf-art{background:#7cc9e8}
 #hfCv{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated}
 .hub-jump:has(.hf-art) .btn{font-family:'Press Start 2P',monospace;font-weight:400;font-size:12px;border-radius:0;background:#f26b2a;color:#fff;text-shadow:2px 2px 0 #7a2a0a;box-shadow:0 0 0 3px #0b1d12,inset 0 -4px 0 #b8461a,inset 0 3px 0 #ff9a5c}
+.hf-btns{display:flex;gap:10px;margin-top:8px;padding:0 3px 3px}
+.hf-btns #hfPlay{flex:1}
+.hub-jump:has(.hf-art) .btn.hf-mp{flex:0 0 54px;padding:0;display:flex;align-items:center;justify-content:center;background:#4f9a5a;box-shadow:0 0 0 3px #0b1d12,inset 0 -4px 0 #2f6a3a,inset 0 3px 0 #7fcf8a}
+.hf-mp svg{width:26px;height:20px;color:#fff;filter:drop-shadow(2px 2px 0 #1f4a2a)}
 .hub-jump:has(.hf-art) .t{font-family:'Press Start 2P',monospace;font-weight:400;font-size:13px;line-height:1.6}
 .hj-info{padding:10px 14px 14px;display:flex;flex-direction:column;gap:3px}
 .hj-info .t{font-size:21px;font-weight:900}
@@ -817,7 +821,7 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
           <div class="t">Flappy Frog</div>
           <div class="hj-row"><span>Твой рекорд</span><b id="hfBest">—</b></div>
           <div class="hj-row"><span id="hfRecName">Лучший в игре</span><b id="hfRec">—</b></div>
-          <button class="btn" id="hfPlay" style="margin-top:8px">Играть</button>
+          <div class="hf-btns"><button class="btn" id="hfPlay">Играть</button><button class="btn hf-mp" id="hfMp" aria-label="Играть с друзьями"><svg viewBox="0 0 16 12" shape-rendering="crispEdges"><path fill="currentColor" d="M4 1h3v1h1v3H7v1H4V5H3V2h1zM10 2h2v1h1v2h-1v1h-2V5H9V3h1zM2 7h7v1h1v4H1V8h1zM10 7h3v1h1v4h-3V8h-1z"/></svg></button></div>
         </div>
       </div>
       <div class="hub-jump">
@@ -2619,7 +2623,7 @@ async function resolveSpecies(){
     if(legacy)sp='frog';
   }
   const known=!!SPECIES[sp];
-  if(!known)sp=/^(t_|ad_|jump)/.test(START_P||'')?'frog':await askSpecies();
+  if(!known)sp=/^(t_|ad_|jump|r_)/.test(START_P||'')?'frog':await askSpecies();
   setSpecies(sp);
   rememberSpecies(SP.key);
   applySpeciesUI();
@@ -2780,6 +2784,9 @@ const FLAP=window.FlappyFrogInit?window.FlappyFrogInit({
   setActive:v=>{jumpOpen=!!v;},
   onClose:()=>openHub(),
   buyJumpItem,
+  dev:!inTG,
+  roomLink:code=>{const b=CFG.appLink||'';return /startapp=/.test(b)?b.replace(/startapp=[^&]*/,'startapp=r_'+code):/\/t\.me\//.test(b)?b+(b.includes('?')?'&':'?')+'startapp=r_'+code:location.origin+location.pathname+'?startapp=r_'+code;},
+  share:(url,text)=>{if(TG&&tgv('6.1'))TG.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(url)+'&text='+encodeURIComponent(text));else{try{navigator.clipboard.writeText(url);toast('Ссылка скопирована');}catch(e){toast(url,5000);}}},
 }):null;
 /* ---------- ТУРНИРЫ ----------
    Турнир — отдельная таблица лучших забегов за своё время. Один забег идёт во
@@ -3595,6 +3602,10 @@ $('#hubPlay').onclick=()=>{
   if(!JUMP){toast('Игра не загрузилась — обнови приложение');return;}
   S.ui();haptic.medium();closeHub();JUMP.open();
 };
+$('#hfMp').onclick=()=>{
+  if(!FLAP){toast('Игра не загрузилась — обнови приложение');return;}
+  S.ui();haptic.medium();FLAP.room();
+};
 $('#hfPlay').onclick=()=>{
   if(!FLAP){toast('Игра не загрузилась — обнови приложение');return;}
   S.ui();haptic.medium();closeHub();FLAP.open();
@@ -3611,6 +3622,7 @@ async function init(){
   // По прямой ссылке сразу открываем нужное, хаб остаётся под ним
   if(startParam==='shop'){openHub();openShop();}
   else if(startParam&&startParam.startsWith('t_')){openHub();openTour(startParam.slice(2).split('-')[0]);}   // t_<id>-ad_канал: турнир + метка рекламы
+  else if(/^r_[A-Z0-9]{5}$/i.test(startParam||'')&&FLAP){openHub();FLAP.room(startParam.slice(2));}   // приглашение в комнату полёта
   else if((startParam==='jump'||/^ad_/.test(startParam||''))&&JUMP){openHub();JUMP.open();}   // реклама ведёт сразу в игру, метка уходит в аналитику
   else openHub();
   sync(true).then(r=>{

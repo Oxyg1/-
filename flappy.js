@@ -120,6 +120,25 @@ window.FlappyFrogInit=function(B){
 #ff .btn.ghost{background:#4f9a5a!important;box-shadow:0 0 0 3px #3a2a12,inset 0 -4px 0 #2f6a3a,inset 0 3px 0 #7fcf8a!important;text-shadow:2px 2px 0 #1f4a2a}
 #ff .card .row{gap:12px}
 #ff .card{gap:14px}
+#ff [hidden]{display:none!important}
+#ff .ff-place{font-family:var(--pxf);font-size:10px;background:#173a26;box-shadow:0 0 0 3px #0b1d12,inset 0 -3px 0 #0e2a1a,inset 0 3px 0 #2f6a43;padding:6px 8px;line-height:1.5;text-align:center}
+#ff .ff-place b{color:#ffd23f;font-weight:400}
+#ff .ff-turbo{width:84px;height:8px;background:#0b1d12;box-shadow:0 0 0 2px #0b1d12;position:relative}
+#ff .ff-turbo i{position:absolute;left:0;top:0;bottom:0;background:#ffd23f;box-shadow:inset 0 -2px 0 #c98a00}
+#ff .ff-count{position:absolute;left:0;right:0;top:34%;text-align:center;font-family:var(--pxf);font-size:64px;color:#fff;pointer-events:none;text-shadow:5px 5px 0 #0b1d12,-4px 0 0 #0b1d12,0 -4px 0 #0b1d12,4px 0 0 #0b1d12,0 4px 0 #0b1d12}
+#ff .ff-count small{display:block;font-size:12px;margin-top:22px;color:#9dffb0;text-shadow:2px 2px 0 #0b1d12}
+#ff .ff-count.go{color:#ffd23f;font-size:40px}
+.fr-list{width:100%;display:flex;flex-direction:column;gap:9px}
+.fr-row{display:grid;grid-template-columns:30px 36px 1fr auto;gap:8px;align-items:center;background:#f3e7bb;box-shadow:inset 0 0 0 2px #b8a46a;padding:6px 8px;text-align:left;color:#3a2a12;font-weight:800;font-size:14px}
+.fr-row .rk{font-family:'Press Start 2P',monospace;font-size:10px;width:26px;height:26px;line-height:26px;text-align:center;background:#d6c58e;color:#3a2a12}
+.fr-row .rk.r1{background:#f7b500;box-shadow:0 0 0 2px #5a3b00}.fr-row .rk.r2{background:#cfd8de;box-shadow:0 0 0 2px #3a4248}.fr-row .rk.r3{background:#d9874a;box-shadow:0 0 0 2px #5a2e0e}
+.fr-row img{width:36px;height:36px;image-rendering:pixelated;scale:-1 1}
+.fr-row .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr-row .nm small{display:block;font-size:11px;font-weight:700;color:#7a6438}
+.fr-row .sc{font-family:'Press Start 2P',monospace;font-size:12px;color:#c4541f}
+.fr-row.me{background:#fff3c4;box-shadow:inset 0 0 0 2px #c4541f}
+.fr-row.empty{background:transparent;box-shadow:inset 0 0 0 2px rgba(122,100,56,.35);color:#9a8656;font-weight:700;grid-template-columns:1fr;text-align:center;min-height:30px;padding:4px;font-size:12px}
+.fr-tag{font-family:'Press Start 2P',monospace;font-size:7px;background:#c4541f;color:#fff;padding:3px 4px;margin-left:6px;vertical-align:2px}
 `;
   document.head.appendChild(st);
 
@@ -131,13 +150,16 @@ window.FlappyFrogInit=function(B){
   <button class="ff-ib" id="ffPause" aria-label="Пауза"><svg><use href="#i-pause"></use></svg></button>
   <div class="ff-mid"><div class="ff-sc" id="ffSc">0</div><div class="ff-lily" id="ffLily"><img src="jump/pad.png" alt=""><span>отскок</span></div></div>
   <div class="ff-fl" id="ffFl">${FLY}<b id="ffFN">0</b></div>
+  <div class="ff-mid" id="ffMp" hidden style="position:absolute;right:12px;top:calc(var(--tg-safe-area-inset-top,env(safe-area-inset-top,0px)) + var(--tg-content-safe-area-inset-top,0px) + 62px);align-items:flex-end"><div class="ff-place" id="ffPlace"></div><div class="ff-turbo" id="ffTurbo"><i></i></div></div>
 </div>
 <div class="ff-tap" id="ffTap">Тапни, чтобы взлететь</div>
+<div class="ff-count" id="ffCount" hidden></div>
 <div class="ff-banner" id="ffBanner"></div>
 <div class="ff-ov" id="ffPauseOv" hidden><div class="card">
   <h2>Пауза</h2>
   <button class="btn" id="ffResume">Продолжить</button>
-  <div class="row"><button class="btn ghost sm" id="ffSnd"></button><button class="btn ghost sm" id="ffQuit">Выйти</button></div>
+  <div class="row"><button class="btn ghost sm" id="ffSnd"></button><button class="btn ghost sm" id="ffGhostB"></button></div>
+  <button class="btn ghost sm" id="ffQuit">Выйти</button>
 </div></div>
 <div class="ff-ov" id="ffOver" hidden><div class="card">
   <div class="ff-newrec" id="ffNewRec" hidden>Новый рекорд!</div>
@@ -150,6 +172,13 @@ window.FlappyFrogInit=function(B){
   <button class="btn" id="ffRevive">Продолжить · 10 <img class="ic" src="icons/tgstar.png" alt=""></button>
   <button class="btn" id="ffAgain">Ещё раз</button>
   <div class="row"><button class="btn ghost sm" id="ffExit">В хаб</button></div>
+</div></div>
+<div class="ff-ov" id="ffRes" hidden><div class="card">
+  <h2 id="ffResT">Итоги гонки</h2>
+  <div class="ff-note" id="ffResN"></div>
+  <div class="fr-list" id="ffResL"></div>
+  <button class="btn" id="ffResGo" hidden>Ещё раунд</button>
+  <button class="btn ghost" id="ffResRoom">В комнату</button>
 </div></div>`;
   document.body.appendChild(root);
   const $=s=>root.querySelector(s);
@@ -220,6 +249,9 @@ window.FlappyFrogInit=function(B){
     reedCache.set(key,c);return c;
   }
 
+  // общий уровень в гонке: одно зерно — одинаковые проходы у всех
+  const mulberry=a=>()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+
   /* ---------- состояние ---------- */
   let open=false,run=null,rafId=0,last=0,acc=0,tGlobal=0,paused=false;
   let bestBefore=0,tourR=[],overRes=null,frogImg=null,frogSlug='';
@@ -252,16 +284,24 @@ window.FlappyFrogInit=function(B){
   function speed(n){return lerp(150,212,clamp(n/100,0,1));}
   function addGate(r){
     const n=r.genN=(r.genN||0)+1;   // номер прохода с начала полёта — по нему растёт сложность
-    const h=gapH(n),minY=VH*.16+h/2,maxY=waterY-56-h/2;
-    let y=clamp(r.lastGy+rnd(-170,170),minY,Math.max(minY,maxY));
-    if(n<5)y=clamp(lerp(r.lastGy,(minY+maxY)/2,.6),minY,maxY);
+    const Rn=r.rng||Math.random,rr=(a,b)=>a+Rn()*(b-a);
+    const h=gapH(n),minY=VH*.16+h/2,maxY=Math.max(minY,waterY-56-h/2);
+    let y;
+    if(r.rng){
+      // в гонке высота прохода — доля свободной полосы: на любом экране проходы совпадают
+      const u=n<5?lerp(r.lastU??.5,.5,.6):clamp((r.lastU??.5)+rr(-.42,.42),0,1);r.lastU=u;y=lerp(minY,maxY,u);
+    }else{
+      y=clamp(r.lastGy+rr(-170,170),minY,maxY);
+      if(n<5)y=clamp(lerp(r.lastGy,(minY+maxY)/2,.6),minY,maxY);
+    }
     r.lastGy=y;
-    const g={x:r.nextX,y,h,passed:false,amp:n>=30?lerp(14,46,clamp((n-30)/60,0,1))*(Math.random()<.65?1:0):0,ph:rnd(0,6),
-      heron:n>=60&&Math.random()<.2?{t:rnd(0,2.2)}:null};
-    r.gates.push(g);r.nextX+=SPACING*rnd(.94,1.08);
+    const g={x:r.nextX,y,h,passed:false,amp:n>=30?lerp(14,46,clamp((n-30)/60,0,1))*(Rn()<.65?1:0):0,ph:rr(0,6),
+      heron:n>=60&&Rn()<.2?{t:rr(0,2.2)}:null};
+    r.gates.push(g);r.nextX+=SPACING*rr(.94,1.08);
     // мошки в проходе: обычная почти всегда, изредка золотая
-    if(Math.random()<.7)r.flyItems.push({x:g.x+rnd(-14,14),y:y+rnd(-h*.25,h*.25),gold:Math.random()<.08,t:rnd(0,6),taken:false});
-    if(Math.random()<.35)r.flyItems.push({x:g.x+SPACING*.5,y:clamp(y+rnd(-60,60),VH*.18,waterY-40),gold:false,t:rnd(0,6),taken:false});
+    const a1=Rn(),a2=rr(-14,14),a3=rr(-.25,.25),a4=Rn(),a5=Rn(),a6=rr(-60,60);
+    if(a1<.7)r.flyItems.push({x:g.x+a2,y:y+a3*h,gold:a4<.08,t:rnd(0,6),taken:false});
+    if(a5<.35)r.flyItems.push({x:g.x+SPACING*.5,y:clamp(y+a6,VH*.18,waterY-40),gold:false,t:rnd(0,6),taken:false});
   }
   const gy=(g,t)=>g.y+(g.amp?Math.sin(t*1.25+g.ph)*g.amp:0);
 
@@ -296,12 +336,16 @@ window.FlappyFrogInit=function(B){
     for(let i=0;i<4;i++)addGate(run);
     run.seg.tokenP=startToken(false);
     bestBefore=Math.max(pref.best||0,((B.net().flap||{}).best)||0);
+    run.ghost=pref.ghost!==false&&ghostRec&&ghostRec.p&&ghostRec.p.length>10?ghostRec:null;
+    mpHud();
     paused=false;hud(true);
     $('#ffOver').hidden=true;$('#ffPauseOv').hidden=true;$('#ffTap').hidden=false;
   }
   function flap(){
     const r=run;if(!r||!r.alive||paused)return;
-    if(!r.started){r.started=true;$('#ffTap').hidden=true;r.seg.t0=r.t;}
+    if(r.mp&&!r.started)return;   // в гонке взлетают все вместе по отсчёту
+    if(!r.started){r.started=true;$('#ffTap').hidden=true;r.seg.t0=r.t;r.t0f=r.t;}
+    if(r.mp&&r.mp.boostOn)r.boost=Math.min(.5,(r.boost||0)+.075);   // каждый взмах — короткий рывок
     r.vy=FLAP;r.sq=.22;SND.flap();B.haptic.light&&B.haptic.light();
     for(let i=0;i<4;i++)P({k:'drop',x:r.x-8,y:r.y+10,vx:rnd(-90,-30),vy:rnd(20,90),life:rnd(.25,.4),s:rnd(2,3),c:'rgba(220,250,255,.8)'});
   }
@@ -317,8 +361,16 @@ window.FlappyFrogInit=function(B){
 
   function update(dt){
     const r=run;tGlobal+=dt;r.t+=dt;
-    const v=speed(r.score);
+    const v=speed(r.score)*(r.mp&&r.mp.boostOn?1+(r.boost||0):1);
+    if(r.mp){
+      r.boost=(r.boost||0)*Math.exp(-dt*1.5);
+      if(!r.started&&mpNow()>=r.mp.startAt){r.started=true;r.t0f=r.t;r.seg.t0=r.t;flap();r.mp.goT=tGlobal;}
+      if(r.boost>.18&&r.alive&&Math.random()<r.boost*.9)P({k:'line',x:r.x-20,y:r.y+rnd(-16,16),vx:-260,vy:0,life:.22,s:2,c:'rgba(255,255,255,.75)'});
+      // выбыл — камера плавно уходит к лидеру гонки
+      if(!r.alive&&r.dead>1.1){const lx=mpLeaderX();if(lx!=null)r.camX=lerp(r.camX??r.x,lx,Math.min(1,dt*2.5));}
+    }
     if(r.started&&r.alive){
+      if(!r.mp&&!r.reviveN)ghostSample(r);
       r.vy=Math.min(r.vy+G*dt,760);r.y+=r.vy*dt;r.x+=v*dt;
     }else if(!r.started){
       r.y=(r.hoverY??VH*.42)+Math.sin(tGlobal*3)*8;   // ждём первого тапа — лягушка парит на месте
@@ -329,7 +381,7 @@ window.FlappyFrogInit=function(B){
     if(r.alive)r.rot=lerp(r.rot,clamp(r.vy/900,-.45,.9),Math.min(1,dt*10));
     if(r.inv>0)r.inv-=dt;
     // генерация и уборка проходов
-    const camX=r.x-W*.3;
+    const camX=(r.camX??r.x)-W*.3;
     while(r.nextX<camX+W*1.6)addGate(r);
     r.gates=r.gates.filter(g=>g.x>camX-RW*2);
     r.flyItems=r.flyItems.filter(f=>f.x>camX-40&&!f.done);
@@ -352,7 +404,7 @@ window.FlappyFrogInit=function(B){
         if(!g.passed&&r.x>g.x){
           g.passed=true;r.score++;SND.score(r.score);kick($('#ffSc'),'kick');hud();
           if(r.score%25===0){const zi=Math.floor(r.score/25)%ZONES.length;r.zoneFrom=r.zone;r.zone=zi;r.zoneT=0;banner(ZONES[zi].name,`${r.score} ${pts(r.score)}`,true);SND.zone();}
-          if(r.score===bestBefore+1&&bestBefore>0){banner('Новый рекорд!','',true);SND.record();}
+          if(!r.mp&&r.score===bestBefore+1&&bestBefore>0){banner('Новый рекорд!','',true);SND.record();}
         }
       }
       // язык ловит мошек рядом
@@ -362,7 +414,7 @@ window.FlappyFrogInit=function(B){
         if(d2<62*62&&dx>-20){f.taken=true;r.tongue={f,t:0};}
       }
     }
-    if(r.tongue){r.tongue.t+=dt;if(r.tongue.t>.13&&!r.tongue.f.done){const f=r.tongue.f;f.done=true;r.flies+=f.gold?5:1;f.gold?SND.gold():SND.gulp();kick($('#ffFl'),'bump');hud();
+    if(r.tongue){r.tongue.t+=dt;if(r.tongue.t>.13&&!r.tongue.f.done){const f=r.tongue.f;f.done=true;r.flies+=f.gold?5:1;if(r.mp&&r.mp.boostOn)r.boost=Math.min(.7,(r.boost||0)+(f.gold?.35:.18));f.gold?SND.gold():SND.gulp();kick($('#ffFl'),'bump');hud();
       for(let i=0;i<8;i++)P({k:'spark',x:f.x,y:f.y,vx:rnd(-90,90),vy:rnd(-90,90),life:.4,s:rnd(2,3.5),c:f.gold?'#ffe36b':'#d9ffe0'});}
       if(r.tongue.t>.22)r.tongue=null;}
     if(r.zoneT<1)r.zoneT=Math.min(1,r.zoneT+dt/1.5);
@@ -370,7 +422,7 @@ window.FlappyFrogInit=function(B){
     r.parts=r.parts.filter(p=>p.t<p.life);
     if(r.shake>0)r.shake=Math.max(0,r.shake-dt*30);
     if(r.bounceFx){r.bounceFx.t+=dt;if(r.bounceFx.t>.9)r.bounceFx=null;}
-    if(!r.alive&&r.dead>.75&&!r.overShown){r.overShown=true;showOver();}
+    if(!r.alive&&r.dead>.75&&!r.overShown){r.overShown=true;if(r.mp)mpDied();else showOver();}
   }
   function heronHit(g,r){
     const ph=(r.t+g.heron.t)%2.6;
@@ -386,6 +438,8 @@ window.FlappyFrogInit=function(B){
     r.alive=false;r.cause=cause||'reed';r.vy=-300;r.shake=10;
     SND.hit();B.haptic.error&&B.haptic.error();
     for(let i=0;i<14;i++)P({k:'spark',x:r.x,y:r.y,vx:rnd(-160,160),vy:rnd(-160,120),life:.5,s:rnd(2,4),c:i%2?'#ffffff':'#9dffb0'});
+    if(r.mp){overRes=null;mpTick(true);return;}
+    if(!r.reviveN)ghostSave(r);
     overRes=submitSeg(r);
   }
 
@@ -454,7 +508,9 @@ window.FlappyFrogInit=function(B){
   $('#ffQuit').onclick=()=>{SND.ui();if(run&&run.alive&&run.started){run.alive=false;overRes=submitSeg(run);}close();};
   function sndLabel(){$('#ffSnd').textContent=B.soundOn()?'Звук: вкл':'Звук: выкл';}
   $('#ffSnd').onclick=()=>{B.setSound(!B.soundOn());sndLabel();};
-  function pause(){if(!run||!run.alive||!run.started)return;paused=true;sndLabel();$('#ffPauseOv').hidden=false;}
+  function ghostLabel(){$('#ffGhostB').textContent=pref.ghost!==false?'Призрак: вкл':'Призрак: выкл';}
+  $('#ffGhostB').onclick=()=>{pref.ghost=pref.ghost===false;savePref();ghostLabel();if(run&&!run.mp)run.ghost=pref.ghost!==false?ghostRec:null;};
+  function pause(){if(!run||!run.alive||!run.started||run.mp)return;ghostLabel();paused=true;sndLabel();$('#ffPauseOv').hidden=false;}
   function resume(){paused=false;$('#ffPauseOv').hidden=true;last=0;}
 
   // тап — в любом месте поля, кроме кнопок и окон
@@ -518,7 +574,7 @@ window.FlappyFrogInit=function(B){
     g.putImageData(im,0,0);return out;
   }
 
-  const X0=()=>run.x-W*.3;   // левый край камеры в мире
+  const X0=()=>(run.camX??run.x)-W*.3;   // левый край камеры в мире
   function zcol(k){const r=run,a=ZONES[r.zoneFrom??r.zone][k],b=ZONES[r.zone][k];return r.zoneT<1?mixA(a,b,r.zoneT):rgb(b);}
   function draw(){drawWorld();blit();}
   function drawWorld(){
@@ -585,6 +641,7 @@ window.FlappyFrogInit=function(B){
     const sx=(r.shake?rnd(-r.shake,r.shake):0)*sc*dpr,sy=(r.shake?rnd(-r.shake,r.shake)*.6:0)*sc*dpr;
     const ox=Math.round(offX*dpr+sx),oy=Math.round(sy),k=fieldW*dpr/PW;
     cx.drawImage(lo,0,0,PW,PH,ox,oy,Math.round(fieldW*dpr),Math.round(PH*PX*sc*dpr));
+    drawGhosts(cx,ox,oy,k,r);
     drawFrog(cx,ox,oy,k,r,r.fx,r.fy);
   }
   function hills(off,base,amp,col,fr,seed){
@@ -649,6 +706,284 @@ window.FlappyFrogInit=function(B){
     g.restore();
   }
 
+  /* ---------- призрак рекорда ----------
+     Лучший полёт пишется по точкам каждые 50 мс (x и высота как доля экрана)
+     и проигрывается полупрозрачной лягушкой. В конце он падает с нимбом —
+     видно, где оборвался рекорд */
+  const GH_KEY='ff.ghost.v1';
+  let ghostRec=null;try{ghostRec=JSON.parse(localStorage.getItem(GH_KEY)||'null');}catch(e){}
+  function ghostSample(r){
+    const k=Math.floor((r.t-r.t0f)*20);if(!r.rec)r.rec=[];
+    if(k>9000)return;
+    while(r.rec.length<=k)r.rec.push([Math.round(r.x),Math.round(r.y/waterY*1000)]);
+  }
+  function ghostSave(r){
+    if(!r.rec||r.score<=0||(ghostRec&&ghostRec.s>=r.score))return;
+    ghostRec={s:r.score,p:r.rec};try{localStorage.setItem(GH_KEY,JSON.stringify(ghostRec));}catch(e){}
+  }
+  function soloGhost(r){
+    const g=r.ghost;if(!g||!r.started||r.t0f==null)return null;
+    const p=g.p,tt=(r.t-r.t0f)*20,i=Math.floor(tt);
+    if(i>=p.length-1){const L=p[p.length-1],te=(tt-(p.length-1))/20,y0=L[1]/1000*waterY;
+      return {x:L[0],y:Math.min(waterY-14,y0+.5*G*te*te),rot:Math.min(Math.PI/2,te*7),dead:te>.4};}
+    const a=p[i],b=p[i+1],f=tt-i,y0=a[1]/1000*waterY,y1=b[1]/1000*waterY;
+    return {x:lerp(a[0],b[0],f),y:lerp(y0,y1,f),rot:clamp((y1-y0)*20/900,-.45,.9)};
+  }
+  // пиксельные наряды соперников — по одному разу на наряд
+  const skinPx=new Map();
+  function skinImg(sk){
+    if(!skinPx.has(sk)){skinPx.set(sk,null);B.bake('frogs/'+sk,256).then(c=>skinPx.set(sk,pixelate(c,36)||c)).catch(()=>B.bake('frogs/original',256).then(c=>skinPx.set(sk,pixelate(c,36))).catch(()=>{}));}
+    return skinPx.get(sk)||frogImg;
+  }
+  function drawSprite(g,ox,oy,k,img,fx,fy,rot,alpha){
+    if(!img)return;
+    g.save();g.globalAlpha=alpha;g.imageSmoothingEnabled=false;
+    g.translate(ox+fx*k,oy+fy*k);g.rotate(rot);g.scale(-k,k);g.drawImage(img,-18,-18,36,36);g.restore();
+  }
+  function haloAt(g,ox,oy,k,fx,fy,alpha){
+    g.save();g.globalAlpha=alpha;const x=ox+(fx-7)*k,y=oy+(fy-27+(Math.sin(tGlobal*3)>0?0:1))*k;
+    g.fillStyle='#b8860b';g.fillRect(x,y,14*k,4*k);g.fillStyle='#ffd23f';g.fillRect(x+k,y,12*k,k);g.fillRect(x,y+k,2*k,2*k);g.fillRect(x+12*k,y+k,2*k,2*k);g.fillRect(x+k,y+3*k,12*k,k);
+    g.restore();
+  }
+  function tagAt(g,x,y,k,text,bg,fg){
+    const fs=Math.max(8,Math.round(3.4*k));g.save();g.font=`${fs}px 'Press Start 2P',monospace`;g.textAlign='center';g.textBaseline='middle';
+    const w=g.measureText(text).width+fs*1.1,h=fs*1.9;
+    g.fillStyle='#0b1d12';g.fillRect(Math.round(x-w/2-2),Math.round(y-h/2-2),Math.round(w+4),Math.round(h+4));
+    g.fillStyle=bg;g.fillRect(Math.round(x-w/2),Math.round(y-h/2),Math.round(w),Math.round(h));
+    g.fillStyle=fg;g.fillText(text,Math.round(x),Math.round(y+fs*.08));g.restore();
+  }
+  function drawGhosts(g,ox,oy,k,r){
+    const cam=X0();
+    if(!r.mp){
+      const gh=soloGhost(r);if(!gh)return;
+      const fx=(gh.x-cam)/PX,fy=gh.y/PX;if(fx<-30||fx>PW+30)return;
+      const a=gh.dead?Math.max(0,.5-(tGlobal%100)*0):.45;
+      drawSprite(g,ox,oy,k,frogImg,fx,fy,gh.rot,a);
+      if(gh.dead)haloAt(g,ox,oy,k,fx,fy,.8);
+      tagAt(g,ox+fx*k,oy+(fy-(gh.dead?36:26))*k,k,`РЕКОРД ${ghostRec.s}`,'rgba(23,58,38,.85)','#ffd23f');
+      return;
+    }
+    for(const o of mpGhosts()){
+      const fx=(o.x-cam)/PX,fy=o.y*waterY/PX;
+      if(fx<-14||fx>PW+14){
+        // соперник за кадром — метка у края с отрывом в метрах
+        const right=fx>PW,ex=right?ox+PW*k-6:ox+6,ey=oy+clamp(fy,30,PH-60)*k,d=Math.round(Math.abs(o.x-r.x)/12);
+        g.save();g.font=`${Math.max(8,Math.round(3*k))}px 'Press Start 2P',monospace`;const t=(right?'':'◀ ')+o.name.slice(0,8)+` ${right?'+':'−'}${d}м`+(right?' ▶':'');
+        const w=g.measureText(t).width+12;g.restore();
+        tagAt(g,right?ex-w/2:ex+w/2,ey,k*.9,t,o.a?'#173a26':'#4a3a2a',o.a?'#9dffb0':'#cfc0a0');
+        continue;
+      }
+      drawSprite(g,ox,oy,k,skinImg(o.skin),fx,fy,o.a?o.r:Math.PI/2,o.a?.5:.35);
+      if(!o.a)haloAt(g,ox,oy,k,fx,fy,.7);
+      tagAt(g,ox+fx*k,oy+(fy-(o.a?26:36))*k,k,o.name.slice(0,10),o.a?'rgba(23,58,38,.8)':'rgba(74,58,42,.8)',o.a?'#fff':'#e8d9a8');
+    }
+  }
+
+  /* ---------- полёт с друзьями ----------
+     Комната на сервере хранит игроков, зерно уровня и время старта. Здесь —
+     меню комнаты, опрос сервера (в гонке ~7 раз в секунду, в лобби — раз в секунду),
+     отсчёт, призраки соперников с плавной интерполяцией и итоги */
+  let room=null;   // {id, me, view, off, buf:Map, timer, busy, raceRound, shownRes}
+  const mpNow=()=>Date.now()+(room?room.off||0:0);
+  function mpGhosts(){
+    if(!room)return [];
+    const T=mpNow()-260,out=[];
+    for(const p of room.view.players){
+      if(p.id===room.me||!p.inRace)continue;
+      const b=room.buf.get(p.id);if(!b||!b.length)continue;
+      let i=b.length-1;while(i>0&&b[i-1].t>T)i--;
+      const a=b[Math.max(0,i-1)],c=b[i];let o=c;
+      if(a!==c&&T<c.t&&T>a.t){const f=(T-a.t)/(c.t-a.t);o={x:lerp(a.x,c.x,f),y:lerp(a.y,c.y,f),r:lerp(a.r,c.r,f),a:c.a,s:c.s};}
+      else if(T>=c.t&&c.a){const ex=Math.min(.4,(T-c.t)/1000);o={...c,x:c.x+speed(c.s)*ex};}   // пакет опаздывает — чуть продлеваем движение
+      out.push({...o,name:p.name||'Игрок',skin:p.skin,id:p.id});
+    }
+    return out;
+  }
+  function mpLeaderX(){let m=null;for(const o of mpGhosts())if(o.a&&(m==null||o.x>m))m=o.x;return m;}
+  function mpRank(){
+    if(!room||!run||!run.mp)return null;
+    const others=mpGhosts(),me={x:run.x,s:run.score};
+    const all=[...others.map(o=>({x:o.x,s:o.s})),me].sort((a,b)=>(b.s-a.s)||(b.x-a.x));
+    return {pos:all.indexOf(me)+1,n:all.length,alive:others.filter(o=>o.a).length+(run.alive?1:0)};
+  }
+  function mpHud(){
+    const r=run,on=!!(r&&r.mp);
+    $('#ffMp').hidden=!on;$('#ffPause').style.visibility=on?'hidden':'';$('#ffLily').hidden=on;
+    if(!on){$('#ffCount').hidden=true;return;}
+    const rk=mpRank();
+    if(rk)$('#ffPlace').innerHTML=r.alive?`МЕСТО <b>${rk.pos}</b>/${rk.n}`:`ВЫБЫЛ · <b>${rk.pos}</b>/${rk.n}<br>в полёте: ${rk.alive}`;
+    $('#ffTurbo').hidden=!r.mp.boostOn;
+    $('#ffTurbo').firstChild.style.width=Math.round(clamp((r.boost||0)/.5,0,1)*100)+'%';
+    // отсчёт до старта
+    const el=$('#ffCount');
+    if(!r.started){const n=Math.ceil((r.mp.startAt-mpNow())/1000);el.hidden=false;el.classList.remove('go');
+      const t=n>0?String(Math.min(n,3)):'';if(el.dataset.n!==t){el.dataset.n=t;el.innerHTML=t+'<small>ВСЕ СТАРТУЮТ ВМЕСТЕ<br><br>ТАП — ВЗМАХ И РЫВОК</small>';if(t)SND.ui();}}
+    else if(r.mp.goT!=null&&tGlobal-r.mp.goT<.8){if(el.dataset.n!=='go'){el.dataset.n='go';el.classList.add('go');el.innerHTML='ЛЕТИМ!';SND.zone();}el.hidden=false;}
+    else el.hidden=true;
+  }
+  function startMP(v){
+    loadFrog();
+    run=mkRun(0);
+    run.mp={round:v.round,startAt:v.startAt,boostOn:!!v.boost};run.rng=mulberry(v.seed);run.boost=0;
+    for(let i=0;i<4;i++)addGate(run);
+    bestBefore=1e9;paused=false;hud(true);
+    $('#ffOver').hidden=true;$('#ffPauseOv').hidden=true;$('#ffRes').hidden=true;$('#ffTap').hidden=true;
+    room.buf=new Map();room.shownRes=0;mpHud();
+  }
+  function mpDied(){
+    B.haptic.error&&B.haptic.error();
+    banner('Ты выбыл','смотрим, кто долетит дальше');
+    if(room&&room.view.state==='results')mpResults();
+  }
+  function mpResults(){
+    const v=room.view;if(!v.results||room.shownRes===v.round)return;room.shownRes=v.round;
+    const host=v.host===room.me,meR=v.results.find(x=>x.id===room.me);
+    $('#ffResT').textContent=meR&&meR.place===1?'Победа!':'Итоги гонки';
+    $('#ffResN').textContent=meR?`Ты ${meR.place}-й из ${v.results.length}`:'';
+    $('#ffResL').innerHTML=v.results.map(x=>`<div class="fr-row${x.id===room.me?' me':''}"><div class="rk${x.place<=3?' r'+x.place:''}">${x.place}</div><img data-sk="${esc(x.skin)}" alt=""><div class="nm">${esc(x.name)}</div><div class="sc">${x.s}</div></div>`).join('');
+    fillThumbs($('#ffResL'));
+    $('#ffResGo').hidden=!host;
+    if(meR&&meR.place===1)SND.record();else SND.zone();
+    $('#ffRes').hidden=false;
+  }
+  $('#ffResGo').onclick=async()=>{SND.ui();const res=await B.api('roomStart',{room:room&&room.id}).catch(()=>null);if(res&&res.ok)mpApply(res.room);else B.toast&&B.toast((res&&res.error)||'Нет связи');};
+  $('#ffResRoom').onclick=()=>{SND.ui();$('#ffRes').hidden=true;run=null;open=false;root.hidden=true;cancelAnimationFrame(rafId);B.setActive&&B.setActive(false);B.onClose&&B.onClose();roomOpen();};
+
+  // обмен с сервером: в гонке — часто и со своими координатами, иначе — раз в секунду
+  async function mpTick(force){
+    if(!room||(room.busy&&!force))return;
+    room.busy=true;
+    const r=run,racing=open&&r&&r.mp&&room.view&&r.mp.round===room.view.round;
+    const body={room:room.id,round:racing?r.mp.round:-1};
+    if(racing)Object.assign(body,{x:Math.round(r.x),y:+(r.y/waterY).toFixed(4),rot:+r.rot.toFixed(2),a:r.alive?1:0,s:r.score});
+    const t0=Date.now();
+    let res=null;try{res=await B.api('roomTick',body);}catch(e){}
+    room&&(room.busy=false);
+    if(!room)return;
+    if(res&&res.ok){const t1=Date.now(),off=res.room.now-(t0+t1)/2;room.off=room.off==null?off:lerp(room.off,off,.2);mpApply(res.room);}
+    else if(res&&res.error&&(res.gone||/закрыта/.test(res.error))){B.toast&&B.toast(res.error,3000);roomDrop();}
+  }
+  function mpLoop(){
+    if(!room)return;
+    const racing=open&&run&&run.mp;
+    clearTimeout(room.timer);room.timer=setTimeout(()=>{mpTick();mpLoop();},racing?140:1000);
+  }
+  function mpApply(v){
+    if(!room)return;
+    room.view=v;room.me=v.me;
+    for(const p of v.players){
+      if(p.id===v.me||!p.inRace||!p.t)continue;
+      let b=room.buf.get(p.id);if(!b)room.buf.set(p.id,b=[]);
+      if(!b.length||b[b.length-1].t<p.t){b.push({t:p.t,x:p.x,y:p.y,r:p.r,a:p.a,s:p.s});if(b.length>40)b.shift();}
+      if(skinPx.size<40)skinImg(p.skin);
+    }
+    const mine=v.players.find(p=>p.id===v.me);
+    // хост нажал «Старт» — гонка начинается у всех, где бы ни был игрок
+    if(v.state==='race'&&mine&&mine.inRace&&room.raceRound!==v.round&&v.startAt-v.now>-3000){
+      room.raceRound=v.round;roomClose();
+      if(!open){open=true;root.hidden=false;B.setActive&&B.setActive(true);loadImgs();resize();last=0;acc=0;cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);B.onRace&&B.onRace();}
+      startMP(v);
+    }
+    if(v.state==='results'&&open&&run&&run.mp&&run.mp.round===v.round&&!run.alive&&run.overShown)mpResults();
+    if(!rr.hidden)roomRender();
+    mpLoop();
+  }
+  function roomDrop(){if(!room)return;clearTimeout(room.timer);room=null;if(!rr.hidden)roomRender();}
+
+  /* ---------- меню комнаты ---------- */
+  const rst=document.createElement('style');
+  rst.textContent=`
+#ffr{position:fixed;inset:0;z-index:185;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(3,25,17,.7);font-family:Nunito,system-ui,sans-serif}
+#ffr[hidden]{display:none}
+#ffr .fr-card{position:relative;width:100%;max-width:370px;max-height:calc(100% - 20px);overflow:auto;background:#e8d9a8;color:#3a2a12;box-shadow:0 0 0 4px #3a2a12,inset 0 0 0 3px #f8efcc,8px 8px 0 4px rgba(0,0,0,.35);padding:20px 16px 18px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+#ffr h2{margin:0;font-family:'Press Start 2P',monospace;font-weight:400;font-size:14px;line-height:1.6;color:#c4541f;text-shadow:2px 2px 0 #f8efcc}
+#ffr p{margin:0;font-size:13px;line-height:1.35;color:#5a4524;font-weight:700}
+#ffr .fr-x{position:absolute;right:8px;top:8px;width:34px;height:34px;border:0;background:#d6c58e;color:#3a2a12;font-family:'Press Start 2P',monospace;font-size:12px;box-shadow:inset 0 0 0 2px #b8a46a;padding:0}
+#ffr .fr-set{width:100%;display:grid;grid-template-columns:auto 1fr;gap:10px 10px;align-items:center;text-align:left}
+#ffr .fr-set>span{font-family:'Press Start 2P',monospace;font-size:8px;color:#5a4524}
+#ffr .fr-seg{display:flex;gap:6px}
+#ffr .fr-seg button{flex:1;border:0;background:#f3e7bb;color:#3a2a12;font-family:'Press Start 2P',monospace;font-size:10px;padding:9px 4px;box-shadow:inset 0 0 0 2px #b8a46a}
+#ffr .fr-seg button.on{background:#4f9a5a;color:#fff;box-shadow:inset 0 0 0 2px #2f6a3a,inset 0 -3px 0 2px #2f6a3a;text-shadow:1px 1px 0 #1f4a2a}
+#ffr .fr-seg button:disabled{opacity:.6}
+#ffr .fr-btn{width:100%;border:0;font-family:'Press Start 2P',monospace;font-size:11px;line-height:1.4;color:#fff;background:#f26b2a;box-shadow:0 0 0 3px #3a2a12,inset 0 -4px 0 #b8461a,inset 0 3px 0 #ff9a5c;text-shadow:2px 2px 0 #7a2a0a;padding:14px 10px 16px;margin:3px 0}
+#ffr .fr-btn.g{background:#4f9a5a;box-shadow:0 0 0 3px #3a2a12,inset 0 -4px 0 #2f6a3a,inset 0 3px 0 #7fcf8a;text-shadow:2px 2px 0 #1f4a2a}
+#ffr .fr-btn.q{background:#d6c58e;color:#5a4524;text-shadow:none;box-shadow:0 0 0 3px #3a2a12,inset 0 -4px 0 #b8a46a,inset 0 3px 0 #f3e7bb;font-size:9px;padding:11px 8px 13px}
+#ffr .fr-btn:active{transform:translateY(2px)}
+#ffr .fr-btn:disabled{filter:grayscale(.7);opacity:.7}
+#ffr .fr-code{font-family:'Press Start 2P',monospace;font-size:26px;letter-spacing:4px;color:#fff;background:#173a26;padding:12px 14px 12px 18px;box-shadow:0 0 0 3px #0b1d12,inset 0 -3px 0 #0e2a1a,inset 0 3px 0 #2f6a43;border:0}
+#ffr .fr-code small{display:block;font-size:7px;letter-spacing:1px;color:#9dffb0;margin-top:8px}
+#ffr .fr-join{display:flex;gap:8px;width:100%}
+#ffr .fr-join input{flex:1;min-width:0;border:0;background:#f3e7bb;box-shadow:inset 0 0 0 2px #b8a46a;font-family:'Press Start 2P',monospace;font-size:13px;letter-spacing:3px;padding:10px;text-transform:uppercase;color:#3a2a12;text-align:center}
+#ffr .fr-join .fr-btn{width:auto;margin:3px;padding:10px 12px 12px}
+#ffr .fr-or{font-family:'Press Start 2P',monospace;font-size:8px;color:#9a8656}
+#ffr .fr-wait{font-family:'Press Start 2P',monospace;font-size:9px;line-height:1.7;color:#4f9a5a;animation:frBlink 1.2s steps(1) infinite}
+@keyframes frBlink{50%{opacity:.4}}
+#ffr .fr-rules{display:grid;grid-template-columns:28px 1fr;gap:8px;text-align:left;font-size:12.5px;font-weight:700;color:#5a4524;line-height:1.3;align-items:center}
+#ffr .fr-rules b{font-family:'Press Start 2P',monospace;font-weight:400;font-size:12px;color:#fff;background:#4f9a5a;width:26px;height:26px;line-height:26px;text-align:center;box-shadow:0 0 0 2px #2f6a3a}
+`;
+  document.head.appendChild(rst);
+  const rr=document.createElement('div');rr.id='ffr';rr.hidden=true;
+  rr.innerHTML='<div class="fr-card"><button class="fr-x" aria-label="Закрыть">X</button><div class="fr-body" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:14px"></div></div>';
+  document.body.appendChild(rr);
+  const $r=s=>rr.querySelector(s);
+  $r('.fr-x').onclick=()=>{SND.ui();roomClose();};
+  rr.addEventListener('pointerdown',e=>{if(e.target===rr){roomClose();}});
+  let roomCfg={max:6,boost:true},roomSig='';
+  function roomClose(){rr.hidden=true;roomSig='';}
+  function fillThumbs(el){el.querySelectorAll('img[data-sk]').forEach(im=>{const sk=im.dataset.sk;const c=skinPx.get(sk);if(c&&c.toDataURL)im.src=c.toDataURL();else{skinImg(sk);setTimeout(()=>{const c2=skinPx.get(sk);if(c2&&c2.toDataURL)im.src=c2.toDataURL();},900);}});}
+  const seg=(key,opts,val,dis)=>`<div class="fr-seg" data-k="${key}">${opts.map(([v,t])=>`<button data-v="${v}" class="${String(v)===String(val)?'on':''}"${dis?' disabled':''}>${t}</button>`).join('')}</div>`;
+  function roomRender(){
+    const body=$r('.fr-body'),v=room&&room.view;
+    const sig=JSON.stringify(v?{s:v.state,r:v.round,h:v.host,m:v.max,b:v.boost,p:v.players.map(p=>p.id+p.inRace)}:roomCfg)+!!room;
+    if(sig===roomSig)return;roomSig=sig;
+    if(!room){
+      body.innerHTML=`<h2>Полёт<br>с друзьями</h2>
+        <div class="fr-rules"><b>1</b><span>Создай комнату и отправь ссылку друзьям</span><b>2</b><span>Все взлетают одновременно — соперники летят рядом призраками и не мешают</span><b>3</b><span>Каждый взмах и пойманная мошка — короткий рывок вперёд</span><b>4</b><span>Кто пролетит больше камышей — победил</span></div>
+        <div class="fr-set"><span>ИГРОКОВ</span>${seg('max',[[2,'2'],[4,'4'],[6,'6'],[8,'8']],roomCfg.max)}<span>РЫВКИ</span>${seg('boost',[[1,'ВКЛ'],[0,'ВЫКЛ']],roomCfg.boost?1:0)}</div>
+        <button class="fr-btn" id="frNew">Создать комнату</button>
+        <div class="fr-or">— ИЛИ ВВЕДИ КОД —</div>
+        <div class="fr-join"><input id="frCode" maxlength="5" autocomplete="off" placeholder="КОД"><button class="fr-btn g" id="frJoin">ОК</button></div>`;
+      body.querySelectorAll('.fr-seg button').forEach(b=>b.onclick=()=>{SND.ui();const k=b.parentNode.dataset.k;roomCfg[k]=k==='boost'?b.dataset.v==='1':+b.dataset.v;roomRender();});
+      $r('#frNew').onclick=async e=>{SND.ui();e.target.disabled=true;const res=await B.api('roomCreate',roomCfg).catch(()=>null);e.target.disabled=false;
+        if(res&&res.ok){room={id:res.room.id,me:res.room.me,view:res.room,buf:new Map(),off:null};mpApply(res.room);B.haptic.medium&&B.haptic.medium();}
+        else B.toast&&B.toast((res&&res.error)||'Нет связи с сервером');};
+      $r('#frJoin').onclick=()=>{const c=$r('#frCode').value.trim().toUpperCase();if(c.length<5){B.toast&&B.toast('Код — 5 символов');return;}SND.ui();roomJoin(c);};
+      return;
+    }
+    const host=v.host===room.me,P=v.players,racing=v.state==='race';
+    const rows=P.map(p=>`<div class="fr-row${p.id===room.me?' me':''}"><div class="rk">${P.indexOf(p)+1}</div><img data-sk="${esc(p.skin)}" alt=""><div class="nm">${esc(p.name)}${p.id===v.host?'<span class="fr-tag">ХОСТ</span>':''}${p.id===room.me?'<small>это ты</small>':''}</div><div class="sc"></div></div>`).join('')
+      +[...Array(Math.max(0,v.max-P.length))].map(()=>'<div class="fr-row empty">свободно</div>').join('');
+    const mine=P.find(p=>p.id===room.me);
+    body.innerHTML=`<h2>Комната</h2>
+      <button class="fr-code" id="frCopy">${v.id}<small>НАЖМИ, ЧТОБЫ СКОПИРОВАТЬ</small></button>
+      <div class="fr-list">${rows}</div>
+      ${host&&!racing?`<div class="fr-set"><span>ИГРОКОВ</span>${seg('max',[[2,'2'],[4,'4'],[6,'6'],[8,'8']],v.max)}<span>РЫВКИ</span>${seg('boost',[[1,'ВКЛ'],[0,'ВЫКЛ']],v.boost?1:0)}</div>`
+        :`<p>Рывки за взмах: ${v.boost?'включены':'выключены'}</p>`}
+      <button class="fr-btn g" id="frShare">Позвать друзей</button>
+      ${racing?(mine&&mine.inRace?'<button class="fr-btn" id="frBack">Вернуться в гонку</button>':'<div class="fr-wait">ИДЁТ ГОНКА —<br>ТЫ В СЛЕДУЮЩЕМ РАУНДЕ</div>')
+        :host?`<button class="fr-btn" id="frGo"${P.length<2&&!B.dev?' disabled':''}>Старт · ${P.length} ${P.length===1?'игрок':P.length<5?'игрока':'игроков'}</button>${P.length<2?'<p>Нужен хотя бы один друг — отправь ему ссылку</p>':''}`
+        :'<div class="fr-wait">ЖДЁМ, КОГДА ХОСТ<br>НАЖМЁТ СТАРТ</div>'}
+      <button class="fr-btn q" id="frLeave">Выйти из комнаты</button>`;
+    fillThumbs(body);
+    body.querySelectorAll('.fr-seg button').forEach(b=>b.onclick=async()=>{SND.ui();const k=b.parentNode.dataset.k,val=k==='boost'?b.dataset.v==='1':+b.dataset.v;
+      const res=await B.api('roomSet',{room:room.id,[k]:val}).catch(()=>null);if(res&&res.ok)mpApply(res.room);else B.toast&&B.toast((res&&res.error)||'Нет связи');});
+    $r('#frCopy').onclick=()=>{SND.ui();const l=B.roomLink(v.id);try{navigator.clipboard.writeText(l);B.toast&&B.toast('Ссылка скопирована');}catch(e){B.toast&&B.toast(l,5000);}};
+    $r('#frShare').onclick=()=>{SND.ui();B.share(B.roomLink(v.id),`Полетели наперегонки во Flappy Frog! Комната ${v.id} — заходи, стартуем вместе`);};
+    $r('#frLeave').onclick=async()=>{SND.ui();const id=room.id;roomDrop();B.api('roomLeave',{room:id}).catch(()=>{});};
+    const go=$r('#frGo');if(go)go.onclick=async()=>{SND.ui();go.disabled=true;const res=await B.api('roomStart',{room:room.id}).catch(()=>null);go.disabled=false;if(res&&res.ok)mpApply(res.room);else B.toast&&B.toast((res&&res.error)||'Нет связи');};
+    const bk=$r('#frBack');if(bk)bk.onclick=()=>{room.raceRound=null;mpApply(room.view);};
+  }
+  async function roomJoin(code){
+    const res=await B.api('roomJoin',{room:code}).catch(()=>null);
+    if(res&&res.ok){room={id:res.room.id,me:res.room.me,view:res.room,buf:new Map(),off:null};rr.hidden=false;roomSig='';mpApply(res.room);B.haptic.medium&&B.haptic.medium();}
+    else{B.toast&&B.toast((res&&res.error)||'Нет связи с сервером',3000);rr.hidden=false;roomRender();}
+  }
+  function roomOpen(code){
+    if(!hasApi()){B.toast&&B.toast('Игра с друзьями работает в Telegram');return;}
+    rr.hidden=false;roomSig='';
+    if(code&&(!room||room.id!==code.toUpperCase()))roomJoin(code);else{roomRender();if(room)mpTick(true);}
+  }
+
   /* ---------- цикл ---------- */
   function frame(ts){
     if(!open)return;
@@ -656,6 +991,7 @@ window.FlappyFrogInit=function(B){
     if(!last)last=ts;let dt=Math.min(.05,(ts-last)/1000);last=ts;
     if(!run)return;
     if(!paused){acc+=dt;while(acc>=STEP){update(STEP);acc-=STEP;}}
+    if(run.mp)mpHud();
     draw();
   }
 
@@ -714,6 +1050,6 @@ window.FlappyFrogInit=function(B){
     window.__ffSkin=k=>{const n=B.net();(n.jump=n.jump||{}).skin=k;frogSlug='';loadFrog();};window.__ffFrogUrl=()=>frogImg?frogImg.toDataURL():'';
     for(const k in SND){const f=SND[k];SND[k]=(...a)=>{window.__ffEv.push({k,a,t:Date.now()});return f(...a);};}
   }
-  return {open:openGame,close,isOpen:()=>open,pixelFrog,hubArt};
+  return {open:openGame,close,isOpen:()=>open,pixelFrog,hubArt,room:roomOpen};
 };
 })();
