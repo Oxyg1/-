@@ -508,7 +508,7 @@ window.FlappyFrogInit=function(B){
   $('#ffQuit').onclick=()=>{SND.ui();if(run&&run.alive&&run.started){run.alive=false;overRes=submitSeg(run);}close();};
   function sndLabel(){$('#ffSnd').textContent=B.soundOn()?'Звук: вкл':'Звук: выкл';}
   $('#ffSnd').onclick=()=>{B.setSound(!B.soundOn());sndLabel();};
-  function ghostLabel(){$('#ffGhostB').textContent=pref.ghost!==false?'Призрак: вкл':'Призрак: выкл';}
+  function ghostLabel(){$('#ffGhostB').textContent=pref.ghost!==false?'Метка рекорда: вкл':'Метка рекорда: выкл';}
   $('#ffGhostB').onclick=()=>{pref.ghost=pref.ghost===false;savePref();ghostLabel();if(run&&!run.mp)run.ghost=pref.ghost!==false?ghostRec:null;};
   function pause(){if(!run||!run.alive||!run.started||run.mp)return;ghostLabel();paused=true;sndLabel();$('#ffPauseOv').hidden=false;}
   function resume(){paused=false;$('#ffPauseOv').hidden=true;last=0;}
@@ -755,12 +755,14 @@ window.FlappyFrogInit=function(B){
   function drawGhosts(g,ox,oy,k,r){
     const cam=X0();
     if(!r.mp){
-      const gh=soloGhost(r);if(!gh)return;
-      const fx=(gh.x-cam)/PX,fy=gh.y/PX;if(fx<-30||fx>PW+30)return;
-      const a=gh.dead?Math.max(0,.5-(tGlobal%100)*0):.45;
-      drawSprite(g,ox,oy,k,frogImg,fx,fy,gh.rot,a);
-      if(gh.dead)haloAt(g,ox,oy,k,fx,fy,.8);
-      tagAt(g,ox+fx*k,oy+(fy-(gh.dead?36:26))*k,k,`РЕКОРД ${ghostRec.s}`,'rgba(23,58,38,.85)','#ffd23f');
+      // соло: вместо призрака — тонкая отметка там, где оборвался рекорд
+      const gr=r.ghost;if(!gr)return;
+      const L=gr.p[gr.p.length-1],fx=(L[0]-cam)/PX;if(fx<-20||fx>PW+20)return;
+      const passed=r.x>L[0],x=Math.round(ox+fx*k),wy=oy+q(waterY)*k;
+      g.save();g.globalAlpha=passed?.35:.75;g.fillStyle='#ffd23f';
+      for(let y=oy;y<wy-16*k;y+=6*k)g.fillRect(x-k/2,Math.round(y),Math.max(1,Math.round(k)),Math.round(3*k));
+      g.restore();
+      tagAt(g,clamp(x,ox+34*k,ox+(PW-34)*k),wy-9*k,k,passed?'РЕКОРД ПОБИТ':`РЕКОРД ${gr.s}`,passed?'#f7b500':'rgba(23,58,38,.9)',passed?'#3d2600':'#ffd23f');
       return;
     }
     for(const o of mpGhosts()){
