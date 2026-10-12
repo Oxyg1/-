@@ -204,7 +204,8 @@ window.FlappyFrogInit=function(B){
     const slug=((B.net().jump||{}).skin)||'original';
     if(slug===frogSlug&&frogImg)return;
     frogSlug=slug;frogImg=null;
-    B.bake('frogs/'+slug,256).then(c=>{if(frogSlug===slug)frogImg=c;}).catch(()=>{if(slug!=='original'){frogSlug='';B.bake('frogs/original',256).then(c=>{frogImg=c;}).catch(()=>{});}});
+    const px=c=>{try{return pixelate(c,36)||c;}catch(e){return c;}};
+    B.bake('frogs/'+slug,256).then(c=>{if(frogSlug===slug)frogImg=px(c);}).catch(()=>{if(slug!=='original'){frogSlug='';B.bake('frogs/original',256).then(c=>{frogImg=px(c);}).catch(()=>{});}});
   }
 
   function mkRun(base){
@@ -433,117 +434,175 @@ window.FlappyFrogInit=function(B){
   window.addEventListener('keydown',e=>{if(!open)return;if(e.code==='Space'||e.key==='ArrowUp'){e.preventDefault();flap();}else if(e.key==='Escape')paused?resume():pause();});
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&open)pause();});
 
-  /* ---------- отрисовка ---------- */
+  /* ---------- отрисовка: пиксель-арт ----------
+     Весь мир рисуется в маленький холст (1 пиксель = PX мировых единиц)
+     только прямоугольниками, потом растягивается без сглаживания —
+     как в оригинальной Flappy Bird. Наряд лягушки пикселизируется в 36×36 */
+  const PX=1.5;
+  const lo=document.createElement('canvas'),lx=lo.getContext('2d');
+  let PW=240,PH=427;
+  const rgb=c=>{if(Array.isArray(c))return c;if(c[0]==='#')return hex(c);return c.match(/\d+/g).slice(0,3).map(Number);};
+  const mixA=(a,b,t)=>{a=rgb(a);b=rgb(b);return a.map((v,i)=>Math.round(v+(b[i]-v)*t));};
+  const css=a=>`rgb(${a[0]},${a[1]},${a[2]})`;
+  const q=v=>Math.round(v/PX);                       // мир → пиксель
+  function R(c,x,y,w,h){lx.fillStyle=c;lx.fillRect(x|0,y|0,w|0,h|0);}   // в пикселях
+  function sprite(rows,pal,x,y){for(let j=0;j<rows.length;j++)for(let i=0;i<rows[j].length;i++){const ch=rows[j][i];if(ch!=='.')R(pal[ch],x+i,y+j,1,1);}}
+
+  /* пикселизация наряда: палитра k-средних + решения по клетке, чтобы
+     контуры, белки глаз и яркие акценты не растворялись в среднем цвете */
+  function pixelate(src,N){
+    const S=src.width,d=src.getContext('2d').getImageData(0,0,S,S).data;
+    const lum=(r,g,b)=>.299*r+.587*g+.114*b;
+    const hsv=(r,g,b)=>{const mx=Math.max(r,g,b),mn=Math.min(r,g,b),df=mx-mn;let h=0;
+      if(df){if(mx===r)h=((g-b)/df)%6;else if(mx===g)h=(b-r)/df+2;else h=(r-g)/df+4;h/=6;if(h<0)h+=1;}return [h,mx?df/mx:0];};
+    const pts=[];for(let i=0;i<S*S;i+=3){if(d[i*4+3]>128)pts.push([d[i*4],d[i*4+1],d[i*4+2]]);}
+    const K=Math.min(14,pts.length);if(!K)return null;
+    let C=[...Array(K)].map((_,i)=>pts[Math.floor(i*pts.length/K)].slice());
+    const near=p=>{let bi=0,bd=1e9;for(let k=0;k<C.length;k++){const c=C[k],dd=(p[0]-c[0])**2+(p[1]-c[1])**2+(p[2]-c[2])**2;if(dd<bd){bd=dd;bi=k;}}return bi;};
+    for(let it=0;it<8;it++){const s=C.map(()=>[0,0,0,0]);for(const p of pts){const k=near(p),t=s[k];t[0]+=p[0];t[1]+=p[1];t[2]+=p[2];t[3]++;}
+      C=C.map((c,k)=>s[k][3]?[s[k][0]/s[k][3],s[k][1]/s[k][3],s[k][2]/s[k][3]]:c);}
+    const CH=C.map(c=>hsv(...c));
+    const out=document.createElement('canvas');out.width=out.height=N;
+    const g=out.getContext('2d'),im=g.createImageData(N,N),o=im.data,fill=new Uint8Array(N*N),cs=S/N;
+    const put=(i,c)=>{o[i*4]=c[0];o[i*4+1]=c[1];o[i*4+2]=c[2];o[i*4+3]=255;fill[i]=1;};
+    for(let cy=0;cy<N;cy++)for(let cxl=0;cxl<N;cxl++){
+      let n=0,a=0,wh=0,dk=0;const hist=new Array(C.length).fill(0);
+      for(let y=Math.floor(cy*cs);y<Math.floor((cy+1)*cs);y++)for(let x=Math.floor(cxl*cs);x<Math.floor((cxl+1)*cs);x++){
+        n++;const i=(y*S+x)*4;if(d[i+3]<=128)continue;a++;
+        const r=d[i],gg=d[i+1],b=d[i+2],L=lum(r,gg,b);
+        if(L>225&&hsv(r,gg,b)[1]<.18)wh++;else if(L<70)dk++;
+        hist[near([r,gg,b])]++;
+      }
+      if(!n||a/n<.45)continue;
+      const ci=cy*N+cxl;
+      if(wh/a>.25&&wh>=dk*.6){put(ci,[244,247,242]);continue;}
+      if(dk/a>.3){put(ci,[22,34,26]);continue;}
+      let m=0;for(let k=1;k<hist.length;k++)if(hist[k]>hist[m])m=k;
+      let pick=m;
+      for(let k=0;k<hist.length;k++){if(k===m||hist[k]/a<=.22)continue;const [h,s]=CH[k];let hd=Math.abs(h-CH[m][0]);hd=Math.min(hd,1-hd);
+        if(s>.35&&hd>.12&&(pick===m||hist[k]>hist[pick]))pick=k;}
+      put(ci,C[pick].map(Math.round));
+    }
+    // контур в 1 пиксель вокруг силуэта
+    const ol=[];for(let y=0;y<N;y++)for(let x=0;x<N;x++){const i=y*N+x;if(fill[i])continue;
+      if((x>0&&fill[i-1])||(x<N-1&&fill[i+1])||(y>0&&fill[i-N])||(y<N-1&&fill[i+N]))ol.push(i);}
+    for(const i of ol)put(i,[22,34,26]);
+    g.putImageData(im,0,0);return out;
+  }
+
   const X0=()=>run.x-W*.3;   // левый край камеры в мире
-  function zcol(k){const r=run,a=ZONES[r.zoneFrom??r.zone][k],b=ZONES[r.zone][k];return r.zoneT<1?mixc(a,b,r.zoneT):b;}
+  function zcol(k){const r=run,a=ZONES[r.zoneFrom??r.zone][k],b=ZONES[r.zone][k];return r.zoneT<1?mixA(a,b,r.zoneT):rgb(b);}
   function draw(){
     const r=run;
-    cx.setTransform(dpr,0,0,dpr,0,0);
-    cx.fillStyle='#0c3a2a';cx.fillRect(0,0,cssW,cssH);
-    cx.save();cx.translate(offX+(r.shake?rnd(-r.shake,r.shake):0),r.shake?rnd(-r.shake,r.shake)*.6:0);cx.scale(sc,sc);
-    cx.beginPath();cx.rect(0,0,W,VH);cx.clip();
-    const cam=X0();
-    // небо
-    const sky=cx.createLinearGradient(0,0,0,waterY);sky.addColorStop(0,zcol('top'));sky.addColorStop(1,zcol('bot'));
-    cx.fillStyle=sky;cx.fillRect(0,0,W,VH);
-    // светлячки/звёзды
-    const night=r.zone===2;
-    for(const m of r.motes){m.t+=.016;const x=((m.x-cam*m.p*.2)%W+W)%W,y=m.y;cx.globalAlpha=night?.5+.4*Math.sin(m.t*2):.18+.12*Math.sin(m.t*2);cx.fillStyle=night?'#fff6c9':'#eaffc9';cx.beginPath();cx.arc(x,y,night?1.4:2,0,7);cx.fill();}
-    cx.globalAlpha=1;
+    PW=Math.round(W/PX);PH=Math.ceil(VH/PX);
+    if(lo.width!==PW||lo.height!==PH){lo.width=PW;lo.height=PH;}
+    lx.setTransform(1,0,0,1,0,0);lx.imageSmoothingEnabled=false;
+    const cam=X0(),wy=q(waterY),night=r.zone===2;
+    // небо — ступенчатый градиент полосами
+    const top=zcol('top'),bot=zcol('bot');
+    for(let i=0;i<10;i++){const y0=Math.floor(wy*i/10),y1=Math.floor(wy*(i+1)/10);R(css(mixA(top,bot,i/9)),0,y0,PW,y1-y0);}
+    // звёзды/пылинки
+    for(const m of r.motes){m.t+=.016;const x=((m.x-cam*m.p*.2)%W+W)%W;if(Math.sin(m.t*2)>(night?-.3:.6))R(night?'#fff6c9':'rgba(234,255,201,.6)',q(x),q(m.y),1,1);}
     // облака
+    const cw=night?'rgba(255,255,255,.18)':'#f4fbff',cs=night?'rgba(255,255,255,.1)':'#d4ecf4';
     for(const c of r.clouds){
       let x=c.x-cam*c.p;x=((x%(W*1.6))+W*1.6)%(W*1.6)-W*.3;
-      if(has(c.k)){const im=IMG[c.k],h=c.w*im.naturalHeight/im.naturalWidth;cx.globalAlpha=night?.35:.9;cx.drawImage(im,x,c.y,c.w,h);cx.globalAlpha=1;}
-      else{cx.fillStyle=night?'rgba(255,255,255,.12)':'rgba(255,255,255,.55)';cx.beginPath();cx.ellipse(x+c.w/2,c.y+10,c.w/2,12,0,0,7);cx.fill();}
+      const px=q(x),py=q(c.y),w=q(c.w);
+      R(cs,px,py+6,w,4);R(cw,px+2,py+3,w-4,6);R(cw,px+Math.floor(w*.18),py,Math.floor(w*.34),4);R(cw,px+Math.floor(w*.5),py-2,Math.floor(w*.3),6);
     }
-    // дальний лес и ближние заросли — параллакс силуэтами
-    hills(cam*.15,waterY-120,46,zcol('far'),.011,3);
-    hills(cam*.35,waterY-60,30,zcol('mid'),.023,7);
+    // дальний лес и ближние заросли — ступеньками
+    hills(cam*.15,waterY-120,46,css(zcol('far')),.011,3);
+    hills(cam*.35,waterY-60,30,css(zcol('mid')),.023,7);
     // камыши
-    const zi=r.zone;
+    const pal=reedPal();
     for(const g of r.gates){
-      const x=g.x-cam,y=gy(g,r.t),top=y-g.h/2,bot=y+g.h/2;
+      const x=g.x-cam,y=gy(g,r.t),t=y-g.h/2,b=y+g.h/2;
       if(x<-RW||x>W+RW)continue;
-      drawReed(x,top,true,zi);
-      if(g.heron)drawHeron(g,x,bot);   // цапля выныривает из нижних зарослей — рисуем её под ними
-      drawReed(x,bot,false,zi);
+      drawReed(x,t,true,pal);
+      if(g.heron)drawHeron(g,x,b);
+      drawReed(x,b,false,pal);
     }
-    // камыши нарисованы при дневном свете — подкрашиваем их под время суток;
-    // лягушку и мошек рисуем поверх, чтобы они оставались яркими
-    const TINT=['rgba(0,0,0,0)','rgba(120,40,30,.16)','rgba(8,12,48,.42)','rgba(40,70,140,.08)'];
-    const ta=TINT[r.zoneFrom??r.zone],tb=TINT[r.zone];
-    cx.fillStyle=tb;cx.globalAlpha=r.zoneT;cx.fillRect(0,0,W,waterY);
-    if(r.zoneT<1){cx.fillStyle=ta;cx.globalAlpha=1-r.zoneT;cx.fillRect(0,0,W,waterY);}
-    cx.globalAlpha=1;
     // мошки
-    for(const f of r.flyItems){if(f.done)continue;const x=f.x-cam,y=f.y+Math.sin(f.t*3)*4;
-      if(f.gold){cx.fillStyle='rgba(255,210,63,.28)';cx.beginPath();cx.arc(x,y,13+Math.sin(f.t*6)*2,0,7);cx.fill();}
-      drawFly(x,y,f.gold,f.t);}
-    // вода с кувшинками
-    const wg=cx.createLinearGradient(0,waterY,0,VH);wg.addColorStop(0,zcol('water'));wg.addColorStop(1,'#0a2a2a');
-    cx.fillStyle=wg;cx.fillRect(0,waterY,W,VH-waterY);
-    cx.strokeStyle='rgba(210,245,255,.35)';cx.lineWidth=1.4;
-    for(let i=0;i<3;i++){const yy=waterY+6+i*13;cx.beginPath();for(let x=0;x<=W;x+=12)cx.lineTo(x,yy+Math.sin((x+cam)*.05+tGlobal*2+i)*2);cx.stroke();}
-    for(const p of r.pads){let x=((p.x-cam)%(W+140)+W+140)%(W+140)-70;
-      if(has('pad')){const im=IMG.pad,h=p.w*im.naturalHeight/im.naturalWidth;cx.drawImage(im,x-p.w/2,waterY-h*.35,p.w,h);}
-      else{cx.fillStyle='#4fb36a';cx.beginPath();cx.ellipse(x,waterY+3,p.w/2,6,0,0,7);cx.fill();}}
-    // кувшинка, от которой отскочили
-    if(r.bounceFx){const k=r.bounceFx.t,x=r.bounceFx.x-cam;cx.globalAlpha=1-k;cx.strokeStyle='rgba(220,250,255,.8)';cx.lineWidth=2;cx.beginPath();cx.ellipse(x,waterY+2,20+k*40,5+k*8,0,0,7);cx.stroke();cx.globalAlpha=1;}
-    // частицы
-    for(const p of r.parts){cx.globalAlpha=1-p.t/p.life;cx.fillStyle=p.c;cx.beginPath();cx.arc(p.x-cam,p.y,p.s,0,7);cx.fill();}
-    cx.globalAlpha=1;
-    // язык
-    if(r.tongue){const f=r.tongue.f,k=Math.min(1,r.tongue.t/.13),mx=r.x-cam+14,my=r.y+4;cx.strokeStyle='#ff7ea0';cx.lineWidth=4;cx.lineCap='round';cx.beginPath();cx.moveTo(mx,my);cx.lineTo(lerp(mx,f.x-cam,k),lerp(my,f.y,k));cx.stroke();}
-    // лягушка
+    for(const f of r.flyItems){if(f.done)continue;drawFly(f.x-cam,f.y+Math.sin(f.t*3)*4,f.gold,f.t);}
+    // вода: полосы, рябь, кувшинки
+    const wc=zcol('water');
+    R(css(wc),0,wy,PW,PH-wy);R(css(mixA(wc,[10,42,42],.5)),0,wy+8,PW,PH-wy-8);R(css(mixA(wc,[10,42,42],.85)),0,wy+22,PW,PH-wy-22);
+    R(css(mixA(wc,[255,255,255],.35)),0,wy,PW,1);
+    for(let i=0;i<3;i++)for(let x=-((cam/PX*(1+i*.3)+tGlobal*6)%16);x<PW;x+=16)R('rgba(210,245,255,.45)',Math.round(x+i*5),wy+4+i*7,5,1);
+    for(const p of r.pads){const x=q(((p.x-cam)%(W+140)+W+140)%(W+140)-70),w=q(p.w);
+      R('#1f5e34',x-w/2,wy-1,w,4);R('#4fb36a',x-w/2+1,wy-2,w-2,3);R('#7fd98a',x-w/2+3,wy-2,Math.floor(w/3),1);R(css(wc),x+2,wy-2,3,2);}
+    if(r.bounceFx){const k=r.bounceFx.t,x=q(r.bounceFx.x-cam),s=Math.round(8+k*26);lx.globalAlpha=1-k;R('#dcfaff',x-s,wy,s*2,1);R('#dcfaff',x-s-3,wy+3,3,1);R('#dcfaff',x+s,wy+3,3,1);lx.globalAlpha=1;}
+    // время суток поверх мира (лягушка и мошки ярче)
+    const TINT=['rgba(0,0,0,0)','rgba(120,40,30,.14)','rgba(8,12,48,.32)','rgba(40,70,140,.06)'];
+    lx.fillStyle=TINT[r.zone];lx.globalAlpha=r.zoneT;lx.fillRect(0,0,PW,wy);
+    if(r.zoneT<1){lx.fillStyle=TINT[r.zoneFrom??r.zone];lx.globalAlpha=1-r.zoneT;lx.fillRect(0,0,PW,wy);}
+    lx.globalAlpha=1;
+    // частицы — квадратиками
+    for(const p of r.parts){lx.globalAlpha=1-p.t/p.life;const s=Math.max(1,Math.round(p.s/PX));R(p.c,q(p.x-cam)-(s>>1),q(p.y)-(s>>1),s,s);}
+    lx.globalAlpha=1;
+    // язык — ступенчатая линия
+    if(r.tongue){const f=r.tongue.f,k=Math.min(1,r.tongue.t/.13),x0=q(r.x-cam+14),y0=q(r.y+4),x1=q(lerp(r.x-cam+14,f.x-cam,k)),y1=q(lerp(r.y+4,f.y,k));
+      const n=Math.max(Math.abs(x1-x0),Math.abs(y1-y0),1);for(let i=0;i<=n;i++)R('#ff7ea0',Math.round(lerp(x0,x1,i/n))-1,Math.round(lerp(y0,y1,i/n))-1,2,2);}
     drawFrog(r.x-cam,r.y,r);
-    cx.restore();
+    // на экран — без сглаживания
+    cx.setTransform(1,0,0,1,0,0);cx.imageSmoothingEnabled=false;
+    cx.fillStyle='#0c3a2a';cx.fillRect(0,0,cv.width,cv.height);
+    const sx=(r.shake?rnd(-r.shake,r.shake):0)*sc*dpr,sy=(r.shake?rnd(-r.shake,r.shake)*.6:0)*sc*dpr;
+    cx.drawImage(lo,0,0,PW,PH,Math.round(offX*dpr+sx),Math.round(sy),Math.round(fieldW*dpr),Math.round(PH*PX*sc*dpr));
   }
   function hills(off,base,amp,col,fr,seed){
-    cx.fillStyle=col;cx.beginPath();cx.moveTo(0,VH);
-    for(let x=0;x<=W;x+=8){const t=(x+off)*fr;cx.lineTo(x,base-amp*(.55+.25*Math.sin(t+seed)+.2*Math.sin(t*2.7+seed*2)));}
-    cx.lineTo(W,VH);cx.closePath();cx.fill();
+    for(let x=0;x<PW;x+=2){const t=(x*PX+off)*fr;const y=q(base-amp*(.55+.25*Math.sin(t+seed)+.2*Math.sin(t*2.7+seed*2)));R(col,x,y,2,PH-y);R('rgba(255,255,255,.12)',x,y,2,1);}
   }
-  function drawReed(x,edge,top,zi){
-    const k=top?'reed_top':'reed_bottom';
-    if(has(k)){
-      // картинка тянется по высоте до края экрана; початки сверху и мох снизу
-      // чуть заходят в проход — граница столкновения остаётся по краю стеблей
-      const im=IMG[k],w=RW+30,h0=w*im.naturalHeight/im.naturalWidth;
-      if(top){const h=Math.max(h0,(edge+12)/.93);cx.drawImage(im,x-w/2,edge-h*.93,w,h);}
-      else{const h=Math.max(h0,(VH-edge+12)/.9);cx.drawImage(im,x-w/2,edge-h*.1,w,h);}
-      return;
+  // камыши: «труба» из пучка стеблей с тёмной обводкой; у нижних — рогоз над краем
+  function reedPal(){
+    const z=zcol('mid'),k=run.zone===2?.5:.25;
+    return {o:'#123a22',d:css(mixA([31,107,58],z,k)),m:css(mixA([63,154,78],z,k*.8)),l:css(mixA([127,207,106],z,k*.6)),h:css(mixA([190,240,150],z,k*.5)),
+      c:'#5a3418',cl:'#8f5a2e'};
+  }
+  function drawReed(x,edge,top,p){
+    const w=q(RW),x0=q(x)-(w>>1),e=q(edge);
+    const y0=top?0:e,y1=top?e:PH;
+    // тело: полосы стеблей
+    R(p.o,x0,y0,w,y1-y0);
+    for(let i=1;i<w-1;i++){const s=i%7;R(s===0?p.d:s<3?p.l:s===3?p.h:s<6?p.m:p.d,x0+i,y0,1,y1-y0);}
+    // кромка у прохода — шире тела, как в оригинале
+    const lip=6,lx0=x0-3,lw=w+6,ly=top?e-lip:e;
+    R(p.o,lx0,ly,lw,lip);
+    for(let i=1;i<lw-1;i++){const s=i%7;R(s===0?p.d:s<3?p.l:s===3?p.h:p.m,lx0+i,ly+1,1,lip-2);}
+    if(!top){
+      // рогоз: три початка торчат над краем
+      for(const fx of [.25,.55,.8]){const cxp=x0+Math.round(w*fx);R(p.o,cxp,e-11,1,4);R(p.o,cxp-2,e-8,5,9);R(p.c,cxp-1,e-7,3,7);R(p.cl,cxp-1,e-7,1,4);}
+    }else{
+      // сверху свисают листья
+      for(let i=2;i<lw-2;i+=5){const l=2+((i*7)%4);R(p.o,lx0+i,e,2,l+1);R(p.m,lx0+i,e,1,l);}
     }
-    const c=reedColumn(top,zi),w=RW+28,h=c.height/(sc*dpr);
-    if(top)cx.drawImage(c,x-w/2,edge-h,w,h);else cx.drawImage(c,x-w/2,edge-6,w,h);
   }
+  const HERON=[
+    '....k....','...kyk...','...kyk...','...kyk...','..kyyk...','..kyyk...','..kyyk...',
+    '.kwwwwk..','kwwwkwwk.','kwwwwwwk.','kwwwwwgk.','.kwwwggk.','..kwwgk..','..kwwgk..',
+    '..kwwgk..','...kwgk..','...kwgk..','...kwwgk.','...kwwgk.','...kwwgk.'];
+  const HPAL={k:'#1d2b33',y:'#f2b134',w:'#f4f8fa',g:'#b9c7cf'};
   function drawHeron(g,x,bot){
     const ph=(run.t+g.heron.t)%2.6;
     let reach=0;if(ph>1.75&&ph<2.2)reach=lerp(0,62,Math.sin((ph-1.75)/.45*Math.PI));
-    const warn=ph>1.25&&ph<1.75;
-    const hx=x-10,hy=bot-6-reach;
-    if(warn){cx.fillStyle='rgba(255,90,70,'+(.5+.5*Math.sin(tGlobal*20))+')';cx.font='900 22px Nunito,system-ui,sans-serif';cx.textAlign='center';cx.fillText('!',hx,bot-14);}
-    if(has('heron')){const im=IMG.heron,w=70,h=w*im.naturalHeight/im.naturalWidth;cx.drawImage(im,hx-w*.62,hy-h*.12,w,h);return;}   // кончик клюва — в точке удара
-    // шея и голова цапли, клюв вверх
-    cx.strokeStyle='#e8eef2';cx.lineWidth=7;cx.lineCap='round';cx.beginPath();cx.moveTo(hx+6,bot+30);cx.quadraticCurveTo(hx+14,hy+18,hx,hy+6);cx.stroke();
-    cx.fillStyle='#f4f8fa';cx.beginPath();cx.ellipse(hx,hy+4,8,7,0,0,7);cx.fill();
-    cx.fillStyle='#f2b134';cx.beginPath();cx.moveTo(hx-3,hy);cx.lineTo(hx+1,hy-22);cx.lineTo(hx+4,hy);cx.closePath();cx.fill();
-    cx.fillStyle='#1d2b33';cx.beginPath();cx.arc(hx+3,hy+2,1.6,0,7);cx.fill();
+    const hx=q(x-10),hy=q(bot-reach);
+    if(ph>1.25&&ph<1.75&&Math.sin(tGlobal*20)>0){const ex=hx,ey=q(bot)-22;R('#1d2b33',ex-2,ey-1,5,12);R('#ff5a46',ex-1,ey,3,7);R('#ff5a46',ex-1,ey+8,3,2);}
+    // кончик клюва — в точке удара; шея уходит под камыши
+    sprite(HERON,HPAL,hx-4,hy);
+    for(let y=hy+HERON.length;y<q(bot)+30;y++)sprite(['...kwwgk.'],HPAL,hx-4,y);
   }
   function drawFly(x,y,gold,t){
-    cx.save();cx.translate(x,y);
-    const fl=Math.sin(t*40)*.5+.5;
-    cx.fillStyle='rgba(235,245,255,.75)';cx.beginPath();cx.ellipse(-4,-4,5,3+fl*2,-.5,0,7);cx.ellipse(4,-4,5,3+fl*2,.5,0,7);cx.fill();
-    cx.fillStyle=gold?'#f7b500':'#2b2f3a';cx.beginPath();cx.ellipse(0,1,4,5,0,0,7);cx.fill();
-    cx.fillStyle='#e0405f';cx.beginPath();cx.arc(-1.6,-2,1.2,0,7);cx.arc(1.6,-2,1.2,0,7);cx.fill();
-    cx.restore();
+    const px=q(x),py=q(y),fl=Math.sin(t*40)>0;
+    if(gold&&Math.sin(t*6)>-.2){R('rgba(255,210,63,.35)',px-5,py-4,11,9);}
+    R('rgba(235,245,255,.85)',px-4,py-(fl?4:3),3,fl?3:2);R('rgba(235,245,255,.85)',px+2,py-(fl?4:3),3,fl?3:2);
+    R(gold?'#f7b500':'#2b2f3a',px-1,py-1,3,4);R('#e0405f',px-1,py-2,1,1);R('#e0405f',px+1,py-2,1,1);
   }
   function drawFrog(x,y,r){
-    cx.save();cx.translate(x,y);cx.rotate(r.rot);
-    const s=1+r.sq;cx.scale(s,1/s);
-    if(r.inv>0&&Math.floor(tGlobal*14)%2)cx.globalAlpha=.5;
-    if(frogImg){cx.drawImage(frogImg,-FROG/2,-FROG/2,FROG,FROG);}
-    else{cx.fillStyle='#5cc27a';cx.beginPath();cx.ellipse(0,0,FROG*.42,FROG*.34,0,0,7);cx.fill();cx.fillStyle='#fff';cx.beginPath();cx.arc(8,-10,7,0,7);cx.fill();cx.fillStyle='#000';cx.beginPath();cx.arc(10,-10,3,0,7);cx.fill();}
-    cx.restore();
+    if(r.inv>0&&Math.floor(tGlobal*14)%2)return;
+    lx.save();lx.translate(q(x),q(y));lx.rotate(Math.round(r.rot/(Math.PI/16))*(Math.PI/16));   // наклон шагами, без «мыла»
+    if(frogImg)lx.drawImage(frogImg,-18,-18,36,36);
+    else{R('#5cc27a',-12,-9,24,18);R('#fff',2,-12,8,8);R('#000',6,-9,3,3);}
+    lx.restore();
   }
 
   /* ---------- цикл ---------- */
