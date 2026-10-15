@@ -569,6 +569,17 @@ function flapTop(n = 20) {
 }
 const flapState = u => { const f = u ? flapRec(u) : null; return { record: db.flapRecord || null, best: f ? f.best || 0 : 0, runs: f ? f.runs || 0 : 0 }; };
 const isFlapTour = t => t && t.mode === 'flap';
+/* ---------- FROG SWING ----------
+   Как Flappy: свой рекорд, мошки и наряды общие с Frog Jump. Токен с префиксом «s» */
+function swingRec(u) { return u.swing || (u.swing = { best: 0, runs: 0, lastT0: 0, total: 0 }); }
+const swingToken = (uid, t0) => jumpToken('s' + uid, t0, 0);
+const swingParse = tok => { const r = jumpParse(tok); if (!r || r.uid[0] !== 's') return null; r.uid = r.uid.slice(1); return r; };
+function swingTop(n = 20) {
+  return Object.values(db.users).filter(u => isRealPlayer(u) && u.swing && u.swing.best > 0)
+    .sort((a, b) => b.swing.best - a.swing.best || (a.swing.bestAt || 0) - (b.swing.bestAt || 0)).slice(0, n)
+    .map((u, i) => ({ rank: i + 1, id: u.id, name: u.name, best: u.swing.best, skin: (u.jump && u.jump.skin) || 'original' }));
+}
+const swingState = u => { const f = u ? swingRec(u) : null; return { record: db.swingRecord || null, best: f ? f.best || 0 : 0, runs: f ? f.runs || 0 : 0 }; };
 // единицы результата в турнире: метры прыжков или очки полёта
 const ptsW = n => { const x = n % 10, y = n % 100; return x === 1 && y !== 11 ? 'очко' : x >= 2 && x <= 4 && (y < 12 || y > 14) ? 'очка' : 'очков'; };
 const tu = (t, n) => isFlapTour(t) ? `${Math.round(n)} ${ptsW(Math.round(n))}` : mm(n);
@@ -1169,7 +1180,7 @@ const api = {
     if (body.warAck && u.warPending && String(body.warAck) === String(u.warPending.week)) delete u.warPending;
     // maxLv/merges текущего вида нужны клиенту как подстраховка: если у него
     // пустой сейв (новое устройство, облако недоступно), он восстановит уровень
-    return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score, maxLv: rec.maxLv || 1, merges: rec.merges || 0, spScore: rec.score || 0 }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, war: warState(u), warResult: u.warPending || null, endless: endlessState(u), endlessTop: endlessTop(20), jump: jumpState(u), jumpTop: jumpTop(20), flap: flapState(u), flapTop: flapTop(20), holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
+    return { ok: true, me: { id: u.id, rank: rankOf(u.id), score: u.score, maxLv: rec.maxLv || 1, merges: rec.merges || 0, spScore: rec.score || 0 }, top: topRows(20), pond: { count: db.pond.count, goal: CFG.pondGoal, stars: db.pond.stars }, war: warState(u), warResult: u.warPending || null, endless: endlessState(u), endlessTop: endlessTop(20), jump: jumpState(u), jumpTop: jumpTop(20), flap: flapState(u), flapTop: flapTop(20), swing: swingState(u), swingTop: swingTop(20), holder: u.holder || null, inv: u.inv || {}, wild: u.wild || 0, appLink: CFG.appLink };
   },
   async leaderboard() { pondCheck(); warCheck(); return { ok: true, top: topRows(50), pond: { count: db.pond.count, goal: CFG.pondGoal }, war: warState(null), endlessTop: endlessTop(50), endless: endlessState(null), jumpTop: jumpTop(50), jump: jumpState(null), flapTop: flapTop(50), flap: flapState(null) }; },
   // старт забега (или его продолжения после оплаты) — выдаём подписанный номер
@@ -1388,6 +1399,42 @@ const api = {
     const { r, err } = roomGet(body, a); if (err) return { ok: true };
     r.players.delete(a.id); roomSweep(r);
     return { ok: true };
+  },
+  async swingStart(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    if (rateLimited('swing:' + a.id, 120, 3600e3)) return { ok: false, error: 'Слишком часто' };
+    const u = getUser(a), f = swingRec(u);
+    const t0 = Math.max(Date.now(), (f.lastT0 || 0) + 1);
+    { const ad = anDay(mskDay()); ad.swings = (ad.swings || 0) + 1; }
+    return { ok: true, run: swingToken(u.id, t0), swing: swingState(u) };
+  },
+  async swingEnd(body, req) {
+    const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };
+    const u = getUser(a), f = swingRec(u), j = jumpRec(u);
+    const run = swingParse(body.run);
+    if (!run || run.uid !== u.id) return { ok: false, error: 'run' };
+    if (run.t0 <= (f.lastT0 || 0)) return { ok: false, error: 'Этот забег уже засчитан' };
+    const now = Date.now();
+    const sec = Math.max(0, Math.min(+body.ms || 0, now - run.t0 + 3000)) / 1000;
+    // быстрее ~42 м/с лягушка физически не летит (потолок скорости в игре)
+    let d = Math.max(0, Math.round(+body.dist || 0));
+    const cap = Math.round(sec * 44 + 30);
+    if (d > cap) { u.flags = (u.flags || 0) + 1; d = cap; }
+    let flies = Math.max(0, Math.round(+body.flies || 0));
+    const fcap = Math.round(d / 4) + 10; if (flies > fcap) { u.flags = (u.flags || 0) + 1; flies = fcap; }
+    f.lastT0 = run.t0; f.runs = (f.runs || 0) + 1;
+    const hour = Math.floor(now / 3600e3);
+    if (j.hour !== hour) { j.hour = hour; j.hourFlies = 0; }
+    flies = Math.min(flies, Math.max(0, 900 - (j.hourFlies || 0)));
+    j.hourFlies = (j.hourFlies || 0) + flies; j.flies = (j.flies || 0) + flies; j.total = (j.total || 0) + flies; f.total = (f.total || 0) + flies;
+    const prevBest = f.best || 0, isBest = d > prevBest;
+    if (isBest) { f.best = d; f.bestAt = now; }
+    let isRecord = false;
+    const r0 = db.swingRecord;
+    if (isRealPlayer(u) && d > 0 && (!r0 || d > r0.best)) { isRecord = true; db.swingRecord = { id: u.id, name: u.name, best: d, at: now }; }
+    save();
+    const top = swingTop(50), rank = isBest || prevBest ? (top.findIndex(r => r.id === u.id) + 1 || null) : null;
+    return { ok: true, dist: d, earned: flies, isBest, prevBest, isRecord, rank, swing: swingState(u), swingTop: top.slice(0, 20), jump: jumpState(u) };
   },
   async flapStart(body, req) {
     const a = authUser(body, req); if (!a) return { ok: false, error: 'auth' };

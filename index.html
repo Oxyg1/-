@@ -14,6 +14,7 @@
 <script src="backdrops.js"></script>
 <script src="jump.js"></script>
 <script src="flappy.js"></script>
+<script src="swing.js"></script>
 <!--CONFIG-->
 <style>
 :root{
@@ -342,6 +343,17 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
 .hj-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hj-row b{font-variant-numeric:tabular-nums;white-space:nowrap}
 .hj-info .btn{width:100%;margin-top:8px}
+/* Frog Swing: лягушка качается на языке под кроной */
+.hs-art{background:linear-gradient(#f6b27a 0%,#e98a4f 40%,#8e3f3a 100%)}
+.hs-art .hs-crown{position:absolute;left:-10px;right:-10px;top:0;height:34px;background:#1f6a3a;box-shadow:0 6px 0 #6b4a2a,0 3px 0 #8a6238 inset}
+.hs-art .hs-crown::after{content:"";position:absolute;left:0;right:0;bottom:-16px;height:14px;background:radial-gradient(circle at 13px -2px,#2c8a49 11px,transparent 12px) 0 0/26px 14px repeat-x}
+.hs-art .hs-gap{position:absolute;top:0;width:58px;height:46px;right:34px;background:linear-gradient(#f6b27a,#f2a06a)}
+.hs-art .hs-water{position:absolute;left:0;right:0;bottom:0;height:22px;background:#234d5d;box-shadow:0 -3px 0 rgba(190,240,255,.35)}
+.hs-art .hs-pend{position:absolute;left:38%;top:40px;width:0;height:0;animation:hsSwing 1.9s ease-in-out infinite alternate}
+.hs-art .hs-pend i{position:absolute;left:-2.5px;top:0;width:5px;height:58px;border-radius:3px;background:#ff6f8e;box-shadow:0 0 0 1px #c43d63}
+.hs-art .hs-pend img{position:absolute;left:-30px;top:44px;width:60px;height:60px}
+.hs-art .fl{position:absolute;width:20px;height:20px;animation:hjFly 3.2s ease-in-out infinite}
+@keyframes hsSwing{from{transform:rotate(38deg)}to{transform:rotate(-38deg)}}
 .hub-soon{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;flex:none}
 .hub-soon button{border:0;border-radius:16px;background:rgba(0,0,0,.22);color:#fff;opacity:.62;padding:12px 4px;font:900 13px Nunito,system-ui;display:flex;flex-direction:column;align-items:center;gap:4px}
 .hub-soon button small{font-size:11px;font-weight:800;opacity:.75}
@@ -822,6 +834,21 @@ body{font-family:Nunito,"Segoe UI",system-ui,sans-serif;font-weight:800;backgrou
           <div class="hj-row"><span>Твой рекорд</span><b id="hfBest">—</b></div>
           <div class="hj-row"><span id="hfRecName">Лучший в игре</span><b id="hfRec">—</b></div>
           <div class="hf-btns"><button class="btn" id="hfPlay">Играть</button><button class="btn hf-mp" id="hfMp" aria-label="Играть с друзьями"><svg viewBox="0 0 16 12" shape-rendering="crispEdges"><path fill="currentColor" d="M4 1h3v1h1v3H7v1H4V5H3V2h1zM10 2h2v1h1v2h-1v1h-2V5H9V3h1zM2 7h7v1h1v4H1V8h1zM10 7h3v1h1v4h-3V8h-1z"/></svg></button></div>
+        </div>
+      </div>
+      <div class="hub-jump">
+        <div class="hj-art hs-art">
+          <i class="hs-crown"></i><i class="hs-gap"></i><i class="hs-water"></i>
+          <div class="hs-pend"><i></i><img id="hsFrog" alt=""></div>
+          <svg class="fl" style="left:70%;top:70px"><use href="#i-fly"></use></svg>
+          <svg class="fl" style="left:14%;top:92px;animation-delay:-1.4s"><use href="#i-fly"></use></svg>
+          <span class="hub-new" id="hsNew">Новое</span>
+        </div>
+        <div class="hj-info">
+          <div class="t">Frog Swing</div>
+          <div class="hj-row"><span>Твой рекорд</span><b id="hsBest">—</b></div>
+          <div class="hj-row"><span id="hsRecName">Лучший в игре</span><b id="hsRec">—</b></div>
+          <button class="btn" id="hsPlay">Играть</button>
         </div>
       </div>
       <div class="hub-jump">
@@ -2788,6 +2815,19 @@ const FLAP=window.FlappyFrogInit?window.FlappyFrogInit({
   roomLink:code=>{const b=CFG.appLink||'';return /startapp=/.test(b)?b.replace(/startapp=[^&]*/,'startapp=r_'+code):/\/t\.me\//.test(b)?b+(b.includes('?')?'&':'?')+'startapp=r_'+code:location.origin+location.pathname+'?startapp=r_'+code;},
   share:(url,text)=>{if(TG&&tgv('6.1'))TG.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(url)+'&text='+encodeURIComponent(text));else{try{navigator.clipboard.writeText(url);toast('Ссылка скопирована');}catch(e){toast(url,5000);}}},
 }):null;
+const SWING=window.FrogSwingInit?window.FrogSwingInit({
+  bake:(ref,size)=>bake(ref,size),
+  api:(p,b)=>api(p,b),
+  hasApi:()=>!!CFG.api,
+  net:()=>net,
+  applySwing:r=>{if(r.swing)net.swing=r.swing;if(r.jump)net.jump=r.jump;},
+  TG,tgv,inTG,haptic,toast,
+  sfx:{voice,thud,note,audio,out:()=>{audio();return dry;}},
+  soundOn:()=>state.sound,
+  setSound:v=>{state.sound=!!v;save();updateHud();},
+  setActive:v=>{jumpOpen=!!v;},
+  onClose:()=>openHub(),
+}):null;
 /* ---------- ТУРНИРЫ ----------
    Турнир — отдельная таблица лучших забегов за своё время. Один забег идёт во
    все турниры, где игрок участвует. В хабе у турниров своя вкладка; красная
@@ -3563,7 +3603,7 @@ function renderHub(){
   // в превью — то, что игрок уже вырастил, и следующий за ним уровень
   thumb(lv).then(u=>{$('#hmA').src=u;$('#hmB').src=u;}).catch(()=>{});
   thumb(Math.min(lv+1,LEVELS.length)).then(u=>{$('#hmC').src=u;}).catch(()=>{});
-  thumb('frogs/original').then(u=>{$('#hjFrog').src=u;}).catch(()=>{});
+  thumb('frogs/original').then(u=>{$('#hjFrog').src=u;$('#hsFrog').src=u;}).catch(()=>{});
   const j=net.jump||{};
   const best=Math.max(j.best||0,JUMP?JUMP.localBest():0);
   $('#hubBest').textContent=best?fmtM(best)+' м':'ещё не прыгал';
@@ -3581,6 +3621,11 @@ function renderHub(){
   $('#hfRec').textContent=fr?`${fr.best} ${ptsW(fr.best)}`:'—';
   $('#hfNew').hidden=!!f.best;
   try{FLAP&&FLAP.hubArt($('#hfCv'));}catch(e){}
+  const sw=net.swing||{},sb=Math.max(sw.best||0,SWING?SWING.localBest():0),sr=sw.record;
+  $('#hsBest').textContent=sb?fmtM(sb)+' м':'ещё не качался';
+  $('#hsRecName').textContent=sr?`Лучший · ${sr.name||'игрок'}`:'Лучший в игре';
+  $('#hsRec').textContent=sr?fmtM(sr.best)+' м':'—';
+  $('#hsNew').hidden=!!sb;
 }
 const ptsW=n=>{const x=n%10,y=n%100;return x===1&&y!==11?'очко':x>=2&&x<=4&&(y<12||y>14)?'очка':'очков';};
 // результат в единицах турнира: метры прыжков или очки полёта
@@ -3606,6 +3651,10 @@ $('#hfMp').onclick=()=>{
   if(!FLAP){toast('Игра не загрузилась — обнови приложение');return;}
   S.ui();haptic.medium();FLAP.room();
 };
+$('#hsPlay').onclick=()=>{
+  if(!SWING){toast('Игра не загрузилась — обнови приложение');return;}
+  S.ui();haptic.medium();closeHub();SWING.open();
+};
 $('#hfPlay').onclick=()=>{
   if(!FLAP){toast('Игра не загрузилась — обнови приложение');return;}
   S.ui();haptic.medium();closeHub();FLAP.open();
@@ -3623,6 +3672,7 @@ async function init(){
   if(startParam==='shop'){openHub();openShop();}
   else if(startParam&&startParam.startsWith('t_')){openHub();openTour(startParam.slice(2).split('-')[0]);}   // t_<id>-ad_канал: турнир + метка рекламы
   else if(/^r_[A-Z0-9]{5}$/i.test(startParam||'')&&FLAP){openHub();FLAP.room(startParam.slice(2));}   // приглашение в комнату полёта
+  else if(startParam==='swing'&&SWING){openHub();SWING.open();}
   else if((startParam==='jump'||/^ad_/.test(startParam||''))&&JUMP){openHub();JUMP.open();}   // реклама ведёт сразу в игру, метка уходит в аналитику
   else openHub();
   sync(true).then(r=>{
