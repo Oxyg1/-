@@ -1421,7 +1421,8 @@ const api = {
     const cap = Math.round(sec * 44 + 30);
     if (d > cap) { u.flags = (u.flags || 0) + 1; d = cap; }
     let flies = Math.max(0, Math.round(+body.flies || 0));
-    const fcap = Math.round(d / 4) + 10; if (flies > fcap) { u.flags = (u.flags || 0) + 1; flies = fcap; }
+    // честный забег с роями и стрекозой — до ~0,24 мошки на метр; лимит с запасом в полтора раза
+    const fcap = Math.round(d * 0.35) + 20; if (flies > fcap) { u.flags = (u.flags || 0) + 1; flies = fcap; }
     f.lastT0 = run.t0; f.runs = (f.runs || 0) + 1;
     const hour = Math.floor(now / 3600e3);
     if (j.hour !== hour) { j.hour = hour; j.hourFlies = 0; }

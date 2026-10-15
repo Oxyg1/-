@@ -298,14 +298,14 @@ window.FrogSwingInit=function(B){
         if(H>40)r.reeds.push({x:x0+len*(.1+R0()*.25),top:WY-H,w:18,ph:R0()*6});
       }
       // мошки по дуге качания от начала участка
-      if(R0()<.85)arcFlies(r,x0+Math.min(len*.3,130),y,x0+len,R0()<.5?4:5);
+      if(R0()<.4)arcFlies(r,x0+Math.min(len*.3,130),y,x0+len,3);
       r.genX=x0+len;
       // дыра
       if(R0()<.3+.45*d){
         const g=Math.min(GAPMAX,lerp(110,200,d)+R0()*lerp(60,130,d));
         if(R0()<lerp(.65,.25,d))r.pads.push({x:r.genX+g*(.35+R0()*.3),w:84,dip:0,dipV:0,bob:R0()*6,spring:m>80&&R0()<.35,springT:9});
         // над дырой — дуга полёта из мошек: награда за смелый отпуск
-        if(R0()<.6)gapFlies(r,r.genX,g,y,4,false);
+        if(R0()<.35)gapFlies(r,r.genX,g,y,3,false);
         r.genX+=g;
       }
     }
@@ -416,17 +416,17 @@ window.FrogSwingInit=function(B){
   function catchFly(r,f){
     f.taken=true;
     r.combo=(r.t-r.comboT<1.3)?r.combo+1:1;r.comboT=r.t;if(r.combo>r.comboMax)r.comboMax=r.combo;
-    const val=(f.gold?5:1)*(r.combo>=5?2:1);
+    const val=(f.gold?5:1)*(r.combo>=8?2:1);
     r.flies_n+=val;elFN.textContent=r.flies_n;kick(elFl,'bump');
     SND.gulp(r.combo);B.haptic.select();
-    txt(f.x,f.y-16,'+'+val,{c:f.gold?'#ffd23f':(r.combo>=5?'#ffe36b':'#fff'),s:f.gold?22:15,life:.6});
+    txt(f.x,f.y-16,'+'+val,{c:f.gold?'#ffd23f':(r.combo>=8?'#ffe36b':'#fff'),s:f.gold?22:15,life:.6});
     sparks(f.x,f.y,f.gold?12:5,f.gold?'#ffd23f':'#fff2b8');
-    if(r.combo===5){banner('Серия!','мошки идут вдвойне',true);}
+    if(r.combo===8){banner('Серия!','мошки идут вдвойне',true);}
     comboRender(r);
   }
   const elCombo=$('#fsCombo'),elComboN=$('#fsComboN');
   function comboRender(r){
-    const on=r&&r.combo>=2;elCombo.classList.toggle('on',on);elCombo.classList.toggle('hot',!!r&&r.combo>=5);
+    const on=r&&r.combo>=2;elCombo.classList.toggle('on',on);elCombo.classList.toggle('hot',!!r&&r.combo>=8);
     if(on){elComboN.textContent='×'+r.combo;kick(elCombo,'kick');}
   }
 
@@ -1177,7 +1177,9 @@ window.FrogSwingInit=function(B){
     const r=run;
     // соперники — вертикальные линии на их рекордах; показываем тех, кто рядом
     const me=(B.net().me||{}).id;
-    rivals=((B.net().swingTop)||[]).filter(x=>x.id!==me&&x.best>0).sort((a,b)=>a.best-b.best).slice(0,12);
+    // ближайшие сверху (их обгонять) и пара снизу
+    {const all=((B.net().swingTop)||[]).filter(x=>x.id!==me&&x.best>0).sort((a,b)=>a.best-b.best);
+     let i=all.findIndex(x=>x.best>bestBefore);if(i<0)i=all.length;rivals=all.slice(Math.max(0,i-2),i+4);}
     // первые три забега подсказываем момент отпускания
     r.coach=(pref.coach||0)<3;pref.coach=(pref.coach||0)+1;savePref();
     gen(r);
