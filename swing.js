@@ -196,15 +196,16 @@ window.FrogSwingInit=function(B){
   }
   window.addEventListener('resize',()=>{if(open)resize();});
 
-  /* ---------- картинки (общие с Frog Jump) ---------- */
-  const IMG_SRC={pad:'jump/pad.png',water:'jump/water.png',cloud_1:'jump/cloud_1.png',cloud_2:'jump/cloud_2.png',cloud_3:'jump/cloud_3.png',
-    reed_top:'flappy/reed_top.png',reed_bottom:'flappy/reed_bottom.png',heron:'flappy/heron.png',spring_low:'jump/spring_low.png',spring_high:'jump/spring_high.png',
-    dragonfly:'jump/dragonfly.png',bubble:'jump/bubble.png',
-    branch:'swing/branch.png',leaves:'swing/leaves.png',forest:'swing/forest.png'};
+  /* ---------- картинки: свои, не из прошлых игр ----------
+     Пути — строками целиком (как в Jump), исходники и вырезка — tools/cut_swing_assets.py */
+  const IMG_SRC={
+    branch:'swing/branch.png',leaves:'swing/leaves.png',forest:'swing/forest.png',thorns:'swing/thorns.png',front:'swing/front.png',
+    water:'swing/water.png',roots:'swing/roots.png',snag:'swing/snag.png',owl:'swing/owl.png',mushroom:'swing/mushroom.png',
+    firefly:'swing/firefly.png',dewdrop:'swing/dewdrop.png',gnat:'swing/gnat.png'};
   const IMG={};
   function loadImgs(){for(const k in IMG_SRC){if(IMG[k])continue;const im=new Image();im.decoding='async';
     // ветку и листву печём в плитку кроны — когда догрузились, перепекаем
-    im.onload=()=>{im.ok=true;if((k==='branch'||k==='leaves')&&open)buildArt();};im.src=IMG_SRC[k];IMG[k]=im;}}
+    im.onload=()=>{im.ok=true;if((k==='branch'||k==='leaves'||k==='thorns')&&open)buildArt();if(k==='gnat')goldGnat=null;};im.src=IMG_SRC[k];IMG[k]=im;}}
   const has=k=>{const im=IMG[k];return !!(im&&im.ok&&im.naturalWidth);};
   const SCALED=new Map();
   function scaled(k,w){
@@ -331,6 +332,16 @@ window.FrogSwingInit=function(B){
       r.flies.push({x:fx,y:fy,t:r.rng()*6,gold:gold&&i===Math.floor(n/2)});
     }
   }
+  const mushW=p=>p.spring?104:84;
+  const mushTop=p=>WY+22-mushW(p)*1.06+10;   // верх шляпки: картинка 228×242, сверху поле
+  function mushBounce(r,p,top){
+    const spr=p.spring;
+    r.y=top-R*.7;r.vy=spr?-1250:-Math.max(880,r.vy*.6);r.vx=Math.max(r.vx,spr?460:330);r.bounces++;r.sq=-.3;r.sqV=0;p.dipV=spr?320:260;
+    if(r.tongue&&r.tongue.st!=='back')r.tongue.st='back';
+    if(spr){SND.spring();B.haptic.medium();r.shake=4;r.zpulse=.06;txt(r.x,r.y-44,'Вжух!',{c:'#ffd0a0',s:20});}
+    else{SND.bounce();B.haptic.light();txt(r.x,r.y-40,'Пружинит!',{c:'#ffd0a0',s:16});}
+    sparks(r.x,top,8,'#fff2e0');
+  }
   function segAt(r,x){
     const s=r.segs;let lo=0,hi=s.length-1;
     while(lo<=hi){const m=(lo+hi)>>1,o=s[m];if(x<o.x0)hi=m-1;else if(x>=o.x1)lo=m+1;else return o;}
@@ -446,8 +457,8 @@ window.FrogSwingInit=function(B){
     const x=r.camX+W*1.35,mid=(TOP+120+WY)/2;
     if(ev==='swarm'){for(let i=0;i<10;i++){const a=i/10*Math.PI*2;r.flies.push({x:x+Math.cos(a)*62,y:mid+Math.sin(a)*50,t:fxR()*6});}banner('Рой мошек!','пролети сквозь — пойдут вдвойне');}
     else if(ev==='gold'){r.flies.push({x:x+80,y:mid-30,t:0,gold:true,vx:-70});banner('Золотая мошка!','+5 мошек',true);}
-    else if(ev==='bubble'){r.items.push({k:'b',x,y:mid,t:0});banner('Пузырь-щит','спасёт от одного удара');}
-    else{r.items.push({k:'d',x,y:mid-20,t:0});banner('Стрекоза!','хватай — прокатит');}
+    else if(ev==='bubble'){r.items.push({k:'b',x,y:mid,t:0});banner('Капля-щит','спасёт от одного удара');}
+    else{r.items.push({k:'d',x,y:mid-20,t:0});banner('Светлячок!','хватай — прокатит');}
   }
 
   /* ---------- шаг физики ---------- */
@@ -513,7 +524,7 @@ window.FrogSwingInit=function(B){
       r.vx=Math.cos(r.t*2.2)*.5*2.2*r.L*Math.cos(a);r.vy=-Math.sin(a)*Math.cos(r.t*2.2)*.5*2.2*r.L;
     }
     // наклон: на языке — головой к точке зацепа, в полёте — по скорости
-    const tgt=r.tongue&&r.tongue.st==='hold'?Math.atan2(r.tongue.x-r.x,r.y-r.tongue.y):clamp(r.vx*.0004+r.vy*.0005,-.5,.6);
+    const tgt=r.dragon>0?0:r.tongue&&r.tongue.st==='hold'?Math.atan2(r.tongue.x-r.x,r.y-r.tongue.y):clamp(r.vx*.0004+r.vy*.0005,-.5,.6);
     r.rot+=(tgt-r.rot)*Math.min(1,dt*(r.tongue&&r.tongue.st==='hold'?14:6));
     // пружинка тела, шлейф и линии скорости, камера отъезжает на скорости
     r.sqV+=(-r.sq*320-r.sqV*13)*dt;r.sq+=r.sqV*dt;
@@ -551,17 +562,16 @@ window.FrogSwingInit=function(B){
     for(const o of r.roots){if(Math.abs(r.x-o.x)<o.w/2+R*.55&&r.y>o.y0&&r.y-R*.5<o.y1&&hurt(r,'root'))return;}
     for(const o of r.reeds){if(Math.abs(r.x-o.x)<o.w/2+R*.55&&r.y+R*.6>o.top+8&&hurt(r,'reed'))return;}
     // вода и кувшинки
+    if(r.vy>0)for(const p of r.pads){
+      const top=mushTop(p)+p.dip*.05;
+      if(Math.abs(p.x-r.x)<mushW(p)*.46&&r.y+R*.7>top&&r.y+R*.7<top+30){mushBounce(r,p,top);break;}
+    }
     if(r.y+R*.6>WY&&r.vy>0){
-      const p=r.pads.find(p=>Math.abs(p.x-r.x)<p.w/2+8);
-      if(p||r.shield){
-        const spr=p&&p.spring;
-        r.y=WY-R*.6;r.vy=spr?-1250:-Math.max(820,r.vy*.6);r.vx=Math.max(r.vx,spr?460:320);r.bounces++;r.sq=-.3;r.sqV=0;
+      if(r.shield){
+        // капля-щит выталкивает из воды
+        r.y=WY-R*.6;r.vy=-900;r.vx=Math.max(r.vx,320);r.sq=-.3;r.sqV=0;r.shield=false;r.invul=.6;
         if(r.tongue&&r.tongue.st!=='back')r.tongue.st='back';
-        if(p){p.dipV=260;p.springT=0;}
-        if(!p){r.shield=false;r.invul=.6;SND.pop();sparks(r.x,WY,14,'#bfefff');}
-        if(spr){SND.spring();B.haptic.medium();r.shake=4;r.zpulse=.06;txt(r.x,r.y-44,'Вжух!',{c:'#b6f0a0',s:20});}
-        else{SND.bounce();B.haptic.light();txt(r.x,r.y-40,p?'Пружинит!':'Щит!',{c:p?'#9dffb0':'#bfefff',s:16});}
-        splash(r.x,WY,6);
+        SND.pop();B.haptic.light();sparks(r.x,WY,14,'#bfefff');txt(r.x,r.y-40,'Щит!',{c:'#bfefff',s:16});splash(r.x,WY,6);
       }else{r.y=WY;die('water');splash(r.x,WY,16);SND.splash();return;}
     }
     // мошки: рядом с лягушкой их затягивает к ней — ловятся сами, если лететь через рой
@@ -703,7 +713,7 @@ window.FrogSwingInit=function(B){
         for(let i=0;i<Math.max(5,Math.round(TW/36));i++){const w=40+rn()*18,x=(i+rn()*.6)*TW/Math.max(5,Math.round(TW/36)),y=14+rn()*30,a=(rn()-.5)*.6;
           for(const dx of [-TW,0,TW]){g.save();g.translate(x+dx,y);g.rotate(a);g.drawImage(sick,-w/2,-w*.55,w,w*im.naturalHeight/im.naturalWidth);g.restore();}}
       }else leafMass(g,wrapBlobs(rn,24,4,62,9,18),DLEAF);
-      const yc=BARK-14;
+      if(!has('thorns')){const yc=BARK-14;
       g.lineCap='round';
       const stem=w=>{g.lineWidth=w;g.beginPath();g.moveTo(-6,yc);for(let x=-6;x<=TW+6;x+=6)g.lineTo(x,yc+Math.sin(x/TW*Math.PI*6)*3);g.stroke();};
       g.strokeStyle='#1a0812';stem(13);g.strokeStyle='#5a2448';stem(9);g.strokeStyle='#7d3a63';g.lineWidth=2;g.beginPath();for(let x=-6;x<=TW+6;x+=6)g.lineTo(x,yc-2.5+Math.sin(x/TW*Math.PI*6)*3);g.stroke();
@@ -714,7 +724,7 @@ window.FrogSwingInit=function(B){
         g.fillStyle='#ff98ad';g.beginPath();g.moveTo(x-w+1.5,y+.5);g.lineTo(x+lean-.5,y+h-3);g.lineTo(x-1,y+.5);g.closePath();g.fill();
         // шипы и вверх — ветка выглядит злой со всех сторон
         if((x/15|0)%2){g.fillStyle='#1a0812';g.beginPath();g.moveTo(x+4,y-6);g.lineTo(x+9,y-15);g.lineTo(x+10,y-5);g.fill();g.fillStyle='#e0405f';g.beginPath();g.moveTo(x+5,y-6);g.lineTo(x+8.8,y-13);g.lineTo(x+9.4,y-6);g.fill();}
-      }
+      }}
     }
     // пышный край кроны у дыры
     [tBushR,g]=mkCanvas(70,130);if(has('leaves')){
@@ -834,6 +844,13 @@ window.FrogSwingInit=function(B){
       const x0=s.x0-cam,x1=s.x1-cam,base=s.k==='w'?s.y:s.y-8,ty=base-BARK;
       cx.fillStyle=top;cx.fillRect(x0,-80,x1-x0,ty+42+80);
       tileStrip(s.k==='w'?tWood:tThorn,s.x0,s.x1,cam,ty);
+      if(s.k==='t'&&has('thorns')){
+        // колючая лента привязана к миру: шипы кончаются чуть ниже линии касания
+        const im=IMG.thorns,h=38,w=h*im.naturalWidth/im.naturalHeight,a=Math.floor(s.x0/w)*w,y0=s.y+4-h;
+        cx.save();cx.beginPath();cx.rect(x0-4,y0-10,x1-x0+8,h+20);cx.clip();
+        for(let x=a;x<s.x1;x+=w)cx.drawImage(scaled('thorns',w),x-cam,y0,w+.6,h);
+        cx.restore();
+      }
     }
     for(let i=0;i<r.segs.length;i++){
       const s=r.segs[i],n=r.segs[i+1],p=r.segs[i-1];
@@ -843,11 +860,11 @@ window.FrogSwingInit=function(B){
       if(!p||s.x0-p.x1>2)cx.drawImage(tBushL,s.x0-cam-34,base-122,70,130);
     }
   }
-  // свисающий камыш: картинка из Flappy, обрезанная сверху под нужную длину
+  // свисающие корни: картинка обрезается сверху, кончики с каплями всегда видны
   function drawRoot(o,cam){
     const L=o.y1-o.y0,x=o.x-cam,sw=Math.sin(tGlobal*1.1+o.ph)*1.5;
-    if(has('reed_top')){
-      const im=IMG.reed_top,w=46,s=w/im.naturalWidth,full=im.naturalHeight*s;
+    if(has('roots')){
+      const im=IMG.roots,w=40,s=w/im.naturalWidth,full=im.naturalHeight*s;
       cx.save();cx.translate(x+sw,o.y0-6);cx.rotate(sw*.004);
       if(L+6<=full){const sh=(L+6)/s;cx.drawImage(im,0,im.naturalHeight-sh,im.naturalWidth,sh,-w/2,0,w,L+6);}
       else cx.drawImage(im,-w/2,0,w,L+6);
@@ -855,19 +872,35 @@ window.FrogSwingInit=function(B){
     }
     cx.fillStyle='#3e8a3a';cx.fillRect(x-o.w/2,o.y0,o.w,L);
   }
+  // коряга из воды: обломанная верхушка видна всегда, низ уходит под воду
   function drawReed(o,cam){
     const H=WY-o.top,x=o.x-cam;
-    if(has('reed_bottom')){
-      const im=IMG.reed_bottom,w=48,s=w/im.naturalWidth,full=im.naturalHeight*s,h=H+14;
-      if(h<=full)cx.drawImage(im,0,0,im.naturalWidth,h/s,x-w/2,o.top-6,w,h);
-      else cx.drawImage(im,x-w/2,o.top-6,w,h);
+    if(has('snag')){
+      const im=IMG.snag,w=46,s=w/im.naturalWidth,full=im.naturalHeight*s,h=H+18;
+      if(h<=full)cx.drawImage(im,0,0,im.naturalWidth,h/s,x-w/2,o.top-10,w,h);
+      else cx.drawImage(im,x-w/2,o.top-10,w,h);
       return;
     }
     cx.fillStyle='#4fa246';cx.fillRect(x-o.w/2,o.top,o.w,H);
   }
+  let goldGnat=null;
+  function gnatImg(gold){
+    if(!gold)return scaled('gnat',30);
+    if(!goldGnat){const im=IMG.gnat,c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;const g=c.getContext('2d');
+      g.drawImage(im,0,0);g.globalCompositeOperation='source-atop';g.fillStyle='rgba(255,196,40,.55)';g.fillRect(0,0,c.width,c.height);goldGnat=c;}
+    return goldGnat;
+  }
   function drawFly(f,cam){
     const x=f.x-cam+(f.pull?0:Math.sin(f.t*3.1)*5),y=f.y+(f.pull?0:Math.sin(f.t*4.3)*4);
     const flap=Math.abs(Math.sin(f.t*38));
+    if(has('gnat')){
+      if(f.gold){cx.fillStyle=`rgba(255,210,63,${.25+.1*Math.sin(f.t*6)})`;cx.beginPath();cx.arc(x,y,19,0,7);cx.fill();}
+      else{cx.fillStyle='rgba(255,255,230,.14)';cx.beginPath();cx.arc(x,y,14,0,7);cx.fill();}
+      // крылья в картинке — частое дрожание по вертикали читается как взмахи
+      const w=f.gold?34:28,im=gnatImg(f.gold),h=w*IMG.gnat.naturalHeight/IMG.gnat.naturalWidth;
+      cx.save();cx.translate(x,y);cx.scale(1+flap*.04,1-flap*.07);cx.drawImage(im,-w/2,-h/2,w,h);cx.restore();
+      return;
+    }
     if(f.gold){cx.fillStyle=`rgba(255,210,63,${.22+.1*Math.sin(f.t*6)})`;cx.beginPath();cx.arc(x,y,18,0,7);cx.fill();}
     else{cx.fillStyle='rgba(255,255,230,.13)';cx.beginPath();cx.arc(x,y,13,0,7);cx.fill();}
     cx.fillStyle='rgba(223,242,255,.9)';cx.strokeStyle='rgba(40,60,80,.5)';cx.lineWidth=.8;
@@ -879,15 +912,13 @@ window.FrogSwingInit=function(B){
     cx.fillStyle=f.gold?'#ffd97a':'#414b5c';cx.beginPath();cx.arc(x,y-5.6,2.6,0,7);cx.fill();
     cx.fillStyle=f.gold?'#ffe680':'#e0405f';cx.beginPath();cx.arc(x-1.5,y-6.2,1.3,0,7);cx.arc(x+1.5,y-6.2,1.3,0,7);cx.fill();
   }
-  // цапля из Flappy: шея выходит из-за левого края, клюв щёлкает вперёд
+  // сова-преследователь: летит справа налево за лягушкой, машет крыльями
   function drawHeron(r){
-    const x=r.hx-r.camX,y=r.hy,snap=Math.max(0,Math.sin(tGlobal*7))*.12;
-    if(has('heron')){
-      const im=IMG.heron,h=120,w=h*im.naturalWidth/im.naturalHeight;
-      // в картинке клюв смотрит вверх-вправо, шея уходит вниз: поворот кладёт клюв
-      // горизонтально на лягушку, шея тянется из-за левого нижнего края
-      cx.save();cx.translate(x,y);cx.rotate(.9-snap);
-      cx.drawImage(im,-w*.4,-h*.3,w,h);
+    const x=r.hx-r.camX,y=r.hy,fl=Math.sin(tGlobal*9);
+    if(has('owl')){
+      const w=118,h=w*IMG.owl.naturalHeight/IMG.owl.naturalWidth;
+      cx.save();cx.translate(x,y+fl*4);cx.rotate(.12+fl*.05);cx.scale(1,1+fl*.08);
+      cx.drawImage(scaled('owl',w),-w*.62,-h*.5,w,h);
       cx.restore();
       return;
     }
@@ -960,19 +991,19 @@ window.FrogSwingInit=function(B){
     const cam=r.camX,x=r.x-cam,y=r.y;
     // шлейф на скорости
     r.trail.forEach((t,i)=>{cx.globalAlpha=.06+.05*i;frogAt(t.x-cam,t.y,t.rot,0,1,1);});cx.globalAlpha=1;
-    if(r.dragon>0&&has('dragonfly')){cx.save();cx.translate(x,y-FROG*.62);cx.scale(1,1+Math.sin(tGlobal*46)*.07);blit('dragonfly',0,0,74);cx.restore();}
+    if(r.dragon>0&&has('firefly')){cx.save();cx.translate(x+4,y-FROG*.66);cx.fillStyle=`rgba(255,236,120,${.22+.08*Math.sin(tGlobal*8)})`;cx.beginPath();cx.arc(-16,10,30,0,7);cx.fill();cx.scale(1,1+Math.sin(tGlobal*40)*.06);blit('firefly',0,0,74);cx.restore();}
     // растяжение по скорости в полёте и пружинка при зацепе/отскоке
     const sp=Math.hypot(r.vx,r.vy),hold=r.tongue&&r.tongue.st==='hold';
-    const st=r.alive&&!hold?clamp((sp-300)/1800,0,.14):0,va=Math.atan2(r.vy,r.vx);
+    const st=r.alive&&!hold&&!(r.dragon>0)?clamp((sp-300)/1800,0,.14):0,va=Math.atan2(r.vy,r.vx);
     if(r.invul>0&&r.alive&&!(r.dragon>0)&&Math.floor(tGlobal*16)%2)cx.globalAlpha=.55;
     frogAt(x,y,r.rot,va,(1+st)*(1+r.sq*.5),(1-st*.6)*(1-r.sq*.5));
     cx.globalAlpha=1;
-    if(r.shield&&has('bubble')){cx.globalAlpha=.9;blit('bubble',x,y,FROG*1.3+Math.sin(tGlobal*3)*2);cx.globalAlpha=1;}
+    if(r.shield&&has('dewdrop')){cx.globalAlpha=.42;blit('dewdrop',x,y-2,FROG*1.32+Math.sin(tGlobal*3)*2);cx.globalAlpha=1;}
   }
   function drawItem(it,cam){
     const x=it.x-cam,y=it.y+Math.sin(it.t*2.4)*5;
-    if(it.k==='b'){if(has('bubble'))blit('bubble',x,y,44+Math.sin(it.t*3)*2);else{cx.strokeStyle='#dff';cx.lineWidth=2;cx.beginPath();cx.arc(x,y,20,0,7);cx.stroke();}}
-    else if(has('dragonfly')){cx.save();cx.translate(x,y);cx.scale(1,1+Math.sin(it.t*46)*.07);blit('dragonfly',0,0,60);cx.restore();}
+    if(it.k==='b'){if(has('dewdrop'))blit('dewdrop',x,y,42+Math.sin(it.t*3)*2);else{cx.strokeStyle='#dff';cx.lineWidth=2;cx.beginPath();cx.arc(x,y,20,0,7);cx.stroke();}}
+    else if(has('firefly')){cx.save();cx.translate(x,y);cx.scale(1,1+Math.sin(it.t*40)*.06);blit('firefly',0,0,58);cx.restore();}
     // мягкое свечение — видно, что это бонус
     cx.fillStyle=`rgba(255,255,220,${.12+.08*Math.sin(it.t*5)})`;cx.beginPath();cx.arc(x,y,30,0,7);cx.fill();
   }
@@ -1047,19 +1078,19 @@ window.FrogSwingInit=function(B){
     // вода
     const L=-offX/sc-40,Rr=W+offX/sc+40;
     if(has('water')){
-      const im=IMG.water,tw=170,th=tw*im.naturalHeight/im.naturalWidth,off=((r.camX+tGlobal*9)%tw+tw)%tw;
-      cx.fillStyle='#234d5d';cx.fillRect(L,WY+th-10,Rr-L,VH-WY+60);
-      for(let x=Math.floor((L+off)/tw)*tw-off;x<Rr;x+=tw)cx.drawImage(im,x,WY-8,tw+1,th);
+      // лента воды привязана к миру и чуть течёт
+      const im=IMG.water,th=80,tw=th*im.naturalWidth/im.naturalHeight,off=((r.camX+tGlobal*6)%tw+tw)%tw;
+      cx.fillStyle='#2a4a30';cx.fillRect(L,WY+th-14,Rr-L,VH-WY+60);
+      for(let x=Math.floor((L+off)/tw)*tw-off;x<Rr;x+=tw)cx.drawImage(scaled('water',tw),x,WY-6,tw+.6,th);
     }else{cx.fillStyle='rgba(20,90,80,.9)';cx.fillRect(L,WY,Rr-L,VH-WY+40);}
     const cam=r.camX,vis=x=>x>cam+L-120&&x<cam+Rr+120;
+    // грибы-батуты: проседают и пружинят, когда на них падают
     for(const p of r.pads)if(vis(p.x)){
-      const y=WY+3+p.dip*.06+Math.sin(tGlobal*1.6+p.bob)*.8;
-      if(has('pad'))blit('pad',p.x-cam,y,p.w+12,.5,.44);
-      else{cx.fillStyle='#5cc27a';cx.beginPath();cx.ellipse(p.x-cam,y,p.w/2,10,0,0,7);cx.fill();}
-      if(p.spring&&has('spring_low')){
-        const up=p.springT<.45,k=p.springT<1?1+Math.sin(p.springT*Math.PI)*.12:1,im=IMG[up?'spring_high':'spring_low'],hgt=(up?46:34)*k,w=hgt*im.naturalWidth/im.naturalHeight;
-        cx.drawImage(im,p.x-cam-w/2,y-4-hgt,w,hgt);
-      }
+      const mw=mushW(p),d=clamp(p.dip,-30,30);
+      if(has('mushroom')){
+        const h=mw*IMG.mushroom.naturalHeight/IMG.mushroom.naturalWidth;
+        cx.save();cx.translate(p.x-cam,WY+22);cx.scale(1+d*.004,1-d*.007);cx.drawImage(scaled('mushroom',mw),-mw/2,-h,mw,h);cx.restore();
+      }else{cx.fillStyle='#e0533a';cx.beginPath();cx.ellipse(p.x-cam,mushTop(p),mw/2,16,0,Math.PI,0);cx.fill();}
     }
     for(const o of r.reeds)if(vis(o.x))drawReed(o,cam);
     drawRivals(r);drawBest(r);
@@ -1075,7 +1106,10 @@ window.FrogSwingInit=function(B){
     drawCoach(r);
     if(r.started&&r.hx>cam+L-90)drawHeron(r);
     // передний план — темнее и быстрее мира, даёт глубину
-    layer(tFront,1.3,r.camX,VH+8,'#04140b',.92);
+    if(has('front')){
+      const im=IMG.front,h=86,w=h*im.naturalWidth/im.naturalHeight,off=((r.camX*1.3)%w+w)%w,Lf=-offX/sc-40,Rf=W+offX/sc+40;
+      for(let x=Lf-off;x<Rf;x+=w)if(x+w>Lf)cx.drawImage(scaled('front',w),x,VH+10-h,w+.6,h);
+    }else layer(tFront,1.3,r.camX,VH+8,'#04140b',.92);
     drawParts(r,true);
     cx.setTransform(dpr,0,0,dpr,0,0);
     // цапля близко — край экрана краснеет
@@ -1117,7 +1151,7 @@ window.FrogSwingInit=function(B){
     try{const res=await B.api('swingEnd',{run:tok,dist:dist(r),flies:r.flies_n,ms});if(res&&res.ok&&B.applySwing)B.applySwing(res);return res;}
     catch(e){return null;}
   }
-  const CAUSE={water:'Плюх в воду',thorn:'Колючки!',root:'Врезалась в корень',reed:'Запуталась в камышах',heron:'Цапля догнала'};
+  const CAUSE={water:'Плюх в воду',thorn:'Колючки!',root:'Врезалась в корень',reed:'Врезалась в корягу',heron:'Сова догнала'};
   async function gameOver(){
     const r=run,m=dist(r);
     const isBest=m>(pref.best||0);
@@ -1131,7 +1165,7 @@ window.FrogSwingInit=function(B){
     $('#fsStats').innerHTML=`<div><span>Зацепов</span><b>${r.sticks}</b></div><div><span>Идеальных отпусканий</span><b>${r.perfects}</b></div><div><span>Лучшая серия мошек</span><b>×${r.comboMax}</b></div><div><span>Отскоков</span><b>${r.bounces}</b></div>`;
     // ближе к рекорду — сильнее хочется ещё раз
     const left=bestBefore-m;
-    $('#fsOverNote').textContent=left>0&&left<=Math.max(30,bestBefore*.2)?`До рекорда всего ${fmtM(left)} м!`:r.cause==='heron'?'Не раскачивайся на месте — цапля летит следом':r.cause==='water'?'Отпускай, когда лягушка летит вверх-вперёд':'';
+    $('#fsOverNote').textContent=left>0&&left<=Math.max(30,bestBefore*.2)?`До рекорда всего ${fmtM(left)} м!`:r.cause==='heron'?'Не раскачивайся на месте — сова летит следом':r.cause==='water'?'Отпускай, когда лягушка летит вверх-вперёд':'';
     $('#fsOver').hidden=false;
     if(m>bestBefore&&bestBefore>0)B.haptic.success();
     const res=await submit(r);
