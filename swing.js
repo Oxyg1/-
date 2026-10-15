@@ -18,7 +18,7 @@ window.FrogSwingInit=function(B){
 
   /* ---------- мир ---------- */
   const W=360, UNIT=30;                         // ширина видимого мира; 30 единиц = 1 метр
-  const G=1500, STEP=1/120, FROG=58, R=19;
+  const G=1500, STEP=1/120, FROG=70, R=22;
   const TSPD=2600, MAXL=400, REEL=34, MINL=95;  // язык: скорость выстрела, длина, подтягивание
   const AIM=55*Math.PI/180;                     // базовый угол выстрела: вперёд-вверх
   const AIMS=[55,50,60,45,65,40,70,36].map(a=>a*Math.PI/180);
@@ -70,7 +70,23 @@ window.FrogSwingInit=function(B){
     splash:()=>{noise(.38,.16,650,.7);TH(.08,0,90);},
     hit:()=>{TH(.13,0,70);noise(.2,.13,480,.8);},
     ui:()=>V(N(6),.045,.018),
+    pass:()=>{V(N(5,1),.25,.05,0,{reward:true});V(N(7,1),.3,.045,.07,{reward:true});},
+    event:()=>{V(N(7,1),.12,.04,0);V(N(9,1),.22,.045,.07,{reward:true});},
+    shield:()=>{V(N(3,1),.3,.05,0,{reward:true});V(N(5,1),.3,.04,.06,{reward:true});},
+    pop:()=>{noise(.08,.12,2600,1.5);V(900,.08,.03,0,{glide:.5});},
+    spring:()=>{V(190,.4,.06,0,{glide:3.6});V(N(4,1),.3,.04,.07,{reward:true});TH(.06,0,120);},
+    dragon:()=>{buzz(2.6);V(N(4,1),.3,.05,0,{reward:true});},
+    whoosh:v=>noise(.22,Math.min(.1,.03+v*.00006),900+v*.8,.9),
   };
+  function buzz(dur){
+    const a=X.audio();if(!a||!B.soundOn())return;const out=X.out();if(!out)return;
+    const t=a.currentTime;
+    const o=a.createOscillator();o.type='sawtooth';o.frequency.setValueAtTime(150,t);o.frequency.linearRampToValueAtTime(190,t+dur);
+    const f=a.createBiquadFilter();f.type='lowpass';f.frequency.value=900;
+    const g=a.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.035,t+.08);g.gain.setValueAtTime(.035,t+dur-.3);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+    const lfo=a.createOscillator();lfo.frequency.value=28;const lg=a.createGain();lg.gain.value=.015;lfo.connect(lg).connect(g.gain);
+    o.connect(f).connect(g).connect(out);o.start(t);o.stop(t+dur+.05);lfo.start(t);lfo.stop(t+dur+.05);
+  }
 
   /* ---------- разметка ---------- */
   const st=document.createElement('style');
@@ -90,6 +106,12 @@ window.FrogSwingInit=function(B){
 #fs .fs-fl svg{width:26px;height:26px}
 #fs .fs-fl.bump{animation:fsBump .25s}
 @keyframes fsBump{40%{transform:scale(1.18)}}
+#fs .fs-sub{position:absolute;left:0;right:0;top:calc(var(--tg-safe-area-inset-top,env(safe-area-inset-top,0px)) + var(--tg-content-safe-area-inset-top,0px) + 62px);display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;z-index:2}
+#fs .fs-combo{display:flex;align-items:center;gap:3px;background:linear-gradient(#ff8fa3,#e0405f);border-radius:999px;padding:3px 11px 3px 5px;font-size:15px;font-weight:900;box-shadow:0 3px 0 #8f1f36;opacity:0;transform:scale(.5);transition:opacity .15s,transform .2s cubic-bezier(.2,.9,.3,1.6)}
+#fs .fs-combo.on{opacity:1;transform:scale(1)}
+#fs .fs-combo.hot{background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00;box-shadow:0 3px 0 #a86f00}
+#fs .fs-combo.kick{animation:fsBump .22s}
+#fs .fs-combo img{width:20px;height:20px}
 #fs .fs-banner{position:absolute;left:50%;top:30%;transform:translate(-50%,-50%) scale(.4);opacity:0;background:rgba(8,30,22,.78);border-radius:18px;padding:10px 18px;font-size:22px;font-weight:900;text-align:center;white-space:nowrap;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.35),inset 0 2px 0 rgba(255,255,255,.1);z-index:3}
 #fs .fs-banner small{display:block;font-size:13px;font-weight:800;opacity:.8;margin-top:2px}
 #fs .fs-banner.gold{background:linear-gradient(#ffe36b,#f7b500);color:#5a3b00}
@@ -126,6 +148,7 @@ window.FrogSwingInit=function(B){
   <div class="fs-h" id="fsHBox"><b id="fsH">0</b><span>м</span></div>
   <div class="fs-fl" id="fsFl">${FLY}<b id="fsFN">0</b></div>
 </div>
+<div class="fs-sub"><div class="fs-combo" id="fsCombo"><img src="icons/fire.png" alt=""><b id="fsComboN">×2</b></div></div>
 <div class="fs-banner" id="fsBanner"></div>
 <div class="fs-hint" id="fsHint" hidden><i></i><p id="fsHintT">Держи — язык держит, отпусти — летишь</p></div>
 <div class="fs-ov" id="fsPauseOv" hidden><div class="card">
@@ -169,13 +192,19 @@ window.FrogSwingInit=function(B){
     // потолок не заходит под счётчик сверху
     const cs=getComputedStyle(root),safe=(parseFloat(cs.getPropertyValue('--tg-safe-area-inset-top'))||0)+(parseFloat(cs.getPropertyValue('--tg-content-safe-area-inset-top'))||0);
     TOP=(safe+64)/sc;
+    buildArt();
   }
   window.addEventListener('resize',()=>{if(open)resize();});
 
   /* ---------- картинки (общие с Frog Jump) ---------- */
-  const IMG_SRC={pad:'jump/pad.png',water:'jump/water.png',cloud_1:'jump/cloud_1.png',cloud_2:'jump/cloud_2.png',cloud_3:'jump/cloud_3.png'};
+  const IMG_SRC={pad:'jump/pad.png',water:'jump/water.png',cloud_1:'jump/cloud_1.png',cloud_2:'jump/cloud_2.png',cloud_3:'jump/cloud_3.png',
+    reed_top:'flappy/reed_top.png',reed_bottom:'flappy/reed_bottom.png',heron:'flappy/heron.png',spring_low:'jump/spring_low.png',spring_high:'jump/spring_high.png',
+    dragonfly:'jump/dragonfly.png',bubble:'jump/bubble.png',
+    branch:'swing/branch.png',leaves:'swing/leaves.png',forest:'swing/forest.png'};
   const IMG={};
-  function loadImgs(){for(const k in IMG_SRC){if(IMG[k])continue;const im=new Image();im.decoding='async';im.onload=()=>{im.ok=true;};im.src=IMG_SRC[k];IMG[k]=im;}}
+  function loadImgs(){for(const k in IMG_SRC){if(IMG[k])continue;const im=new Image();im.decoding='async';
+    // ветку и листву печём в плитку кроны — когда догрузились, перепекаем
+    im.onload=()=>{im.ok=true;if((k==='branch'||k==='leaves')&&open)buildArt();};im.src=IMG_SRC[k];IMG[k]=im;}}
   const has=k=>{const im=IMG[k];return !!(im&&im.ok&&im.naturalWidth);};
   const SCALED=new Map();
   function scaled(k,w){
@@ -224,7 +253,8 @@ window.FrogSwingInit=function(B){
       segs:[],roots:[],reeds:[],pads:[],flies:[],parts:[],
       genX:0,lastY:150,
       hx:-9999,hy:300,heronOn:false,heronWarn:0,
-      flies_n:0,maxX:0,mile:100,zone:0,bestCrossed:false,
+      flies_n:0,combo:0,comboT:-9,comboMax:0,maxX:0,
+      sq:0,sqV:0,trail:[],trailT:0,zoom:1,zpulse:0,shield:false,invul:0,dragon:0,items:[],nextEv:8,lastEv:'',passed:new Set(),slow:0,hitstop:0,coach:false,mile:100,zone:0,bestCrossed:false,
       perfects:0,bounces:0,ms0:0,tokenP:null,
     };
     return r;
@@ -242,7 +272,13 @@ window.FrogSwingInit=function(B){
     while(r.genX<r.camX+W*2.2){
       const m=r.genX/UNIT,d=clamp((m-40)/1600,0,1);
       const y=clamp(r.lastY+(R0()-.5)*120,TOP+20,TOP+lerp(150,190,d));r.lastY=y;
-      if(r.genX<700){seg(r,r.genX,r.genX+700,y,'w');r.genX+=700;continue;}
+      if(r.genX<10){
+        // начало собрано руками: длинная ветка, по дуге первого качания мошки,
+        // потом дыра с роем — первый же отпуск сразу приносит награду
+        const y0=TOP+70;r.lastY=y0;seg(r,0,560,y0,'w');
+        arcFlies(r,110,y0,560,6);
+        gapFlies(r,560,170,y0,7,true);r.genX=560+170;continue;
+      }
       // дерево
       let len=lerp(420,300,d)*(.8+R0()*.5);
       const x0=r.genX;
@@ -261,17 +297,15 @@ window.FrogSwingInit=function(B){
         const room=WY-y;const H=clamp(room*(.2+R0()*.18),50,room-280);
         if(H>40)r.reeds.push({x:x0+len*(.1+R0()*.25),top:WY-H,w:18,ph:R0()*6});
       }
-      // мошки по дуге под участком
-      const nf=1+Math.floor(R0()*3);
-      for(let i=0;i<nf;i++){const fx=x0+len*(.2+.6*i/Math.max(1,nf-1||1)),fy=y+lerp(180,260,R0());
-        if(!blocked(r,fx,fy,30))r.flies.push({x:fx,y:fy,t:R0()*6,gold:R0()<.05});}
+      // мошки по дуге качания от начала участка
+      if(R0()<.85)arcFlies(r,x0+Math.min(len*.3,130),y,x0+len,R0()<.5?4:5);
       r.genX=x0+len;
       // дыра
       if(R0()<.3+.45*d){
         const g=Math.min(GAPMAX,lerp(110,200,d)+R0()*lerp(60,130,d));
-        if(R0()<lerp(.65,.25,d))r.pads.push({x:r.genX+g*(.35+R0()*.3),w:84,dip:0,dipV:0,bob:R0()*6});
-        // в дыре висит мошка — награда за риск
-        if(R0()<.55)r.flies.push({x:r.genX+g/2,y:y+lerp(60,140,R0()),t:R0()*6,gold:R0()<.12});
+        if(R0()<lerp(.65,.25,d))r.pads.push({x:r.genX+g*(.35+R0()*.3),w:84,dip:0,dipV:0,bob:R0()*6,spring:m>80&&R0()<.35,springT:9});
+        // над дырой — дуга полёта из мошек: награда за смелый отпуск
+        if(R0()<.6)gapFlies(r,r.genX,g,y,4,false);
         r.genX+=g;
       }
     }
@@ -283,6 +317,19 @@ window.FrogSwingInit=function(B){
     if(r.reeds.length>30)r.reeds=keep(r.reeds);
     if(r.pads.length>30)r.pads=keep(r.pads);
     if(r.flies.length>60)r.flies=r.flies.filter(f=>!f.taken&&f.x>lim);
+  }
+  function arcFlies(r,px,y,xmax,n){
+    const L0=clamp(WY-y-250,130,185);   // примерно та длина языка, на которой качаются
+    for(let i=0;i<n;i++){
+      const a=lerp(-.35,1.05,i/(n-1)),fx=px+Math.sin(a)*L0,fy=y+Math.cos(a)*L0;
+      if(fx<xmax-10&&!blocked(r,fx,fy,26))r.flies.push({x:fx,y:fy,t:r.rng()*6,gold:r.rng()<.04});
+    }
+  }
+  function gapFlies(r,x,g,y,n,gold){
+    for(let i=0;i<n;i++){
+      const u=(i+.5)/n,fx=x-40+(g+80)*u,fy=y+120-Math.sin(u*Math.PI)*70;
+      r.flies.push({x:fx,y:fy,t:r.rng()*6,gold:gold&&i===Math.floor(n/2)});
+    }
   }
   function segAt(r,x){
     const s=r.segs;let lo=0,hi=s.length-1;
@@ -326,6 +373,7 @@ window.FrogSwingInit=function(B){
     const r=run;if(!r||!r.alive)return;
     hintSeen();
     if(!r.started){r.started=true;r.ms0=performance.now();return;}   // забег начинается висящим
+    if(r.dragon>0)return;
     if(!r.tongue||r.tongue.st==='back')fire(r);
   }
   function letGo(){
@@ -339,8 +387,10 @@ window.FrogSwingInit=function(B){
         r.perfN++;r.perfects++;const k=1+Math.min(.12,.06+r.perfN*.012);r.vx*=k;r.vy*=k;
         SND.perfect(r.perfN);B.haptic.light();
         txt(r.x,r.y-38,r.perfN>2?`Идеально ×${r.perfN}`:'Идеально!',{c:'#ffe680'});
-        sparks(r.x,r.y,8,'#ffe680');
+        sparks(r.x,r.y,8,'#ffe680');r.zpulse=Math.min(.09,.03+r.perfN*.012);
+        for(let i=0;i<7;i++)P({k:'line',x:r.x-rnd(10,60),y:r.y+rnd(-30,30),vx:-rnd(200,500),vy:0,g:0,life:.35,s:rnd(30,60)});
       }else{r.perfN=0;SND.release();}
+      SND.whoosh(Math.hypot(r.vx,r.vy));
       r.lastRel=r.t;if(r.rel0==null)r.rel0=r.t;
     }else if(tg.st==='out')tg.st='back';
   }
@@ -363,11 +413,48 @@ window.FrogSwingInit=function(B){
   let hintOn=false,hintT=0;
   function hintSeen(){if(hintOn&&!hintT)hintT=1;}
 
+  function catchFly(r,f){
+    f.taken=true;
+    r.combo=(r.t-r.comboT<1.3)?r.combo+1:1;r.comboT=r.t;if(r.combo>r.comboMax)r.comboMax=r.combo;
+    const val=(f.gold?5:1)*(r.combo>=5?2:1);
+    r.flies_n+=val;elFN.textContent=r.flies_n;kick(elFl,'bump');
+    SND.gulp(r.combo);B.haptic.select();
+    txt(f.x,f.y-16,'+'+val,{c:f.gold?'#ffd23f':(r.combo>=5?'#ffe36b':'#fff'),s:f.gold?22:15,life:.6});
+    sparks(f.x,f.y,f.gold?12:5,f.gold?'#ffd23f':'#fff2b8');
+    if(r.combo===5){banner('Серия!','мошки идут вдвойне',true);}
+    comboRender(r);
+  }
+  const elCombo=$('#fsCombo'),elComboN=$('#fsComboN');
+  function comboRender(r){
+    const on=r&&r.combo>=2;elCombo.classList.toggle('on',on);elCombo.classList.toggle('hot',!!r&&r.combo>=5);
+    if(on){elComboN.textContent='×'+r.combo;kick(elCombo,'kick');}
+  }
+
+  function hurt(r,cause){
+    if(r.invul>0)return false;
+    if(r.shield){
+      r.shield=false;r.invul=1;SND.pop();B.haptic.medium();sparks(r.x,r.y,14,'#bfefff');txt(r.x,r.y-44,'Щит!',{c:'#bfefff'});
+      r.vy=Math.min(r.vy,0)-160;r.vx=Math.max(r.vx,260);
+      if(r.tongue&&r.tongue.st!=='back'){r.tongue.st='back';r.tongue.len=Math.hypot(r.tongue.x-r.x,r.tongue.y-r.y);}
+      return false;
+    }
+    die(cause);return true;
+  }
+  function tryEvent(r){
+    const m=dist(r),list=['swarm','gold'];if(m>=120)list.push('bubble');if(m>=220)list.push('dragon');
+    const pool=list.filter(e=>e!==r.lastEv),ev=pool[Math.floor(fxR()*pool.length)];r.lastEv=ev;SND.event();
+    const x=r.camX+W*1.35,mid=(TOP+120+WY)/2;
+    if(ev==='swarm'){for(let i=0;i<10;i++){const a=i/10*Math.PI*2;r.flies.push({x:x+Math.cos(a)*62,y:mid+Math.sin(a)*50,t:fxR()*6});}banner('Рой мошек!','пролети сквозь — пойдут вдвойне');}
+    else if(ev==='gold'){r.flies.push({x:x+80,y:mid-30,t:0,gold:true,vx:-70});banner('Золотая мошка!','+5 мошек',true);}
+    else if(ev==='bubble'){r.items.push({k:'b',x,y:mid,t:0});banner('Пузырь-щит','спасёт от одного удара');}
+    else{r.items.push({k:'d',x,y:mid-20,t:0});banner('Стрекоза!','хватай — прокатит');}
+  }
+
   /* ---------- шаг физики ---------- */
   function update(dt){
     const r=run;r.t+=dt;tGlobal+=dt;
     if(r.shake>0)r.shake=Math.max(0,r.shake-dt*30);
-    for(const p of r.pads){p.dipV+=(-p.dip*160-p.dipV*10)*dt;p.dip+=p.dipV*dt;}
+    for(const p of r.pads){p.dipV+=(-p.dip*160-p.dipV*10)*dt;p.dip+=p.dipV*dt;if(p.springT<9)p.springT+=dt*2.5;}
     for(const f of r.flies)f.t+=dt;
     for(let i=r.parts.length-1;i>=0;i--){const p=r.parts[i];p.t+=dt;if(p.t>=p.life){r.parts.splice(i,1);continue;}p.vy+=(p.g||0)*dt;p.x+=(p.vx||0)*dt;p.y+=(p.vy||0)*dt;}
     if(hintT>0){hintT-=dt;if(hintT<=0){hintOn=false;$('#fsHint').classList.add('off');}}
@@ -392,15 +479,24 @@ window.FrogSwingInit=function(B){
             tg.st='hold';tg.len=d;r.L=Math.max(MINL,d);r.sticks++;
             // зацеп добавляет немного скорости по ходу — качаться должно быть живо
             const sp=Math.hypot(r.vx,r.vy);if(sp<520&&r.started){const k=(sp+50)/Math.max(1,sp);r.vx*=k;r.vy*=k;if(sp<20)r.vx+=60;}
+            tg.wt=0;r.sqV-=4;
             SND.stick(r.sticks%11);B.haptic.select();bark(tg.x,tg.y);
           }else{tg.st='back';tg.len=d;if(!tg.ok)SND.miss();}
         }
-      }else if(tg.st==='back'){tg.len-=TSPD*1.4*dt;if(tg.len<=0)r.tongue=null;}
+      }else if(tg.st==='hold')tg.wt+=dt;
+      else if(tg.st==='back'){tg.len-=TSPD*1.4*dt;if(tg.len<=0)r.tongue=null;}
     }
     // зажал и опоры раньше не было — язык цепляется сам, как только появится
-    if(holding&&r.started&&!r.tongue){const a=aimAt(r);if(a.ok)fire(r);}
+    if(holding&&r.started&&!r.tongue&&!(r.dragon>0)){const a=aimAt(r);if(a.ok)fire(r);}
 
-    if(r.started){
+    if(r.invul>0)r.invul-=dt;
+    if(r.started&&r.dragon>0){
+      // стрекоза несёт ровно вперёд по середине — время собирать мошек
+      r.dragon-=dt;
+      const ty=(TOP+120+WY)/2;r.vx+=(640-r.vx)*Math.min(1,dt*3);r.vy+=((ty-r.y)*4-r.vy)*Math.min(1,dt*5);
+      r.x+=r.vx*dt;r.y+=r.vy*dt;
+      if(r.dragon<=0){r.vy=-280;txt(r.x,r.y-40,'Хватайся!',{c:'#9dffb0',s:16});}
+    }else if(r.started){
       r.vy+=G*dt;
       const hold=r.tongue&&r.tongue.st==='hold';
       if(hold&&r.L>MINL)r.L=Math.max(MINL,r.L-REEL*dt);
@@ -419,12 +515,31 @@ window.FrogSwingInit=function(B){
     // наклон: на языке — головой к точке зацепа, в полёте — по скорости
     const tgt=r.tongue&&r.tongue.st==='hold'?Math.atan2(r.tongue.x-r.x,r.y-r.tongue.y):clamp(r.vx*.0004+r.vy*.0005,-.5,.6);
     r.rot+=(tgt-r.rot)*Math.min(1,dt*(r.tongue&&r.tongue.st==='hold'?14:6));
+    // пружинка тела, шлейф и линии скорости, камера отъезжает на скорости
+    r.sqV+=(-r.sq*320-r.sqV*13)*dt;r.sq+=r.sqV*dt;
+    const spd=Math.hypot(r.vx,r.vy);
+    r.trailT-=dt;if(r.trailT<=0){r.trailT=.03;if(spd>820||r.dragon>0){r.trail.push({x:r.x,y:r.y,rot:r.rot});if(r.trail.length>6)r.trail.shift();}else if(r.trail.length)r.trail.shift();}
+    if(spd>860&&fxR()<(spd-860)/420)P({k:'line',x:r.camX+W+rnd(0,80),y:rnd(TOP+40,WY-20),vx:-spd*1.3,vy:0,g:0,life:.4,s:rnd(30,80)});
+    const zt=1-clamp((spd-600)/900,0,1)*.08-r.zpulse;r.zpulse*=Math.exp(-dt*4);r.zoom+=(zt-r.zoom)*Math.min(1,dt*3);
+    // события: что-то происходит каждые 11–16 секунд
+    if(r.started){r.nextEv-=dt;if(r.nextEv<=0&&dist(r)>40){r.nextEv=11+fxR()*5;tryEvent(r);}}
+    for(const it of r.items){
+      it.t+=dt;if(it.taken)continue;
+      if(Math.hypot(it.x-r.x,it.y+Math.sin(it.t*2.4)*5-r.y)<R+22){
+        it.taken=true;
+        if(it.k==='b'){r.shield=true;SND.shield();B.haptic.medium();txt(r.x,r.y-44,'Щит!',{c:'#bfefff'});}
+        else{r.dragon=2.8;r.invul=3.3;SND.dragon();B.haptic.medium();txt(r.x,r.y-44,'Полетели!',{c:'#9dffb0'});
+          if(r.tongue&&r.tongue.st!=='back'){r.tongue.st='back';r.tongue.len=Math.hypot(r.tongue.x-r.x,r.tongue.y-r.y);}}
+        sparks(it.x,it.y,12,'#ffffff');
+      }
+    }
+    if(r.items.length>8)r.items=r.items.filter(it=>!it.taken&&it.x>r.camX-W);
 
     // потолок: лбом в дерево — сползаем вниз; в колючки — конец
     for(const ox of [-R*.7,0,R*.7]){
       const s=segAt(r,r.x+ox);
       if(s&&r.y-R<s.y){
-        if(s.k==='t'){die('thorn');return;}
+        if(s.k==='t'&&hurt(r,'thorn'))return;
         if(r.y-R<s.y-14&&ox!==0){ // въехали в торец более низкого участка
           r.x-=Math.sign(ox)*2;r.vx=-r.vx*.3;
         }
@@ -433,26 +548,31 @@ window.FrogSwingInit=function(B){
     }
     if(r.y<-80){r.y=-80;if(r.vy<0)r.vy=0;}
     // корни и камыши
-    for(const o of r.roots){if(Math.abs(r.x-o.x)<o.w/2+R*.8&&r.y>o.y0&&r.y-R*.6<o.y1){die('root');return;}}
-    for(const o of r.reeds){if(Math.abs(r.x-o.x)<o.w/2+R*.7&&r.y+R*.7>o.top+6){die('reed');return;}}
+    for(const o of r.roots){if(Math.abs(r.x-o.x)<o.w/2+R*.55&&r.y>o.y0&&r.y-R*.5<o.y1&&hurt(r,'root'))return;}
+    for(const o of r.reeds){if(Math.abs(r.x-o.x)<o.w/2+R*.55&&r.y+R*.6>o.top+8&&hurt(r,'reed'))return;}
     // вода и кувшинки
     if(r.y+R*.6>WY&&r.vy>0){
       const p=r.pads.find(p=>Math.abs(p.x-r.x)<p.w/2+8);
-      if(p){
-        r.y=WY-R*.6;r.vy=-Math.max(820,r.vy*.6);r.vx=Math.max(r.vx,320);p.dipV=260;r.bounces++;
+      if(p||r.shield){
+        const spr=p&&p.spring;
+        r.y=WY-R*.6;r.vy=spr?-1250:-Math.max(820,r.vy*.6);r.vx=Math.max(r.vx,spr?460:320);r.bounces++;r.sq=-.3;r.sqV=0;
         if(r.tongue&&r.tongue.st!=='back')r.tongue.st='back';
-        SND.bounce();B.haptic.light();splash(r.x,WY,6);txt(r.x,r.y-40,'Пружинит!',{c:'#9dffb0',s:16});
+        if(p){p.dipV=260;p.springT=0;}
+        if(!p){r.shield=false;r.invul=.6;SND.pop();sparks(r.x,WY,14,'#bfefff');}
+        if(spr){SND.spring();B.haptic.medium();r.shake=4;r.zpulse=.06;txt(r.x,r.y-44,'Вжух!',{c:'#b6f0a0',s:20});}
+        else{SND.bounce();B.haptic.light();txt(r.x,r.y-40,p?'Пружинит!':'Щит!',{c:p?'#9dffb0':'#bfefff',s:16});}
+        splash(r.x,WY,6);
       }else{r.y=WY;die('water');splash(r.x,WY,16);SND.splash();return;}
     }
-    // мошки ловим телом и прилипшим языком
+    // мошки: рядом с лягушкой их затягивает к ней — ловятся сами, если лететь через рой
     for(const f of r.flies){
       if(f.taken)continue;
-      const fy=f.y+Math.sin(f.t*4.3)*4;
-      if(Math.hypot(f.x-r.x,fy-r.y)<R+16){
-        f.taken=true;const n=f.gold?5:1;r.flies_n+=n;elFN.textContent=r.flies_n;kick(elFl,'bump');
-        SND.gulp(r.flies_n%15);sparks(f.x,fy,f.gold?10:5,f.gold?'#ffd23f':'#dff2ff');if(f.gold)txt(f.x,fy-20,'+5',{c:'#ffd23f'});
-      }
+      if(f.vx&&!f.pull)f.x+=f.vx*dt;
+      const fy=f.pull?f.y:f.y+Math.sin(f.t*4.3)*4,dx=r.x-f.x,dy=r.y-fy,d=Math.hypot(dx,dy)||1;
+      if(!f.pull&&d<(f.gold?100:80)*(r.dragon>0?1.8:1)){f.pull=true;f.y=fy;}
+      if(f.pull){const st=(Math.hypot(r.vx,r.vy)+700)*dt;if(d<=st+R*.6){catchFly(r,f);continue;}f.x+=dx/d*st;f.y+=dy/d*st;}
     }
+    if(r.combo&&r.t-r.comboT>1.3){r.combo=0;comboRender(r);}
     // цапля сзади: не даёт стоять. Держится сразу за краем экрана и подлетает,
     // если лягушка медлит
     // цапля вылетает не сразу: новичку дают раскачаться и сделать первый полёт
@@ -464,7 +584,7 @@ window.FrogSwingInit=function(B){
       r.heronWarn=clamp(1-(gap-80)/320,0,1);
       if(!r.heronOn&&r.hx>r.camX-60){r.heronOn=true;SND.heron();}
       if(r.hx<r.camX-120)r.heronOn=false;
-      if(gap<34){die('heron');return;}
+      if(gap<34){if(r.shield){r.shield=false;r.invul=.8;r.hx-=260;SND.pop();sparks(r.x,r.y,14,'#bfefff');txt(r.x,r.y-44,'Щит!',{c:'#bfefff'});}else{die('heron');return;}}
     }
     // камера: лягушка на трети экрана, чуть впереди — куда летим
     const cam=r.x-W*.33+clamp(r.vx*.08,-20,50);
@@ -474,13 +594,14 @@ window.FrogSwingInit=function(B){
       if(m>=r.mile){r.mile+=100;SND.mile();kick(elHB,'pulse');}
       let zi=0;for(let i=0;i<ZONES.length;i++)if(m>=ZONES[i].m)zi=i;
       if(zi>r.zone){r.zone=zi;SND.zone();banner(ZONES[zi].name,`${fmtM(m)} м`);}
+      for(const rv of rivals)if(!r.passed.has(rv.id)&&m>rv.best){r.passed.add(rv.id);SND.pass();txt(r.x,r.y-50,`Обогнал ${rv.name}`,{c:'#ffe680',s:16,life:1.1});}
       if(!r.bestCrossed&&bestBefore>0&&m>bestBefore){r.bestCrossed=true;SND.record();banner('Новый рекорд!','',true);B.haptic.success();}
     }
     gen(r);
   }
   function die(cause){
     const r=run;if(!r.alive)return;
-    r.alive=false;r.cause=cause;r.dyingT=0;holding=false;ptrs.clear();
+    r.alive=false;r.cause=cause;r.dyingT=0;holding=false;ptrs.clear();r.slow=.5;r.hitstop=cause==='water'?0:.07;r.shield=false;r.dragon=0;
     if(r.tongue&&r.tongue.st!=='back'){r.tongue.st='back';r.tongue.len=Math.hypot(r.tongue.x-r.x,r.tongue.y-r.y);}
     if(cause!=='water'){r.vy=cause==='thorn'?120:-260;r.vx*=.3;SND.hit();r.shake=6;}
     if(cause==='heron'){r.vy=-380;r.vx=200;}
@@ -512,128 +633,289 @@ window.FrogSwingInit=function(B){
     }
     cx.globalAlpha=1;
   }
-  // дальний лес у воды: два слоя силуэтов с параллаксом
-  function drawHills(r,z){
-    const L=-offX/sc,Rr=W+offX/sc;
-    const layers=[{k:.18,h:.22,c:'rgba(0,0,0,.16)',f:.011},{k:.4,h:.14,c:'rgba(0,0,0,.2)',f:.019}];
-    for(const ly of layers){
-      cx.fillStyle=ly.c;cx.beginPath();cx.moveTo(L,WY);
-      for(let x=L;x<=Rr+8;x+=8){const wx=x+r.camX*ly.k;const h=VH*ly.h*(.55+.25*Math.sin(wx*ly.f)+.2*Math.sin(wx*ly.f*2.7+1));cx.lineTo(x,WY-h);}
-      cx.lineTo(Rr,WY);cx.closePath();cx.fill();
-    }
+  /* ---------- нарисованные куски ----------
+     Печём один раз под масштаб экрана, в стиле стикеров и ассетов Jump: тёмный
+     контур, два тона заливки и блик. Когда придут картинки из Nano Banana
+     (swing/branch, leaves, forest, thorns, front), они заменят эти заготовки */
+  let TW=240;const TLH=100,BARK=86,BH=40;                   // плитка кроны; низ коры — на высоте сегмента
+  let tWood=null,tThorn=null,tBushR=null,tBushL=null,tFar=null,tNear=null,tFront=null;
+  function mkCanvas(w,h){const c=document.createElement('canvas');c.width=Math.max(1,Math.ceil(w*sc*dpr));c.height=Math.max(1,Math.ceil(h*sc*dpr));const g=c.getContext('2d');g.scale(sc*dpr,sc*dpr);c.w=w;c.h=h;return [c,g];}
+  function srand(s){return ()=>{s=(s*16807)%2147483647;return (s-1)/2147483646;};}
+  // листва: сначала все контуры, потом заливки — выходит одна масса с общим контуром
+  function leafMass(g,blobs,pal){
+    g.fillStyle=pal[0];for(const b of blobs){g.beginPath();g.arc(b.x,b.y,b.r+2.4,0,7);g.fill();}
+    g.fillStyle=pal[1];for(const b of blobs){g.beginPath();g.arc(b.x,b.y,b.r,0,7);g.fill();}
+    g.fillStyle=pal[2];for(const b of blobs){g.beginPath();g.arc(b.x-b.r*.14,b.y-b.r*.18,b.r*.8,0,7);g.fill();}
+    g.fillStyle=pal[3];for(const b of blobs){if(b.r<8)continue;g.beginPath();g.ellipse(b.x-b.r*.38,b.y-b.r*.42,b.r*.3,b.r*.18,-.6,0,7);g.fill();}
   }
-  function canopyCol(z){return z.a===ZONES[3]||z.b===ZONES[3]&&z.t>.5?['#0e2a24','#163b30','#1f5240']:['#164a2c','#1f6a3a','#2c8a49'];}
-  function drawCeiling(r,z){
-    const cam=r.camX,[c0,c1,c2]=canopyCol(z);
-    const L=cam-offX/sc-40,Rr=cam+W+offX/sc+40;
-    // свет из дыр — тёплые лучи вниз
-    for(let i=0;i<r.segs.length-1;i++){
-      const a=r.segs[i],b=r.segs[i+1];if(b.x0-a.x1<20||a.x1>Rr||b.x0<L)continue;
-      const x0=a.x1-cam,x1=b.x0-cam,yt=Math.min(a.y,b.y);
-      const g=cx.createLinearGradient(0,yt,0,WY);g.addColorStop(0,'rgba(255,240,180,.22)');g.addColorStop(1,'rgba(255,240,180,0)');
-      cx.fillStyle=g;cx.beginPath();cx.moveTo(x0,yt-20);cx.lineTo(x1,yt-20);cx.lineTo(x1+60,WY);cx.lineTo(x0+30,WY);cx.closePath();cx.fill();
-    }
-    for(const s of r.segs){
-      if(s.x1<L||s.x0>Rr)continue;
-      const x0=s.x0-cam,x1=s.x1-cam,y=s.y;
-      // крона: тёмная масса сверху
-      const g=cx.createLinearGradient(0,-40,0,y);g.addColorStop(0,c0);g.addColorStop(1,c1);
-      cx.fillStyle=g;cx.fillRect(x0,-60,x1-x0,y+50);
-      // нижняя кромка: листья-полукруги, у колючек — шипы
-      if(s.k==='w'){
-        cx.fillStyle='#6b4a2a';cx.fillRect(x0,y-12,x1-x0,12);         // кора, за неё цепляемся
-        cx.fillStyle='#8a6238';cx.fillRect(x0,y-12,x1-x0,3);
-        cx.fillStyle='#4e3420';cx.fillRect(x0,y-2,x1-x0,2);
-        cx.fillStyle=c2;
-        for(let x=Math.ceil(s.x0/26)*26;x<s.x1;x+=26){
-          const h=((x*7.3)%11);cx.beginPath();cx.ellipse(x-cam,y-12,15,6+h*.4,0,Math.PI,0,true);cx.fill();
-        }
-        // свисающий мох — просто украшение
-        cx.strokeStyle='rgba(120,200,110,.55)';cx.lineWidth=2;cx.lineCap='round';
-        for(let x=Math.ceil(s.x0/57)*57+20;x<s.x1-10;x+=57){
-          const l=10+((x*13)%18),sw=Math.sin(tGlobal*1.4+x)*2;
-          cx.beginPath();cx.moveTo(x-cam,y);cx.quadraticCurveTo(x-cam+sw,y+l*.6,x-cam+sw*1.4,y+l);cx.stroke();
-        }
-      }else{
-        cx.fillStyle='#4a2140';cx.fillRect(x0,y-14,x1-x0,14);
-        cx.fillStyle='#e0405f';
-        for(let x=x0+4;x<x1-4;x+=11){cx.beginPath();cx.moveTo(x,y-1);cx.lineTo(x+5.5,y+11+Math.sin(x)*2);cx.lineTo(x+11,y-1);cx.closePath();cx.fill();}
-        cx.fillStyle='#ff8fa3';
-        for(let x=x0+4;x<x1-4;x+=11){cx.beginPath();cx.moveTo(x+3,y);cx.lineTo(x+5.5,y+7);cx.lineTo(x+6.5,y);cx.closePath();cx.fill();}
+  const LEAF=['#0f3a1f','#1f6a34','#2f8f45','rgba(190,255,170,.55)'];
+  const DLEAF=['#1a0d1c','#3b1f3d','#552c50','rgba(255,180,220,.3)'];
+  function wrapBlobs(rn,n,y0,y1,r0,r1){
+    const a=[];for(let i=0;i<n;i++){const b={x:rn()*TW,y:lerp(y0,y1,Math.pow(rn(),.7)),r:lerp(r0,r1,rn())};a.push(b,{...b,x:b.x-TW},{...b,x:b.x+TW});}
+    return a.sort((p,q)=>p.y-q.y);
+  }
+  function buildArt(){
+    let g;
+    // кора с мхом и листвой над ней — за неё цепляется язык
+    // ширина плитки — под ленту ветки, чтобы повтор был бесшовным
+    TW=has('branch')?Math.round(BH*IMG.branch.naturalWidth/IMG.branch.naturalHeight):240;
+    [tWood,g]=mkCanvas(TW,TLH);if(has('branch')){
+      const rn=srand(7);
+      if(has('leaves')){
+        // два ряда пучков: задний притемнён — у кроны появляется объём
+        const im=IMG.leaves,dark=document.createElement('canvas');dark.width=im.naturalWidth;dark.height=im.naturalHeight;
+        {const d=dark.getContext('2d');d.drawImage(im,0,0);d.globalCompositeOperation='source-atop';d.fillStyle='rgba(6,34,16,.55)';d.fillRect(0,0,dark.width,dark.height);}
+        g.fillStyle='#0f3a1f';g.fillRect(0,0,TW,40);
+        const row=(src,n,y0,w0,w1)=>{for(let i=0;i<n;i++){const w=lerp(w0,w1,rn()),x=(i+rn()*.6)*TW/n,y=y0+rn()*10,a=(rn()-.5)*.6;
+          for(const dx of [-TW,0,TW]){g.save();g.translate(x+dx,y);g.rotate(a);g.drawImage(src,-w/2,-w*.55,w,w*im.naturalHeight/im.naturalWidth);g.restore();}}};
+        row(dark,Math.max(4,Math.round(TW/34)),8,44,60);
+        row(im,Math.max(3,Math.round(TW/44)),34,38,52);
+      }else leafMass(g,wrapBlobs(rn,Math.round(TW/9),2,58,9,20),LEAF);
+      g.drawImage(IMG.branch,0,BARK-BH+4,TW+.5,BH);
+    }else{
+      const rn=srand(7);
+      leafMass(g,wrapBlobs(rn,26,4,64,9,20),LEAF);
+      const y0=BARK-17;
+      const gr=g.createLinearGradient(0,y0,0,BARK);gr.addColorStop(0,'#a8703f');gr.addColorStop(.45,'#7a4b26');gr.addColorStop(1,'#4f2f17');
+      g.fillStyle='#2e1a0b';g.fillRect(-4,y0-2.2,TW+8,BARK-y0+4.4);
+      g.fillStyle=gr;g.fillRect(-4,y0,TW+8,BARK-y0);
+      g.fillStyle='rgba(222,170,110,.75)';g.fillRect(-4,y0+1.6,TW+8,2.2);
+      g.strokeStyle='rgba(46,26,11,.75)';g.lineWidth=1.6;g.lineCap='round';
+      for(let i=0;i<14;i++){const x=rn()*TW,y=y0+5+rn()*8,l=8+rn()*16;g.beginPath();g.moveTo(x,y);g.quadraticCurveTo(x+l/2,y+(rn()-.5)*3,x+l,y+(rn()-.5)*2);g.stroke();}
+      for(let i=0;i<3;i++){const x=20+rn()*200,y=y0+9;g.fillStyle='#4f2f17';g.beginPath();g.ellipse(x,y,4.5,3,0,0,7);g.fill();g.fillStyle='#2e1a0b';g.beginPath();g.ellipse(x,y,2,1.3,0,0,7);g.fill();}
+      // мох на коре и свисающие пряди
+      const moss=[];for(let i=0;i<10;i++){const b={x:rn()*TW,y:y0-1+rn()*2,r:3+rn()*4};moss.push(b,{...b,x:b.x-TW},{...b,x:b.x+TW});}
+      leafMass(g,moss,['#123d24','#4f9a3a','#79c24f','rgba(230,255,190,.6)']);
+      for(let i=0;i<7;i++){
+        const x=10+i*TW/7+rn()*14,l=6+rn()*9;
+        g.strokeStyle='#123d24';g.lineWidth=4.2;g.beginPath();g.moveTo(x,BARK-1);g.quadraticCurveTo(x+2,BARK+l*.6,x+1,BARK+l);g.stroke();
+        g.strokeStyle='#6fb648';g.lineWidth=2.2;g.beginPath();g.moveTo(x,BARK-1);g.quadraticCurveTo(x+2,BARK+l*.6,x+1,BARK+l);g.stroke();
       }
     }
-    // края дыр — пышные кусты листвы, чтобы обрыв не был рубленым
+    // колючая ветка: язык не берёт, касаться нельзя
+    [tThorn,g]=mkCanvas(TW,TLH);{
+      const rn=srand(11);
+      if(has('leaves')){
+        // та же листва, но больная: тёмно-лиловая
+        const im=IMG.leaves,sick=document.createElement('canvas');sick.width=im.naturalWidth;sick.height=im.naturalHeight;
+        {const d=sick.getContext('2d');d.drawImage(im,0,0);d.globalCompositeOperation='source-atop';d.fillStyle='rgba(58,18,52,.72)';d.fillRect(0,0,sick.width,sick.height);}
+        g.fillStyle='#1a0d1c';g.fillRect(0,0,TW,40);
+        for(let i=0;i<Math.max(5,Math.round(TW/36));i++){const w=40+rn()*18,x=(i+rn()*.6)*TW/Math.max(5,Math.round(TW/36)),y=14+rn()*30,a=(rn()-.5)*.6;
+          for(const dx of [-TW,0,TW]){g.save();g.translate(x+dx,y);g.rotate(a);g.drawImage(sick,-w/2,-w*.55,w,w*im.naturalHeight/im.naturalWidth);g.restore();}}
+      }else leafMass(g,wrapBlobs(rn,24,4,62,9,18),DLEAF);
+      const yc=BARK-14;
+      g.lineCap='round';
+      const stem=w=>{g.lineWidth=w;g.beginPath();g.moveTo(-6,yc);for(let x=-6;x<=TW+6;x+=6)g.lineTo(x,yc+Math.sin(x/TW*Math.PI*6)*3);g.stroke();};
+      g.strokeStyle='#1a0812';stem(13);g.strokeStyle='#5a2448';stem(9);g.strokeStyle='#7d3a63';g.lineWidth=2;g.beginPath();for(let x=-6;x<=TW+6;x+=6)g.lineTo(x,yc-2.5+Math.sin(x/TW*Math.PI*6)*3);g.stroke();
+      for(let x=6;x<TW;x+=15){
+        const y=yc+Math.sin(x/TW*Math.PI*6)*3+3,h=11+((x*7)%9),w=5.5,lean=((x*13)%7-3)*.6;
+        g.fillStyle='#1a0812';g.beginPath();g.moveTo(x-w-1.6,y-1);g.lineTo(x+lean,y+h+2.6);g.lineTo(x+w+1.6,y-1);g.closePath();g.fill();
+        g.fillStyle='#e0405f';g.beginPath();g.moveTo(x-w,y);g.lineTo(x+lean,y+h);g.lineTo(x+w,y);g.closePath();g.fill();
+        g.fillStyle='#ff98ad';g.beginPath();g.moveTo(x-w+1.5,y+.5);g.lineTo(x+lean-.5,y+h-3);g.lineTo(x-1,y+.5);g.closePath();g.fill();
+        // шипы и вверх — ветка выглядит злой со всех сторон
+        if((x/15|0)%2){g.fillStyle='#1a0812';g.beginPath();g.moveTo(x+4,y-6);g.lineTo(x+9,y-15);g.lineTo(x+10,y-5);g.fill();g.fillStyle='#e0405f';g.beginPath();g.moveTo(x+5,y-6);g.lineTo(x+8.8,y-13);g.lineTo(x+9.4,y-6);g.fill();}
+      }
+    }
+    // пышный край кроны у дыры
+    [tBushR,g]=mkCanvas(70,130);if(has('leaves')){
+      const im=IMG.leaves,w=66,h=w*im.naturalHeight/im.naturalWidth;
+      g.drawImage(im,2,8,w*.8,h*.8);g.drawImage(im,4,48,w,h);
+    }else{
+      const rn=srand(3),b=[];
+      for(let i=0;i<14;i++)b.push({x:18+rn()*26,y:6+rn()*104,r:9+rn()*12});
+      b.push({x:30,y:112,r:10},{x:22,y:118,r:7});
+      leafMass(g,b.sort((p,q)=>p.y-q.y),LEAF);
+      g.strokeStyle='#123d24';g.lineWidth=4;g.lineCap='round';g.beginPath();g.moveTo(40,100);g.quadraticCurveTo(52,112,48,128);g.stroke();
+      g.strokeStyle='#6fb648';g.lineWidth=2;g.beginPath();g.moveTo(40,100);g.quadraticCurveTo(52,112,48,128);g.stroke();
+    }
+    [tBushL,g]=mkCanvas(70,130);g.translate(70,0);g.scale(-1,1);g.drawImage(tBushR,0,0,70,130);
+    // дальний лес: два слоя силуэтов, ниже — дымка
+    const forest=(seed,h,k)=>{
+      const [c,f]=mkCanvas(480,h),rn=srand(seed);
+      f.fillStyle='#fff';
+      for(let i=0;i<9;i++){
+        const x=rn()*480,w=(8+rn()*10)*k,top=h*(.25+rn()*.35);
+        for(const dx of [-480,0,480]){
+          f.beginPath();f.moveTo(x+dx-w,h);f.lineTo(x+dx-w*.6,top);f.lineTo(x+dx+w*.6,top);f.lineTo(x+dx+w,h);f.fill();
+          for(let j=0;j<5;j++){f.beginPath();f.arc(x+dx+(rn()-.5)*60*k,top-rn()*30*k,(22+rn()*22)*k,0,7);f.fill();}
+          // ветки-лианы свисают с кроны
+          f.lineWidth=2.4*k;f.strokeStyle='#fff';f.beginPath();f.moveTo(x+dx+20*k,top);f.quadraticCurveTo(x+dx+26*k,top+40*k,x+dx+22*k,top+(60+rn()*50)*k);f.stroke();
+        }
+      }
+      f.fillRect(0,h-6,480,6);
+      return c;
+    };
+    tFar=forest(5,300,.8);tNear=forest(9,260,1.15);
+    // передний план: тёмная трава и рогоз у нижнего края
+    [tFront,g]=mkCanvas(320,120);{
+      const rn=srand(21);g.lineCap='round';
+      for(let i=0;i<40;i++){
+        const x=rn()*320,h=30+rn()*80,bend=(rn()-.5)*30;
+        for(const dx of [-320,0,320]){
+          g.strokeStyle='#04140b';g.lineWidth=3+rn()*3;g.beginPath();g.moveTo(x+dx,122);g.quadraticCurveTo(x+dx+bend*.2,120-h*.6,x+dx+bend,120-h);g.stroke();
+        }
+        if(i%6===0)for(const dx of [-320,0,320]){g.fillStyle='#0b1f12';g.beginPath();g.ellipse(x+dx+bend*.6,122-h*.8,4,11,bend*.01,0,7);g.fill();}
+      }
+    }
+  }
+  function tileStrip(t,x0,x1,cam,y){
+    // плитка привязана к миру, поэтому не «едет» вместе с краем участка
+    const a=Math.floor(x0/TW)*TW;
+    cx.save();cx.beginPath();cx.rect(x0-cam,y-2,x1-x0,TLH+20);cx.clip();
+    for(let x=a;x<x1;x+=TW)cx.drawImage(t,x-cam,y,TW+.6,TLH);
+    cx.restore();
+  }
+  // слой с параллаксом, тонированный под зону: белые силуэты красим через source-atop
+  const tinted=new Map();
+  function tint(t,col){
+    const key=t.width+'/'+col;let c=tinted.get(t)&&tinted.get(t).col===col?tinted.get(t).c:null;
+    if(!c){c=document.createElement('canvas');c.width=t.width;c.height=t.height;const g=c.getContext('2d');g.drawImage(t,0,0);g.globalCompositeOperation='source-atop';g.fillStyle=col;g.fillRect(0,0,c.width,c.height);tinted.set(t,{col,c});}
+    return c;
+  }
+  function layer(t,k,cam,yBottom,col,alpha){
+    const c=tint(t,col),w=t.w,h=t.h,L=-offX/sc-40,Rr=W+offX/sc+40;
+    const off=((cam*k)%w+w)%w;
+    cx.globalAlpha=alpha;
+    for(let x=L-off-w*Math.ceil(0);x<Rr;x+=w){if(x+w<L)continue;cx.drawImage(c,x,yBottom-h,w+.6,h);}
+    cx.globalAlpha=1;
+  }
+  const zoneMix=(z,k)=>mixc(z.a[k],z.b[k],z.t);
+  let fTint=null;
+  function forestTint(src,col){
+    if(fTint&&fTint.src===src&&fTint.col===col)return fTint.c;
+    const c=document.createElement('canvas');c.width=src.width;c.height=src.height;const g=c.getContext('2d');
+    g.drawImage(src,0,0);g.globalCompositeOperation='source-atop';g.globalAlpha=.55;g.fillStyle=col;g.fillRect(0,0,c.width,c.height);
+    // верх ленты растворяем: иначе у леса видна ровная горизонтальная кромка
+    g.globalAlpha=1;g.globalCompositeOperation='destination-in';
+    const gr=g.createLinearGradient(0,0,0,c.height*.4);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,'rgba(0,0,0,1)');
+    g.fillStyle=gr;g.fillRect(0,0,c.width,c.height);
+    fTint={src,col,c};return c;
+  }
+  function drawBack(r,z){
+    const cam=r.camX;
+    // дальний и ближний лес темнее неба, с дымкой у воды
+    // цвет слоя квантуем: иначе на переходе зон перекрашивали бы плитку каждый кадр
+    const zq={a:z.a,b:z.b,t:Math.round(z.t*8)/8};
+    const far=mixc(zoneMix(zq,'bot'),'#000000',.18),near=mixc(zoneMix(zq,'bot'),'#000000',.42);
+    if(!has('forest'))layer(tFar,.12,cam,WY+2,far,.55);
+    const hz=cx.createLinearGradient(0,WY-160,0,WY);hz.addColorStop(0,'rgba(255,255,255,0)');hz.addColorStop(1,'rgba(220,255,235,.12)');
+    cx.fillStyle=hz;cx.fillRect(-offX/sc,WY-160,W+2*offX/sc,160);
+    if(has('forest')){
+      const im=IMG.forest,h=Math.min(470,(WY-TOP)*.85),w=h*im.naturalWidth/im.naturalHeight,off=((cam*.3)%w+w)%w,L=-offX/sc-40,Rr=W+offX/sc+40;
+      // под цвет зоны: закат, облака, ночь — красим сам лес, не полосу
+      const fc=forestTint(scaled('forest',w),mixc(zoneMix(zq,'bot'),zoneMix(zq,'top'),.3));
+      for(let x=L-off;x<Rr;x+=w)if(x+w>L)cx.drawImage(fc,x,WY-h+8,w+.6,h);
+    }else layer(tNear,.32,cam,WY+2,near,.8);
+    // лианы среднего плана: качаются, ни за что не цепляют
+    cx.lineCap='round';
+    const step=96,first=Math.floor((cam*.7-offX/sc)/step)-1;
+    for(let i=first;i<first+8;i++){
+      const h=(Math.sin(i*12.9898)*43758.5453)%1,hh=Math.abs(h);
+      if(hh<.35)continue;
+      const x=i*step+hh*60-cam*.7,l=110+hh*220,sw=Math.sin(tGlobal*.9+i)*6;
+      cx.strokeStyle='rgba(8,40,22,.55)';cx.lineWidth=3.2;cx.beginPath();cx.moveTo(x,-10);cx.quadraticCurveTo(x+sw,l*.55,x+sw*1.6,l);cx.stroke();
+      cx.fillStyle='rgba(20,70,36,.6)';
+      for(let k=1;k<5;k++){const t=k/5,lx=x+sw*1.6*t*t,ly=l*t;cx.beginPath();cx.ellipse(lx+(k%2?5:-5),ly,6,3,k%2?.6:-.6,0,7);cx.fill();}
+    }
+  }
+  function drawCeiling(r,z){
+    const cam=r.camX,L=cam-offX/sc-80,Rr=cam+W+offX/sc+80;
+    // свет из дыр — тёплые лучи вниз, чуть дышат
+    for(let i=0;i<r.segs.length-1;i++){
+      const a=r.segs[i],b=r.segs[i+1];if(b.x0-a.x1<20||a.x1>Rr||b.x0<L)continue;
+      const x0=a.x1-cam,x1=b.x0-cam,yt=Math.min(a.y,b.y)-40,br=.18+.05*Math.sin(tGlobal*1.3+i);
+      const g=cx.createLinearGradient(0,yt,0,WY);g.addColorStop(0,`rgba(255,240,180,${br})`);g.addColorStop(1,'rgba(255,240,180,0)');
+      cx.fillStyle=g;cx.beginPath();cx.moveTo(x0+6,yt);cx.lineTo(x1-6,yt);cx.lineTo(x1+70,WY);cx.lineTo(x0+40,WY);cx.closePath();cx.fill();
+    }
+    const night=z.b===ZONES[3]?z.t:(z.a===ZONES[3]?1:0);
+    const top=mixc('#0f3a1f','#0a1c18',night);
+    for(const s of r.segs){
+      if(s.x1<L||s.x0>Rr)continue;
+      const x0=s.x0-cam,x1=s.x1-cam,base=s.k==='w'?s.y:s.y-8,ty=base-BARK;
+      cx.fillStyle=top;cx.fillRect(x0,-80,x1-x0,ty+42+80);
+      tileStrip(s.k==='w'?tWood:tThorn,s.x0,s.x1,cam,ty);
+    }
     for(let i=0;i<r.segs.length;i++){
       const s=r.segs[i],n=r.segs[i+1],p=r.segs[i-1];
       if(s.x1<L||s.x0>Rr)continue;
-      if(!n||n.x0-s.x1>2)bush(s.x1-cam,s.y,c1,c2,1);
-      if(!p||s.x0-p.x1>2)bush(s.x0-cam,s.y,c1,c2,-1);
+      const base=s.k==='w'?s.y:s.y-8;
+      if(!n||n.x0-s.x1>2)cx.drawImage(tBushR,s.x1-cam-36,base-122,70,130);
+      if(!p||s.x0-p.x1>2)cx.drawImage(tBushL,s.x0-cam-34,base-122,70,130);
     }
   }
-  function bush(x,y,c1,c2,side){
-    cx.fillStyle=c1;cx.beginPath();cx.arc(x,y-30,24,0,7);cx.arc(x+side*6,y-60,20,0,7);cx.arc(x,y-4,14,0,7);cx.fill();
-    cx.fillStyle=c2;cx.beginPath();cx.arc(x+side*4,y-12,10,0,7);cx.arc(x+side*8,y-38,9,0,7);cx.fill();
-  }
+  // свисающий камыш: картинка из Flappy, обрезанная сверху под нужную длину
   function drawRoot(o,cam){
-    const x=o.x-cam,sw=Math.sin(tGlobal*1.1+o.ph)*2;
-    cx.fillStyle='#5a3b22';cx.beginPath();
-    cx.moveTo(x-o.w/2-3,o.y0);cx.quadraticCurveTo(x-o.w/2+sw,(o.y0+o.y1)/2,x-3+sw,o.y1);
-    cx.quadraticCurveTo(x+sw,o.y1+10,x+3+sw,o.y1);cx.quadraticCurveTo(x+o.w/2+sw,(o.y0+o.y1)/2,x+o.w/2+3,o.y0);cx.closePath();cx.fill();
-    cx.strokeStyle='#3e2816';cx.lineWidth=2;cx.beginPath();cx.moveTo(x-2,o.y0+6);cx.quadraticCurveTo(x+sw*.5,(o.y0+o.y1)/2,x-1+sw,o.y1-8);cx.stroke();
-    cx.strokeStyle='#6f4c2d';cx.lineWidth=3;cx.lineCap='round';
-    for(let k=1;k<=2;k++){const yy=lerp(o.y0,o.y1,k/3.2),s=k%2?-1:1;cx.beginPath();cx.moveTo(x+sw*.5,yy);cx.quadraticCurveTo(x+s*12,yy+4,x+s*16,yy+14);cx.stroke();}
-    cx.fillStyle='rgba(120,200,110,.8)';cx.beginPath();cx.ellipse(x+sw,o.y0+16,10,5,.4,0,7);cx.fill();
+    const L=o.y1-o.y0,x=o.x-cam,sw=Math.sin(tGlobal*1.1+o.ph)*1.5;
+    if(has('reed_top')){
+      const im=IMG.reed_top,w=46,s=w/im.naturalWidth,full=im.naturalHeight*s;
+      cx.save();cx.translate(x+sw,o.y0-6);cx.rotate(sw*.004);
+      if(L+6<=full){const sh=(L+6)/s;cx.drawImage(im,0,im.naturalHeight-sh,im.naturalWidth,sh,-w/2,0,w,L+6);}
+      else cx.drawImage(im,-w/2,0,w,L+6);
+      cx.restore();return;
+    }
+    cx.fillStyle='#3e8a3a';cx.fillRect(x-o.w/2,o.y0,o.w,L);
   }
   function drawReed(o,cam){
-    const x=o.x-cam;
-    for(let i=-1;i<=1;i++){
-      const sx=x+i*6,sw=Math.sin(tGlobal*1.3+o.ph+i)*3,top=o.top+Math.abs(i)*14;
-      cx.strokeStyle=i?'#3e8a3a':'#4fa246';cx.lineWidth=4;cx.lineCap='round';
-      cx.beginPath();cx.moveTo(sx,WY+4);cx.quadraticCurveTo(sx,top+(WY-top)*.4,sx+sw,top+12);cx.stroke();
-      if(!i){cx.fillStyle='#7a4a24';cx.beginPath();cx.ellipse(sx+sw,top+4,5.5,15,0,0,7);cx.fill();cx.strokeStyle='#4fa246';cx.lineWidth=2;cx.beginPath();cx.moveTo(sx+sw,top-10);cx.lineTo(sx+sw,top-18);cx.stroke();}
+    const H=WY-o.top,x=o.x-cam;
+    if(has('reed_bottom')){
+      const im=IMG.reed_bottom,w=48,s=w/im.naturalWidth,full=im.naturalHeight*s,h=H+14;
+      if(h<=full)cx.drawImage(im,0,0,im.naturalWidth,h/s,x-w/2,o.top-6,w,h);
+      else cx.drawImage(im,x-w/2,o.top-6,w,h);
+      return;
     }
-    cx.fillStyle='#4fa246';cx.beginPath();cx.moveTo(x-4,WY);cx.quadraticCurveTo(x-24,WY-50,x-30,WY-70);cx.quadraticCurveTo(x-14,WY-40,x+2,WY);cx.fill();
+    cx.fillStyle='#4fa246';cx.fillRect(x-o.w/2,o.top,o.w,H);
   }
   function drawFly(f,cam){
-    const x=f.x-cam+Math.sin(f.t*3.1)*5,y=f.y+Math.sin(f.t*4.3)*4;
+    const x=f.x-cam+(f.pull?0:Math.sin(f.t*3.1)*5),y=f.y+(f.pull?0:Math.sin(f.t*4.3)*4);
     const flap=Math.abs(Math.sin(f.t*38));
-    if(f.gold){cx.fillStyle='rgba(255,210,63,.25)';cx.beginPath();cx.arc(x,y,16,0,7);cx.fill();}
-    cx.fillStyle='rgba(223,242,255,.85)';
-    cx.beginPath();cx.ellipse(x-6,y-.5,7,2.4*flap+.7,-.95,0,7);cx.fill();
-    cx.beginPath();cx.ellipse(x+6,y-.5,7,2.4*flap+.7,.95,0,7);cx.fill();
+    if(f.gold){cx.fillStyle=`rgba(255,210,63,${.22+.1*Math.sin(f.t*6)})`;cx.beginPath();cx.arc(x,y,18,0,7);cx.fill();}
+    else{cx.fillStyle='rgba(255,255,230,.13)';cx.beginPath();cx.arc(x,y,13,0,7);cx.fill();}
+    cx.fillStyle='rgba(223,242,255,.9)';cx.strokeStyle='rgba(40,60,80,.5)';cx.lineWidth=.8;
+    cx.beginPath();cx.ellipse(x-6,y-.5,7,2.4*flap+.7,-.95,0,7);cx.fill();cx.stroke();
+    cx.beginPath();cx.ellipse(x+6,y-.5,7,2.4*flap+.7,.95,0,7);cx.fill();cx.stroke();
     cx.fillStyle=f.gold?'#f5b400':'#333a45';
-    cx.beginPath();cx.ellipse(x,y+2.6,3.4,4.6,0,0,7);cx.fill();
-    cx.beginPath();cx.ellipse(x,y-2,3,2.7,0,0,7);cx.fill();
-    cx.fillStyle=f.gold?'#ffd97a':'#414b5c';cx.beginPath();cx.arc(x,y-5.6,2.5,0,7);cx.fill();
-    cx.fillStyle=f.gold?'#ffe680':'#e0405f';cx.beginPath();cx.arc(x-1.5,y-6.2,1.2,0,7);cx.arc(x+1.5,y-6.2,1.2,0,7);cx.fill();
+    cx.beginPath();cx.ellipse(x,y+2.6,3.6,4.8,0,0,7);cx.fill();
+    cx.beginPath();cx.ellipse(x,y-2,3.2,2.8,0,0,7);cx.fill();
+    cx.fillStyle=f.gold?'#ffd97a':'#414b5c';cx.beginPath();cx.arc(x,y-5.6,2.6,0,7);cx.fill();
+    cx.fillStyle=f.gold?'#ffe680':'#e0405f';cx.beginPath();cx.arc(x-1.5,y-6.2,1.3,0,7);cx.arc(x+1.5,y-6.2,1.3,0,7);cx.fill();
   }
+  // цапля из Flappy: шея выходит из-за левого края, клюв щёлкает вперёд
   function drawHeron(r){
-    const x=r.hx-r.camX,y=r.hy-10,fl=Math.sin(tGlobal*9);
-    cx.save();cx.translate(x,y);
-    // крылья
-    cx.fillStyle='#aab6c1';
-    cx.beginPath();cx.moveTo(-6,-4);cx.quadraticCurveTo(-30,-30*fl-6,-58,-36*fl-4);cx.quadraticCurveTo(-30,-6,-6,6);cx.fill();
-    cx.fillStyle='#dfe6ec';cx.beginPath();cx.ellipse(0,0,26,12,-.08,0,7);cx.fill();
-    cx.fillStyle='#c9d3dc';
-    cx.beginPath();cx.moveTo(4,-2);cx.quadraticCurveTo(-20,-24*fl,-44,-30*fl+4);cx.quadraticCurveTo(-18,-2,4,8);cx.fill();
-    // шея и голова вперёд
-    cx.strokeStyle='#dfe6ec';cx.lineWidth=7;cx.lineCap='round';cx.beginPath();cx.moveTo(18,-4);cx.quadraticCurveTo(30,-18,40,-12);cx.stroke();
-    cx.fillStyle='#dfe6ec';cx.beginPath();cx.arc(42,-12,7,0,7);cx.fill();
-    cx.fillStyle='#e7a35a';cx.beginPath();cx.moveTo(47,-15);cx.lineTo(72,-10);cx.lineTo(47,-8);cx.fill();
-    cx.fillStyle='#1b2a22';cx.beginPath();cx.arc(44,-14,1.8,0,7);cx.fill();
-    cx.fillStyle='#39434d';cx.beginPath();cx.moveTo(38,-17);cx.lineTo(28,-22);cx.lineTo(38,-14);cx.fill();
-    cx.strokeStyle='#e7a35a';cx.lineWidth=2.5;cx.beginPath();cx.moveTo(-22,4);cx.lineTo(-44,10);cx.moveTo(-22,7);cx.lineTo(-44,14);cx.stroke();
-    cx.restore();
+    const x=r.hx-r.camX,y=r.hy,snap=Math.max(0,Math.sin(tGlobal*7))*.12;
+    if(has('heron')){
+      const im=IMG.heron,h=120,w=h*im.naturalWidth/im.naturalHeight;
+      // в картинке клюв смотрит вверх-вправо, шея уходит вниз: поворот кладёт клюв
+      // горизонтально на лягушку, шея тянется из-за левого нижнего края
+      cx.save();cx.translate(x,y);cx.rotate(.9-snap);
+      cx.drawImage(im,-w*.4,-h*.3,w,h);
+      cx.restore();
+      return;
+    }
+    cx.fillStyle='#dfe6ec';cx.beginPath();cx.ellipse(x,y,26,12,0,0,7);cx.fill();
+    cx.fillStyle='#e7a35a';cx.beginPath();cx.moveTo(x+20,y-4);cx.lineTo(x+52,y);cx.lineTo(x+20,y+4);cx.fill();
   }
+  // язык — упругий: на вылете провисает, после зацепа дрожит и успокаивается,
+  // у рта толще, к кончику тоньше
   function drawTongue(r){
     const tg=r.tongue;if(!tg)return;
     const m=mouth(r),dx=tg.x-m.x,dy=tg.y-m.y,d=Math.hypot(dx,dy)||1;
     const l=tg.st==='hold'?d:Math.min(d,Math.max(0,tg.len));
-    const tx=m.x+dx/d*l,ty=m.y+dy/d*l,cam=r.camX;
-    cx.lineCap='round';
-    cx.strokeStyle='#c43d63';cx.lineWidth=6.5;cx.beginPath();cx.moveTo(m.x-cam,m.y);cx.lineTo(tx-cam,ty);cx.stroke();
-    cx.strokeStyle='#ff6f8e';cx.lineWidth=4;cx.beginPath();cx.moveTo(m.x-cam,m.y);cx.lineTo(tx-cam,ty);cx.stroke();
-    cx.strokeStyle='rgba(255,200,215,.7)';cx.lineWidth=1.3;cx.beginPath();cx.moveTo(m.x-cam-1,m.y);cx.lineTo(tx-cam-1,ty);cx.stroke();
+    const ux=dx/d,uy=dy/d,tx=m.x+ux*l,ty=m.y+uy*l,cam=r.camX;
+    const wob=tg.st==='hold'?Math.sin((tg.wt||0)*42)*Math.exp(-(tg.wt||0)*7)*16:0;
+    const sag=tg.st==='out'?Math.min(20,l*.09):tg.st==='back'?Math.min(14,l*.07):0;
+    const qx=(m.x+tx)/2-uy*wob,qy=(m.y+ty)/2+ux*wob+sag;
+    const N=14,Lp=[],Rp=[];
+    for(let i=0;i<=N;i++){
+      const t=i/N,a=1-t,px=a*a*m.x+2*a*t*qx+t*t*tx,py=a*a*m.y+2*a*t*qy+t*t*ty;
+      const gx=2*a*(qx-m.x)+2*t*(tx-qx),gy=2*a*(qy-m.y)+2*t*(ty-qy),gl=Math.hypot(gx,gy)||1,w=lerp(4.6,2.6,t);
+      Lp.push([px-cam-gy/gl*w,py+gx/gl*w]);Rp.push([px-cam+gy/gl*w,py-gx/gl*w]);
+    }
+    const poly=(grow)=>{cx.beginPath();Lp.forEach(([x,y],i)=>{const [rx,ry]=Rp[i],mx=(x+rx)/2,my=(y+ry)/2;const X2=mx+(x-mx)*grow,Y2=my+(y-my)*grow;i?cx.lineTo(X2,Y2):cx.moveTo(X2,Y2);});
+      for(let i=N;i>=0;i--){const [x,y]=Rp[i],[lx,ly]=Lp[i],mx=(x+lx)/2,my=(y+ly)/2;cx.lineTo(mx+(x-mx)*grow,my+(y-my)*grow);}cx.closePath();cx.fill();};
+    cx.fillStyle='#a82d50';poly(1.45);
+    cx.fillStyle='#ff6f8e';poly(1);
+    cx.strokeStyle='rgba(255,215,225,.75)';cx.lineWidth=1.2;cx.lineCap='round';cx.beginPath();
+    for(let i=1;i<N;i++){const [x,y]=Lp[i],[rx,ry]=Rp[i],px=x*.7+rx*.3,py=y*.7+ry*.3;i>1?cx.lineTo(px,py):cx.moveTo(px,py);}cx.stroke();
     // липкий кончик; на держании — расплющен о кору
     cx.fillStyle='#ff8fa8';cx.beginPath();
     if(tg.st==='hold')cx.ellipse(tx-cam,ty-1,8,4.5,0,0,7);else cx.arc(tx-cam,ty,5.2,0,7);
@@ -668,13 +950,43 @@ window.FrogSwingInit=function(B){
       cx.globalAlpha=1;
     }
   }
-  function drawFrog(r){
-    const x=r.x-r.camX,y=r.y;
-    const sp=Math.hypot(r.vx,r.vy),st=r.alive&&!(r.tongue&&r.tongue.st==='hold')?clamp(sp/1400,0,.12):0;
-    cx.save();cx.translate(x,y);cx.rotate(r.rot);cx.scale(1-st*.5,1+st);
+  function frogAt(x,y,rot,va,sx,sy){
+    cx.save();cx.translate(x,y);cx.rotate(va);cx.scale(sx,sy);cx.rotate(rot-va);
     if(frogImg)cx.drawImage(frogImg,-FROG/2,-FROG*.55,FROG,FROG);
     else{cx.fillStyle='#5cc27a';cx.beginPath();cx.ellipse(0,0,FROG*.4,FROG*.3,0,0,7);cx.fill();}
     cx.restore();
+  }
+  function drawFrog(r){
+    const cam=r.camX,x=r.x-cam,y=r.y;
+    // шлейф на скорости
+    r.trail.forEach((t,i)=>{cx.globalAlpha=.06+.05*i;frogAt(t.x-cam,t.y,t.rot,0,1,1);});cx.globalAlpha=1;
+    if(r.dragon>0&&has('dragonfly')){cx.save();cx.translate(x,y-FROG*.62);cx.scale(1,1+Math.sin(tGlobal*46)*.07);blit('dragonfly',0,0,74);cx.restore();}
+    // растяжение по скорости в полёте и пружинка при зацепе/отскоке
+    const sp=Math.hypot(r.vx,r.vy),hold=r.tongue&&r.tongue.st==='hold';
+    const st=r.alive&&!hold?clamp((sp-300)/1800,0,.14):0,va=Math.atan2(r.vy,r.vx);
+    if(r.invul>0&&r.alive&&!(r.dragon>0)&&Math.floor(tGlobal*16)%2)cx.globalAlpha=.55;
+    frogAt(x,y,r.rot,va,(1+st)*(1+r.sq*.5),(1-st*.6)*(1-r.sq*.5));
+    cx.globalAlpha=1;
+    if(r.shield&&has('bubble')){cx.globalAlpha=.9;blit('bubble',x,y,FROG*1.3+Math.sin(tGlobal*3)*2);cx.globalAlpha=1;}
+  }
+  function drawItem(it,cam){
+    const x=it.x-cam,y=it.y+Math.sin(it.t*2.4)*5;
+    if(it.k==='b'){if(has('bubble'))blit('bubble',x,y,44+Math.sin(it.t*3)*2);else{cx.strokeStyle='#dff';cx.lineWidth=2;cx.beginPath();cx.arc(x,y,20,0,7);cx.stroke();}}
+    else if(has('dragonfly')){cx.save();cx.translate(x,y);cx.scale(1,1+Math.sin(it.t*46)*.07);blit('dragonfly',0,0,60);cx.restore();}
+    // мягкое свечение — видно, что это бонус
+    cx.fillStyle=`rgba(255,255,220,${.12+.08*Math.sin(it.t*5)})`;cx.beginPath();cx.arc(x,y,30,0,7);cx.fill();
+  }
+  // подсказка первых забегов: момент отпускания
+  function drawCoach(r){
+    if(!r.coach||!r.alive)return;
+    const tg=r.tongue;if(!tg||tg.st!=='hold')return;
+    const ang=Math.atan2(-r.vy,r.vx);if(!(r.x>tg.x&&r.vx>150&&ang>.3&&ang<1.05))return;
+    const x=r.x-r.camX,y=r.y+FROG*.75,s=1+Math.sin(tGlobal*14)*.06;
+    cx.save();cx.translate(x,y);cx.scale(s,s);
+    cx.font='900 15px Nunito,"Segoe UI",sans-serif';cx.textAlign='center';cx.textBaseline='middle';
+    const w=cx.measureText('Отпускай!').width+22;
+    cx.fillStyle='#f7b500';cx.beginPath();cx.roundRect?cx.roundRect(-w/2,-13,w,26,13):cx.rect(-w/2,-13,w,26);cx.fill();
+    cx.fillStyle='#5a3b00';cx.fillText('Отпускай!',0,1);cx.restore();
   }
   function drawParts(r,front){
     const cam=r.camX;
@@ -682,6 +994,7 @@ window.FrogSwingInit=function(B){
       const isTxt=p.k==='txt';if(isTxt!==front)continue;
       const a=1-p.t/p.life,x=p.x-cam,y=p.y;
       if(p.k==='drop'){cx.fillStyle=p.c;cx.globalAlpha=a;cx.beginPath();cx.arc(x,y,p.s,0,7);cx.fill();}
+      else if(p.k==='line'){cx.strokeStyle='rgba(255,255,255,.55)';cx.globalAlpha=a;cx.lineWidth=2;cx.lineCap='round';cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+p.s,y);cx.stroke();}
       else if(p.k==='ring'){cx.strokeStyle=p.c+(a*.8).toFixed(2)+')';cx.lineWidth=2;const rr=p.s+p.t*110;cx.beginPath();cx.ellipse(x,y,rr,rr*.28,0,0,7);cx.stroke();}
       else if(p.k==='spark'){cx.fillStyle=p.c;cx.globalAlpha=a;cx.beginPath();cx.arc(x,y,p.s*(.5+a*.5),0,7);cx.fill();}
       else if(isTxt){
@@ -693,6 +1006,19 @@ window.FrogSwingInit=function(B){
     }
   }
   // линия рекорда поперёк экрана — как в Frog Jump, только вертикальная
+  let rivals=[];
+  function drawRivals(r){
+    cx.font='800 11px Nunito,"Segoe UI",sans-serif';cx.textBaseline='middle';cx.textAlign='center';
+    rivals.forEach((rv,i)=>{
+      const x=rv.best*UNIT-r.camX;if(x<-60||x>W+offX/sc+60)return;
+      const done=r.passed.has(rv.id);
+      cx.setLineDash([5,7]);cx.strokeStyle=done?'rgba(255,255,255,.25)':'rgba(255,255,255,.7)';cx.lineWidth=1.4;
+      cx.beginPath();cx.moveTo(x,TOP+40);cx.lineTo(x,WY);cx.stroke();cx.setLineDash([]);
+      const label=`${rv.name} · ${fmtM(rv.best)} м`,tw=cx.measureText(label).width+16,ly=WY-58-(i%2)*20;
+      cx.fillStyle='rgba(8,30,22,.72)';cx.beginPath();cx.roundRect?cx.roundRect(x-tw/2,ly,tw,16,8):cx.rect(x-tw/2,ly,tw,16);cx.fill();
+      cx.fillStyle='#fff';cx.fillText(label,x,ly+8);
+    });
+  }
   function drawBest(r){
     if(!(best>0))return;
     const x=best*UNIT-r.camX;if(x<-20||x>W+offX/sc+20)return;
@@ -716,9 +1042,10 @@ window.FrogSwingInit=function(B){
     drawMotes(z.a.mote,1-z.mt,camPx);if(z.mt>0)drawMotes(z.b.mote,z.mt,camPx);
     const shx=r.shake?rnd(-r.shake,r.shake):0,shy=r.shake?rnd(-r.shake,r.shake):0;
     cx.setTransform(dpr*sc,0,0,dpr*sc,(offX+shx*sc)*dpr,shy*sc*dpr);
-    drawHills(r,z);
+    {const px=W*.4,py=VH*.5;cx.translate(px,py);cx.scale(r.zoom,r.zoom);cx.translate(-px,-py);}
+    drawBack(r,z);
     // вода
-    const L=-offX/sc,Rr=W+offX/sc;
+    const L=-offX/sc-40,Rr=W+offX/sc+40;
     if(has('water')){
       const im=IMG.water,tw=170,th=tw*im.naturalHeight/im.naturalWidth,off=((r.camX+tGlobal*9)%tw+tw)%tw;
       cx.fillStyle='#234d5d';cx.fillRect(L,WY+th-10,Rr-L,VH-WY+60);
@@ -729,18 +1056,26 @@ window.FrogSwingInit=function(B){
       const y=WY+3+p.dip*.06+Math.sin(tGlobal*1.6+p.bob)*.8;
       if(has('pad'))blit('pad',p.x-cam,y,p.w+12,.5,.44);
       else{cx.fillStyle='#5cc27a';cx.beginPath();cx.ellipse(p.x-cam,y,p.w/2,10,0,0,7);cx.fill();}
+      if(p.spring&&has('spring_low')){
+        const up=p.springT<.45,k=p.springT<1?1+Math.sin(p.springT*Math.PI)*.12:1,im=IMG[up?'spring_high':'spring_low'],hgt=(up?46:34)*k,w=hgt*im.naturalWidth/im.naturalHeight;
+        cx.drawImage(im,p.x-cam-w/2,y-4-hgt,w,hgt);
+      }
     }
     for(const o of r.reeds)if(vis(o.x))drawReed(o,cam);
-    drawBest(r);
+    drawRivals(r);drawBest(r);
     drawCeiling(r,z);
     for(const o of r.roots)if(vis(o.x))drawRoot(o,cam);
     for(const f of r.flies)if(!f.taken&&vis(f.x))drawFly(f,cam);
+    for(const it of r.items)if(!it.taken&&vis(it.x))drawItem(it,cam);
     drawParts(r,false);
     r.aim=r.alive&&r.started?aimAt(r):null;
     drawAim(r);
     drawFrog(r);
     drawTongue(r);
+    drawCoach(r);
     if(r.started&&r.hx>cam+L-90)drawHeron(r);
+    // передний план — темнее и быстрее мира, даёт глубину
+    layer(tFront,1.3,r.camX,VH+8,'#04140b',.92);
     drawParts(r,true);
     cx.setTransform(dpr,0,0,dpr,0,0);
     // цапля близко — край экрана краснеет
@@ -760,7 +1095,10 @@ window.FrogSwingInit=function(B){
     if(!run)return;
     if(dt>0){fAcc+=dt;fN++;if(fN>=45){const avg=fAcc/fN;fAcc=0;fN=0;if(quality&&avg>.028){quality=0;resize();}else if(!quality&&avg<.017){quality=1;resize();}}}
     if(!paused&&$('#fsOver').hidden){
-      acc+=dt;let n=0;
+      let sdt=dt;
+      if(run.hitstop>0){run.hitstop-=dt;sdt=0;}
+      if(run.slow>0){run.slow-=dt;sdt*=.35;}
+      acc+=sdt;let n=0;
       while(acc>=STEP&&n<12){update(STEP);acc-=STEP;n++;}
       if(n>=12)acc=0;
     }
@@ -790,8 +1128,10 @@ window.FrogSwingInit=function(B){
     $('#fsOverF').textContent=r.flies_n;
     $('#fsNewRec').hidden=!(m>bestBefore&&bestBefore>0);   // первый забег рекордом не считаем
     $('#fsOverBest').textContent=`Рекорд: ${fmtM(Math.max(bestBefore,m))} м`;
-    $('#fsStats').innerHTML=`<div><span>Зацепов</span><b>${r.sticks}</b></div><div><span>Идеальных отпусканий</span><b>${r.perfects}</b></div>`;
-    $('#fsOverNote').textContent=r.cause==='heron'?'Не раскачивайся на месте — цапля летит следом':r.cause==='water'?'Отпускай, когда лягушка летит вверх-вперёд':'';
+    $('#fsStats').innerHTML=`<div><span>Зацепов</span><b>${r.sticks}</b></div><div><span>Идеальных отпусканий</span><b>${r.perfects}</b></div><div><span>Лучшая серия мошек</span><b>×${r.comboMax}</b></div><div><span>Отскоков</span><b>${r.bounces}</b></div>`;
+    // ближе к рекорду — сильнее хочется ещё раз
+    const left=bestBefore-m;
+    $('#fsOverNote').textContent=left>0&&left<=Math.max(30,bestBefore*.2)?`До рекорда всего ${fmtM(left)} м!`:r.cause==='heron'?'Не раскачивайся на месте — цапля летит следом':r.cause==='water'?'Отпускай, когда лягушка летит вверх-вперёд':'';
     $('#fsOver').hidden=false;
     if(m>bestBefore&&bestBefore>0)B.haptic.success();
     const res=await submit(r);
@@ -835,6 +1175,11 @@ window.FrogSwingInit=function(B){
     bestBefore=Math.max(pref.best||0,sw.best||0);best=bestBefore;
     run=newRun(seed||Math.floor(Math.random()*2**31));
     const r=run;
+    // соперники — вертикальные линии на их рекордах; показываем тех, кто рядом
+    const me=(B.net().me||{}).id;
+    rivals=((B.net().swingTop)||[]).filter(x=>x.id!==me&&x.best>0).sort((a,b)=>a.best-b.best).slice(0,12);
+    // первые три забега подсказываем момент отпускания
+    r.coach=(pref.coach||0)<3;pref.coach=(pref.coach||0)+1;savePref();
     gen(r);
     // старт: висим на языке под первым участком
     const s=r.segs[0];
