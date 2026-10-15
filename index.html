@@ -3621,11 +3621,14 @@ function renderHub(){
   $('#hfRec').textContent=fr?`${fr.best} ${ptsW(fr.best)}`:'—';
   $('#hfNew').hidden=!!f.best;
   try{FLAP&&FLAP.hubArt($('#hfCv'));}catch(e){}
-  const sw=net.swing||{},sb=Math.max(sw.best||0,SWING?SWING.localBest():0),sr=sw.record;
-  $('#hsBest').textContent=sb?fmtM(sb)+' м':'ещё не качался';
-  $('#hsRecName').textContent=sr?`Лучший · ${sr.name||'игрок'}`:'Лучший в игре';
-  $('#hsRec').textContent=sr?fmtM(sr.best)+' м':'—';
-  $('#hsNew').hidden=!!sb;
+  // как и FLAP выше: при самом раннем вызове SWING ещё не объявлен
+  try{
+    const sw=net.swing||{},sb=Math.max(sw.best||0,SWING?SWING.localBest():0),sr=sw.record;
+    $('#hsBest').textContent=sb?fmtM(sb)+' м':'ещё не качался';
+    $('#hsRecName').textContent=sr?`Лучший · ${sr.name||'игрок'}`:'Лучший в игре';
+    $('#hsRec').textContent=sr?fmtM(sr.best)+' м':'—';
+    $('#hsNew').hidden=!!sb;
+  }catch(e){}
 }
 const ptsW=n=>{const x=n%10,y=n%100;return x===1&&y!==11?'очко':x>=2&&x<=4&&(y<12||y>14)?'очка':'очков';};
 // результат в единицах турнира: метры прыжков или очки полёта

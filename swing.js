@@ -167,7 +167,7 @@ window.FrogSwingInit=function(B){
     sc=fieldW/W;VH=cssH/sc;
     WY=VH-Math.max(70,VH*.09);                  // поверхность воды
     // потолок не заходит под счётчик сверху
-    const safe=parseFloat(getComputedStyle(root).getPropertyValue('--tg-safe-area-inset-top'))||0;
+    const cs=getComputedStyle(root),safe=(parseFloat(cs.getPropertyValue('--tg-safe-area-inset-top'))||0)+(parseFloat(cs.getPropertyValue('--tg-content-safe-area-inset-top'))||0);
     TOP=(safe+64)/sc;
   }
   window.addEventListener('resize',()=>{if(open)resize();});
@@ -325,7 +325,7 @@ window.FrogSwingInit=function(B){
   function press(){
     const r=run;if(!r||!r.alive)return;
     hintSeen();
-    if(!r.started){r.started=true;r.ms0=performance.now();r.hx=r.camX-650;return;}   // первый забег начинается висящим
+    if(!r.started){r.started=true;r.ms0=performance.now();return;}   // забег начинается висящим
     if(!r.tongue||r.tongue.st==='back')fire(r);
   }
   function letGo(){
@@ -341,7 +341,7 @@ window.FrogSwingInit=function(B){
         txt(r.x,r.y-38,r.perfN>2?`Идеально ×${r.perfN}`:'Идеально!',{c:'#ffe680'});
         sparks(r.x,r.y,8,'#ffe680');
       }else{r.perfN=0;SND.release();}
-      r.lastRel=r.t;
+      r.lastRel=r.t;if(r.rel0==null)r.rel0=r.t;
     }else if(tg.st==='out')tg.st='back';
   }
 
@@ -374,7 +374,7 @@ window.FrogSwingInit=function(B){
 
     if(!r.alive){
       r.dyingT+=dt;
-      if(r.cause!=='water'){r.vy+=G*dt;r.y=Math.min(r.y+r.vy*dt,WY+40);r.x+=r.vx*dt;r.vx*=.98;r.rot+=dt*5;}
+      if(r.cause!=='water'){r.vy+=G*dt;r.y=Math.min(r.y+r.vy*dt,WY+40);r.x+=r.vx*dt;r.vx*=.98;r.rot=Math.min(Math.PI/2,r.rot+dt*5);}
       if(r.tongue){r.tongue.len-=TSPD*1.4*dt;if(r.tongue.len<=0)r.tongue=null;}
       if(r.cause!=='water'&&r.y>=WY&&!r.splashed){r.splashed=true;splash(r.x,WY);SND.splash();}
       if(r.dyingT>1.1&&!r.over){r.over=true;gameOver();}
@@ -455,9 +455,10 @@ window.FrogSwingInit=function(B){
     }
     // цапля сзади: не даёт стоять. Держится сразу за краем экрана и подлетает,
     // если лягушка медлит
-    if(r.started){
+    // цапля вылетает не сразу: новичку дают раскачаться и сделать первый полёт
+    if(r.started&&r.rel0!=null&&r.t-r.rel0>2.5){
       const m=r.x/UNIT,hv=lerp(150,340,clamp(m/2500,0,1));
-      r.hx=Math.max(r.hx+hv*dt,r.camX-300);
+      r.hx=r.hx<-9000?r.camX-700:Math.max(r.hx+hv*dt,r.camX-300);
       r.hy+=(r.y-r.hy)*Math.min(1,dt*2);
       const gap=r.x-r.hx;
       r.heronWarn=clamp(1-(gap-80)/320,0,1);
