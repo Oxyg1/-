@@ -631,7 +631,7 @@ window.FrogSwingInit=function(B){
   }
   function drawMotes(kind,alpha,camPx){
     if(alpha<=.01)return;
-    const w=cssW+120,n=quality?motes.length:Math.round(motes.length*.45);
+    const w=cssW+120,n=quality?14:8;
     for(let i=0;i<n;i++){
       const m=motes[i];
       const x=((m.x*w-camPx*m.d)%w+w)%w-60,y=m.y*cssH*.85;
@@ -679,8 +679,8 @@ window.FrogSwingInit=function(B){
         g.fillStyle='#0f3a1f';g.fillRect(0,0,TW,40);
         const row=(src,n,y0,w0,w1)=>{for(let i=0;i<n;i++){const w=lerp(w0,w1,rn()),x=(i+rn()*.6)*TW/n,y=y0+rn()*10,a=(rn()-.5)*.6;
           for(const dx of [-TW,0,TW]){g.save();g.translate(x+dx,y);g.rotate(a);g.drawImage(src,-w/2,-w*.55,w,w*im.naturalHeight/im.naturalWidth);g.restore();}}};
-        row(dark,Math.max(4,Math.round(TW/34)),8,44,60);
-        row(im,Math.max(3,Math.round(TW/44)),34,38,52);
+        row(dark,Math.max(3,Math.round(TW/62)),8,44,60);
+        row(im,Math.max(2,Math.round(TW/90)),34,38,52);
       }else leafMass(g,wrapBlobs(rn,Math.round(TW/9),2,58,9,20),LEAF);
       g.drawImage(IMG.branch,0,BARK-BH+4,TW+.5,BH);
     }else{
@@ -815,12 +815,12 @@ window.FrogSwingInit=function(B){
       const im=IMG.forest,h=Math.min(470,(WY-TOP)*.85),w=h*im.naturalWidth/im.naturalHeight,off=((cam*.3)%w+w)%w,L=-offX/sc-40,Rr=W+offX/sc+40;
       // под цвет зоны: закат, облака, ночь — красим сам лес, не полосу
       const fc=forestTint(scaled('forest',w),mixc(zoneMix(zq,'bot'),zoneMix(zq,'top'),.3));
-      for(let x=L-off;x<Rr;x+=w)if(x+w>L)cx.drawImage(fc,x,WY-h+8,w+.6,h);
+      cx.globalAlpha=.4;for(let x=L-off;x<Rr;x+=w)if(x+w>L)cx.drawImage(fc,x,WY-h+8,w+.6,h);cx.globalAlpha=1;
     }else layer(tNear,.32,cam,WY+2,near,.8);
     // лианы среднего плана: качаются, ни за что не цепляют
     cx.lineCap='round';
     const step=96,first=Math.floor((cam*.7-offX/sc)/step)-1;
-    for(let i=first;i<first+8;i++){
+    for(let i=first;i<first;i++){   // лианы убраны: шумели на фоне
       const h=(Math.sin(i*12.9898)*43758.5453)%1,hh=Math.abs(h);
       if(hh<.35)continue;
       const x=i*step+hh*60-cam*.7,l=110+hh*220,sw=Math.sin(tGlobal*.9+i)*6;
@@ -834,7 +834,7 @@ window.FrogSwingInit=function(B){
     // свет из дыр — тёплые лучи вниз, чуть дышат
     for(let i=0;i<r.segs.length-1;i++){
       const a=r.segs[i],b=r.segs[i+1];if(b.x0-a.x1<20||a.x1>Rr||b.x0<L)continue;
-      const x0=a.x1-cam,x1=b.x0-cam,yt=Math.min(a.y,b.y)-40,br=.18+.05*Math.sin(tGlobal*1.3+i);
+      const x0=a.x1-cam,x1=b.x0-cam,yt=Math.min(a.y,b.y)-40,br=.07+.02*Math.sin(tGlobal*1.3+i);
       const g=cx.createLinearGradient(0,yt,0,WY);g.addColorStop(0,`rgba(255,240,180,${br})`);g.addColorStop(1,'rgba(255,240,180,0)');
       cx.fillStyle=g;cx.beginPath();cx.moveTo(x0+6,yt);cx.lineTo(x1-6,yt);cx.lineTo(x1+70,WY);cx.lineTo(x0+40,WY);cx.closePath();cx.fill();
     }
@@ -1109,7 +1109,7 @@ window.FrogSwingInit=function(B){
     // передний план — темнее и быстрее мира, даёт глубину
     if(has('front')){
       const im=IMG.front,h=86,w=h*im.naturalWidth/im.naturalHeight,off=((r.camX*1.3)%w+w)%w,Lf=-offX/sc-40,Rf=W+offX/sc+40;
-      for(let x=Lf-off;x<Rf;x+=w)if(x+w>Lf)cx.drawImage(scaled('front',w),x,VH+10-h,w+.6,h);
+      for(let x=Lf-off;x<Rf;x+=w)if(x+w>Lf){cx.globalAlpha=.5;cx.drawImage(scaled('front',w),x,VH+10-h,w+.6,h);cx.globalAlpha=1;}
     }else layer(tFront,1.3,r.camX,VH+8,'#04140b',.92);
     drawParts(r,true);
     cx.setTransform(dpr,0,0,dpr,0,0);
