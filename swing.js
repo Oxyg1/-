@@ -597,8 +597,9 @@ window.FrogSwingInit=function(B){
       if(gap<34){if(r.shield){r.shield=false;r.invul=.8;r.hx-=260;SND.pop();sparks(r.x,r.y,14,'#bfefff');txt(r.x,r.y-44,'Щит!',{c:'#bfefff'});}else{die('heron');return;}}
     }
     // камера: лягушка на трети экрана, чуть впереди — куда летим
-    const cam=r.x-W*.33+clamp(r.vx*.08,-20,50);
-    r.camX+=(cam-r.camX)*Math.min(1,dt*4);
+    const cam=r.x-W*.22+clamp(r.vx*.04,-10,30);
+    r.camX+=(cam-r.camX)*Math.min(1,dt*7);
+    r.camX=Math.max(r.camX,r.x-W*.3);                    // на скорости камера не должна отставать — лягушка не уходит вправо
     if(r.x>r.maxX){
       r.maxX=r.x;const m=dist(r);hudH(m);
       if(m>=r.mile){r.mile+=100;SND.mile();kick(elHB,'pulse');}
@@ -1221,7 +1222,7 @@ window.FrogSwingInit=function(B){
     const s=r.segs[0];
     r.L=Math.min(200,WY-s.y-150);
     r.tongue={st:'hold',x:110,y:s.y,ok:true,len:r.L,t:0};
-    r.x=110;r.y=s.y+r.L;r.camX=r.x-W*.33;
+    r.x=110;r.y=s.y+r.L;r.camX=r.x-W*.22;
     r.tokenP=startToken();
     hudH(0);elFN.textContent='0';holding=false;ptrs.clear();acc=0;last=0;
     const h=$('#fsHint');
