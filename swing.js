@@ -672,16 +672,8 @@ window.FrogSwingInit=function(B){
     TW=has('branch')?Math.round(BH*IMG.branch.naturalWidth/IMG.branch.naturalHeight):240;
     [tWood,g]=mkCanvas(TW,TLH);if(has('branch')){
       const rn=srand(7);
-      if(has('leaves')){
-        // два ряда пучков: задний притемнён — у кроны появляется объём
-        const im=IMG.leaves,dark=document.createElement('canvas');dark.width=im.naturalWidth;dark.height=im.naturalHeight;
-        {const d=dark.getContext('2d');d.drawImage(im,0,0);d.globalCompositeOperation='source-atop';d.fillStyle='rgba(6,34,16,.55)';d.fillRect(0,0,dark.width,dark.height);}
-        g.fillStyle='#0f3a1f';g.fillRect(0,0,TW,40);
-        const row=(src,n,y0,w0,w1)=>{for(let i=0;i<n;i++){const w=lerp(w0,w1,rn()),x=(i+rn()*.6)*TW/n,y=y0+rn()*10,a=(rn()-.5)*.6;
-          for(const dx of [-TW,0,TW]){g.save();g.translate(x+dx,y);g.rotate(a);g.drawImage(src,-w/2,-w*.55,w,w*im.naturalHeight/im.naturalWidth);g.restore();}}};
-        row(dark,Math.max(3,Math.round(TW/62)),8,44,60);
-        row(im,Math.max(2,Math.round(TW/90)),34,38,52);
-      }else leafMass(g,wrapBlobs(rn,Math.round(TW/9),2,58,9,20),LEAF);
+      {const gr=g.createLinearGradient(0,0,0,BARK-BH+8);gr.addColorStop(0,'#0f3a1f');gr.addColorStop(1,'#2a6a34');g.fillStyle=gr;g.fillRect(0,0,TW,BARK-BH+8);}
+
       g.drawImage(IMG.branch,0,BARK-BH+4,TW+.5,BH);
     }else{
       const rn=srand(7);
@@ -706,14 +698,8 @@ window.FrogSwingInit=function(B){
     // колючая ветка: язык не берёт, касаться нельзя
     [tThorn,g]=mkCanvas(TW,TLH);{
       const rn=srand(11);
-      if(has('leaves')){
-        // та же листва, но больная: тёмно-лиловая
-        const im=IMG.leaves,sick=document.createElement('canvas');sick.width=im.naturalWidth;sick.height=im.naturalHeight;
-        {const d=sick.getContext('2d');d.drawImage(im,0,0);d.globalCompositeOperation='source-atop';d.fillStyle='rgba(58,18,52,.72)';d.fillRect(0,0,sick.width,sick.height);}
-        g.fillStyle='#1a0d1c';g.fillRect(0,0,TW,40);
-        for(let i=0;i<Math.max(5,Math.round(TW/36));i++){const w=40+rn()*18,x=(i+rn()*.6)*TW/Math.max(5,Math.round(TW/36)),y=14+rn()*30,a=(rn()-.5)*.6;
-          for(const dx of [-TW,0,TW]){g.save();g.translate(x+dx,y);g.rotate(a);g.drawImage(sick,-w/2,-w*.55,w,w*im.naturalHeight/im.naturalWidth);g.restore();}}
-      }else leafMass(g,wrapBlobs(rn,24,4,62,9,18),DLEAF);
+      {const gr=g.createLinearGradient(0,0,0,BARK);gr.addColorStop(0,'#1a0d1c');gr.addColorStop(1,'#3a1a38');g.fillStyle=gr;g.fillRect(0,0,TW,BARK);}
+
       if(!has('thorns')){const yc=BARK-14;
       g.lineCap='round';
       const stem=w=>{g.lineWidth=w;g.beginPath();g.moveTo(-6,yc);for(let x=-6;x<=TW+6;x+=6)g.lineTo(x,yc+Math.sin(x/TW*Math.PI*6)*3);g.stroke();};
@@ -839,11 +825,11 @@ window.FrogSwingInit=function(B){
       cx.fillStyle=g;cx.beginPath();cx.moveTo(x0+6,yt);cx.lineTo(x1-6,yt);cx.lineTo(x1+70,WY);cx.lineTo(x0+40,WY);cx.closePath();cx.fill();
     }
     const night=z.b===ZONES[3]?z.t:(z.a===ZONES[3]?1:0);
-    const top=mixc('#0f3a1f','#0a1c18',night);
+    const top=mixc('#0f3a1f','#0a1c18',night);const topT='#1a0d1c';
     for(const s of r.segs){
       if(s.x1<L||s.x0>Rr)continue;
       const x0=s.x0-cam,x1=s.x1-cam,base=s.k==='w'?s.y:s.y-8,ty=base-BARK;
-      cx.fillStyle=top;cx.fillRect(x0,-80,x1-x0,ty+42+80);
+      cx.fillStyle=s.k==='w'?top:topT;cx.fillRect(x0,-80,x1-x0,ty+42+80);
       tileStrip(s.k==='w'?tWood:tThorn,s.x0,s.x1,cam,ty);
       if(s.k==='t'&&has('thorns')){
         // колючая лента привязана к миру: шипы кончаются чуть ниже линии касания
@@ -857,8 +843,6 @@ window.FrogSwingInit=function(B){
       const s=r.segs[i],n=r.segs[i+1],p=r.segs[i-1];
       if(s.x1<L||s.x0>Rr)continue;
       const base=s.k==='w'?s.y:s.y-8;
-      if(!n||n.x0-s.x1>2)cx.drawImage(tBushR,s.x1-cam-36,base-122,70,130);
-      if(!p||s.x0-p.x1>2)cx.drawImage(tBushL,s.x0-cam-34,base-122,70,130);
     }
   }
   // свисающие корни: картинка обрезается сверху, кончики с каплями всегда видны
