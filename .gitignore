@@ -9,3 +9,7 @@ jump/*.jpe
 flappy/*.jpe
 
 swing/*.jpe
+
+widget/.env
+widget/state.json
+widget/state.json.tmp

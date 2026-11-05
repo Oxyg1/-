@@ -1,0 +1,99 @@
+<style>
+:root{--h:var(--tg-theme-hint-color);--b:var(--tg-theme-button-color);--bt:var(--tg-theme-button-text-color)}
+body{margin:0;padding:10px 12px 12px;font:15px/1.3 system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.hd,.row,.lh,li{display:flex;align-items:center;gap:8px}
+.hd{font-size:17px;font-weight:600}
+.hd span,.lh span{margin-left:auto;font-size:13px;font-weight:400;color:var(--h)}
+canvas{display:block;width:100%;height:280px;margin-top:8px;border-radius:12px;touch-action:none;cursor:pointer}
+.row{min-height:40px}
+#st{flex:1;font-size:13px;color:var(--h)}
+#sb{padding:8px 14px;border-radius:10px;border:0;background:var(--b);color:var(--bt);font:600 14px system-ui,sans-serif}
+#sb.off{display:none}
+.lb{padding:8px 12px 4px;border-radius:12px;background:var(--tg-theme-secondary-bg-color)}
+.lh{font-size:13px;font-weight:600;color:var(--h)}
+ol{margin:0;padding:0;list-style:none}
+li{height:26px}
+li i{flex:none;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:700 11px system-ui,sans-serif;color:var(--h)}
+li:nth-child(-n+3) i{color:#fff;background:#f2b600}
+li:nth-child(2) i{background:#a3adb8}
+li:nth-child(3) i{background:#d0884a}
+li span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+li.me span{color:var(--b);font-weight:600}
+li u{margin-left:auto;text-decoration:none;font-weight:600}
+.no{justify-content:center;color:var(--h)}
+</style>
+<div class="hd">🐤 Flappy<span id="pl"></span></div>
+<canvas id="c"></canvas>
+<div class="row"><div id="st"></div><button id="sb" class="off"></button></div>
+<div class="lb"><div class="lh">Рекорды<span id="cb"></span></div><ol id="lb"></ol></div>
+<script>
+const T=window.TelegramWidget,$=i=>document.getElementById(i),cv=$('c'),x=cv.getContext('2d'),sb=$('sb'),
+J=(s,d)=>{try{return s?JSON.parse(s):d}catch(e){return d}},
+Hp=(k,v)=>{try{T.HapticFeedback[k](v)}catch(e){}},
+E={NOT_ALLOWED:'Отсюда отправить нельзя',RATE_LIMITED:'Слишком часто, подожди',TIMEOUT:'Бот не ответил'};
+const H=280,G=24,BX=70,R=11,GAP=96,PW=46,SP=170,V=135;
+let W=300,dpr=1,st='idle',y=H/2,vy=0,ps=[],sc=0,best=0,sent=0,t=0,off=0,dt0=0,busy=0,L=null,
+can=!!(T&&T.viewer&&!T.isPreview),dark=T?T.colorScheme=='dark':matchMedia('(prefers-color-scheme: dark)').matches;
+try{const s=J(localStorage.getItem('fb'),{});best=s.b|0;sent=s.s|0}catch(e){}
+const save=()=>{try{localStorage.setItem('fb',JSON.stringify({b:best,s:sent}))}catch(e){}};
+function size(){W=cv.clientWidth||300;dpr=Math.min(2,window.devicePixelRatio||1);cv.width=W*dpr;cv.height=H*dpr;draw()}
+function reset(){y=H/2-20;vy=0;sc=0;ps=[];for(let i=0;i<4;i++)ps.push(pipe(W+60+i*SP))}
+function pipe(px){return{x:px,g:50+Math.random()*(H-G-GAP-100),p:0}}
+function say(s,c){$('st').textContent=s;$('st').style.color=c||''}
+function btn(){sb.classList.toggle('off',!busy&&!(can&&best>sent&&st!='play'));if(!busy)sb.textContent='Отправить '+best}
+function flap(){if(T&&T.isPreview)return;
+  if(st=='play'){vy=-370;Hp('impactOccurred','light');return}
+  if(st=='dead'&&t<.45)return;
+  if(st!='pause')reset();st='play';vy=-370;say('');btn()}
+function die(){st='dead';t=0;Hp('notificationOccurred','error');
+  if(sc>best){best=sc;save();say('Новый рекорд: '+sc+'!','#2a9d4b')}else say('Счёт '+sc+' · рекорд '+best);btn()}
+function step(d){t+=d;off=(off+(st=='dead'?0:V*d))%24;
+  if(st=='idle'||st=='pause'){if(st=='idle')y=H/2-20+Math.sin(t*4)*6;return}
+  vy=Math.min(vy+1350*d,600);y+=vy*d;
+  if(st=='dead'){if(y>H-G-R)y=H-G-R;return}
+  for(const p of ps){p.x-=V*d;if(!p.p&&p.x+PW<BX){p.p=1;sc++;Hp('selectionChanged')}
+    if(BX+R-3>p.x&&BX-R+3<p.x+PW&&(y-R+3<p.g||y+R-3>p.g+GAP))return die()}
+  if(ps[0].x<-PW){ps.shift();ps.push(pipe(ps[ps.length-1].x+SP))}
+  if(y>H-G-R){y=H-G-R;die()}if(y<R){y=R;vy=0}}
+function txt(s,px,ty,f){x.font='800 '+f+'px system-ui,sans-serif';x.lineWidth=f/6;x.lineJoin='round';x.strokeStyle='#2b2b2b';x.strokeText(s,px,ty);x.fillStyle='#fff';x.fillText(s,px,ty)}
+function draw(){x.setTransform(dpr,0,0,dpr,0,0);
+  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,dark?'#0f2140':'#5ec6f0');g.addColorStop(1,dark?'#2c4a73':'#c8eefa');x.fillStyle=g;x.fillRect(0,0,W,H);
+  x.fillStyle=dark?'#1d3a5e':'#a9e3c0';for(let i=-1;i<W/60+1;i++){x.beginPath();x.arc(i*60-off*.5%60,H-G,34,Math.PI,0);x.fill()}
+  for(const p of ps){x.fillStyle='#5fbf3a';x.fillRect(p.x,0,PW,p.g);x.fillRect(p.x,p.g+GAP,PW,H);
+    x.fillStyle='#3f8f25';x.fillRect(p.x-3,p.g-14,PW+6,14);x.fillRect(p.x-3,p.g+GAP,PW+6,14);
+    x.fillStyle='#8fd86e';x.fillRect(p.x+6,0,6,p.g-14);x.fillRect(p.x+6,p.g+GAP+14,6,H)}
+  x.fillStyle='#ded895';x.fillRect(0,H-G,W,G);x.fillStyle='#c9b46a';for(let i=-1;i<W/24+1;i++)x.fillRect(i*24-off,H-G+6,12,5);
+  x.fillStyle='#73bf2e';x.fillRect(0,H-G,W,4);
+  x.save();x.translate(BX,y);x.rotate(st=='idle'||st=='pause'?0:Math.max(-.5,Math.min(1.4,vy/500)));
+  x.fillStyle='#f7c331';x.beginPath();x.arc(0,0,R,0,7);x.fill();x.lineWidth=2;x.strokeStyle='#2b2b2b';x.stroke();
+  x.fillStyle='#fff6d5';x.beginPath();x.ellipse(-5,(t*14|0)%2&&st!='dead'?-3:3,6,4,0,0,7);x.fill();x.stroke();
+  x.fillStyle='#fff';x.beginPath();x.arc(4,-4,4,0,7);x.fill();x.fillStyle='#2b2b2b';x.beginPath();x.arc(5,-4,1.8,0,7);x.fill();
+  x.fillStyle='#f0642d';x.beginPath();x.moveTo(8,0);x.lineTo(17,2);x.lineTo(8,5);x.fill();x.restore();
+  x.textAlign='center';x.textBaseline='middle';
+  if(st=='play'||st=='dead')txt(sc,W/2,36,34);
+  if(st=='idle')txt('Нажми, чтобы лететь',W/2,H/2+40,18);
+  if(st=='pause')txt('Пауза · нажми',W/2,H/2+40,18);
+  if(st=='dead'&&t>.45){txt('Игра окончена',W/2,H/2-30,24);txt('нажми ещё раз',W/2,H/2+6,15)}}
+function loop(n){const d=Math.min(.033,dt0?(n-dt0)/1e3:0);dt0=n;step(d);draw();requestAnimationFrame(loop)}
+cv.onpointerdown=e=>{e.preventDefault();flap()};
+sb.onclick=()=>{if(busy||!can)return;busy=1;const n=best;sb.disabled=true;sb.textContent='Отправляю…';
+  T.request('score:'+n).then(a=>{const r=J(a.result,{});if(!(r.rank>=0))throw{m:String(r.err||'Бот не принял').slice(0,40)};
+    sent=n;save();r.top&&pub(r);say(r.rank?'Ты #'+r.rank+' в таблице!':'Отправлено. Пока не в топе','#2a9d4b');Hp('notificationOccurred','success')})
+  .catch(e=>{if(e.code=='NOT_ALLOWED')can=false;say(e.m||E[e.code]||'Не удалось, попробуй ещё','var(--tg-theme-destructive-text-color)')})
+  .finally(()=>{busy=0;sb.disabled=false;lb();btn()})};
+function pub(p){if(p&&(!L||(p.r|0)>=(L.r|0)))L=p}
+function lb(){T&&pub(J(T.publicData,null));
+  const p=T?L:{top:[['Макс',42],['Ева',31],['Боб',17]],n:96},c=T&&J(T.chatData,null),me=T&&T.viewer&&T.viewer.id,
+  top=(p&&Array.isArray(p.top)?p.top:[]).filter(r=>Array.isArray(r)&&r[1]>0).slice(0,5),n=p&&p.n|0;
+  $('pl').textContent=n?'игроков: '+n:'';
+  $('cb').textContent=c&&c.best>0?'в этом чате '+c.best:'';
+  $('lb').replaceChildren(...top.map((r,i)=>{const li=document.createElement('li');li.className=me&&r[2]==me?'me':'';
+    li.innerHTML='<i>'+(i+1)+'</i><span></span><u>'+(r[1]|0)+'</u>';li.children[1].textContent=String(r[0]).slice(0,24);return li}));
+  if(!top.length)$('lb').innerHTML='<li class="no">Пока пусто. Будь первым!</li>'}
+reset();size();lb();btn();say(best?'Твой рекорд '+best:'Тапай, чтобы махать крыльями');
+requestAnimationFrame(loop);
+typeof ResizeObserver=='function'&&new ResizeObserver(()=>cv.clientWidth!=W&&size()).observe(cv);
+if(T){T.onEvent('publicDataChanged',lb);T.onEvent('chatDataChanged',lb);
+  T.onEvent('deactivated',()=>{if(st=='play')st='pause';dt0=0});T.onEvent('activated',()=>dt0=0);
+  T.onEvent('themeChanged',()=>dark=T.colorScheme=='dark');T.isPreview||T.watchPublicData();T.ready&&T.ready()}
+</script>
