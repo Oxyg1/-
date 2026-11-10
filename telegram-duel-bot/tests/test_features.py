@@ -169,10 +169,11 @@ async def test_rematch_from_widget(env):
     assert "уже участвует" in again
 
 
-async def test_duel_in_private_explains_where_to_play(env):
+async def test_duel_in_private_with_unknown_user_suggests_search(env):
     h, dp, bot, raw, session = env
-    await dp.feed_raw_update(bot, private_msg(1, "Alice", "/cduel @bob"))
-    assert "в группе" in sent_texts(session)[-1]
+    await dp.feed_raw_update(bot, private_msg(1, "Alice", "/cduel @nobody_here"))
+    assert "/cfind" in sent_texts(session)[-1]
+    assert await h.db.get_duel(1) is None
 
 
 def test_texts_helpers():

@@ -92,3 +92,12 @@ CREATE TABLE IF NOT EXISTS kv (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- поиск соперника (/cfind): кто ждёт и в каком виджете
+CREATE TABLE IF NOT EXISTS queue (
+    user_id     INTEGER PRIMARY KEY,
+    rating      INTEGER NOT NULL,
+    message_id  INTEGER NOT NULL,                  -- виджет поиска в личке; при совпадении он станет дуэлью
+    joined_at   REAL NOT NULL,
+    seen_at     REAL                                -- когда виджет последний раз был открыт (time.time)
+);

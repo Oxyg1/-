@@ -41,8 +41,8 @@ def duel_state(rev: int, phase: str, *, duel_id: int | None = None, opponent: st
                stake_kind: str | None = None, stake_label: str | None = None, nonce: int | None = None,
                ms: float | None = None, opp_ms: float | None = None, reason: Reason | None = None,
                claim: str | None = None, error: str | None = None,
-               rating: int | None = None, delta: int | None = None) -> str:
-    """phase: stake | lobby | wait | go | win | lose | fs | draw | cancel."""
+               rating: int | None = None, delta: int | None = None, reason_code: str | None = None) -> str:
+    """phase: find | stake | lobby | wait | go | win | lose | fs | draw | cancel."""
     d: dict[str, Any] = {"r": rev, "p": phase}
     if duel_id is not None:
         d["d"] = duel_id
@@ -59,6 +59,8 @@ def duel_state(rev: int, phase: str, *, duel_id: int | None = None, opponent: st
         d["oms"] = round(opp_ms)
     if reason is not None:
         d["w"] = REASON_CODE.get(reason, "")
+    if reason_code is not None:
+        d["w"] = reason_code
     if claim:
         d["q"] = claim          # o: плательщик должен оплатить, w: ждём оплату, p: оплачено, u: не оплачено
         d.setdefault("a", stake_label)

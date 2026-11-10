@@ -5,6 +5,7 @@ import asyncio
 import json
 import time
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 from duelbot.bot_api_raw import BotApiError
 from duelbot.config import Settings
@@ -17,14 +18,25 @@ class FakeBot:
     def __init__(self):
         self.messages: list[tuple[int, str]] = []
         self.markups: list[object] = []
+        self.edits: list[dict] = []
+        self.dm_blocked: set[int] = set()      # эти не нажимали Start: писать им в личку нельзя
+        self._mid = 500
         self.invoices: list[dict] = []
         self.refunds: list[tuple[int, str]] = []
         self.gifts: list[dict] = []
         self.fail_refund_for: set[str] = set()
 
     async def send_message(self, chat_id, text, **kw):
+        if chat_id in self.dm_blocked:
+            raise RuntimeError("Forbidden: bot can't initiate conversation with a user")
         self.messages.append((chat_id, text))
         self.markups.append(kw.get("reply_markup"))
+        self._mid += 1
+        return SimpleNamespace(message_id=self._mid)
+
+    async def edit_message_text(self, text, chat_id=None, message_id=None, **kw):
+        self.edits.append({"chat_id": chat_id, "message_id": message_id, "text": text})
+        return True
 
     async def send_invoice(self, **kw):
         self.invoices.append(kw)

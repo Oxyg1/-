@@ -113,6 +113,15 @@ class TonClaim:
 
 
 @dataclass
+class QueueEntry:
+    user_id: int
+    rating: int
+    message_id: int
+    joined_at: float
+    seen_at: float | None
+
+
+@dataclass
 class StarPayment:
     charge_id: str
     duel_id: int
@@ -463,6 +472,32 @@ class Database:
             "SELECT * FROM ton_claims WHERE payer_id=? AND status IN ('pending','tx_reported','unpaid') "
             "ORDER BY created_at DESC", user_id)
         return self._claim(r) if r else None
+
+    # ---------- поиск соперника ----------
+    async def queue_add(self, user_id: int, rating: int, message_id: int) -> None:
+        await self._c.execute("INSERT OR REPLACE INTO queue(user_id, rating, message_id, joined_at) VALUES(?,?,?,?)",
+                              (user_id, rating, message_id, time.time()))
+        await self._c.commit()
+
+    async def queue_get(self, user_id: int) -> QueueEntry | None:
+        r = await self._one("SELECT * FROM queue WHERE user_id=?", user_id)
+        return QueueEntry(**dict(r)) if r else None
+
+    async def queue_by_widget(self, user_id: int, message_id: int) -> QueueEntry | None:
+        r = await self._one("SELECT * FROM queue WHERE user_id=? AND message_id=?", user_id, message_id)
+        return QueueEntry(**dict(r)) if r else None
+
+    async def queue_all(self) -> list[QueueEntry]:
+        return [QueueEntry(**dict(r)) for r in await self._all("SELECT * FROM queue ORDER BY joined_at")]
+
+    async def queue_seen(self, user_id: int) -> None:
+        await self._c.execute("UPDATE queue SET seen_at=? WHERE user_id=?", (time.time(), user_id))
+        await self._c.commit()
+
+    async def queue_remove(self, user_id: int) -> bool:
+        cur = await self._c.execute("DELETE FROM queue WHERE user_id=?", (user_id,))
+        await self._c.commit()
+        return cur.rowcount == 1
 
     # ---------- kv ----------
     async def kv_get(self, key: str) -> str | None:

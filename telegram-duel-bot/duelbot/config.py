@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     ready_ttl: int = Field(90, gt=0)
     # сколько секунд нельзя снова вызывать игрока, который отказался (защита от спама вызовами)
     challenge_cooldown: int = Field(60, ge=0)
+    # сколько секунд /cfind ищет соперника
+    search_ttl: int = Field(600, gt=0)
     delay_min: float = Field(2.0, ge=0)
     delay_max: float = Field(6.0, ge=0)
     response_timeout: float = Field(5.0, gt=0)

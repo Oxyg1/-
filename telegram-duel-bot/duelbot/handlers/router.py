@@ -101,6 +101,9 @@ def build_router(ctx: Ctx) -> Router:
         if arg == "lb":
             await send_leaderboard(message, message.chat.id)
             return
+        if arg == "find":
+            await cmd_find(message)
+            return
         if arg == "stats":
             await cmd_stats(message, CommandObject(prefix="/", command=C.STATS, args=None))
             return
@@ -155,10 +158,39 @@ def build_router(ctx: Ctx) -> Router:
         await tell(message, await send_challenge(message.chat.id, challenger, target, spec))
 
     @r.message(Command(C.DUEL), F.chat.type == "private")
-    async def cmd_duel_private(message: Message):
-        await message.answer("Дуэли начинаются в группе: добавь бота в чат (администратором) и напиши там "
-                             f"<code>/{C.DUEL} @username</code>. Сама дуэль потом придёт сюда, в личку.",
-                             parse_mode="HTML")
+    async def cmd_duel_private(message: Message, command: CommandObject):
+        """Вызов из лички: приглашение уходит сопернику в его личку с ботом."""
+        try:
+            spec = parse_stake(command.args)
+        except StakeParseError as e:
+            return await message.answer(str(e))
+        target = await resolve_target(message, command.args)
+        if target is None:
+            return await message.answer(
+                f"Кого вызываем? Напиши <code>/{C.DUEL} @username</code> — соперник должен хоть раз написать "
+                f"боту. Или найди случайного противника: /{C.FIND}", parse_mode="HTML")
+        challenger = await db.get_player(message.from_user.id)
+        assert challenger is not None
+        await message.answer(await send_challenge(0, challenger, target, spec), parse_mode="HTML")
+
+    # ---------------- поиск соперника ----------------
+    @r.message(Command(C.FIND))
+    async def cmd_find(message: Message):
+        in_group = message.chat.type in GROUPS
+        try:
+            text = await service.find(message.from_user.id)
+        except BotApiError as e:
+            if not e.is_unreachable_user:
+                log.exception("find failed")
+                return await message.reply("Не получилось начать поиск, попробуй ещё раз.")
+            await db.set_can_dm(message.from_user.id, False)
+            kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+                text="Открыть бота и нажать Start", url=f"https://t.me/{ctx.bot_username}?start=find")]])
+            return await message.reply("Поиск идёт в личке с ботом — сначала нажми Start.", reply_markup=kb)
+        if in_group:
+            await tell(message, text)
+        elif not text.startswith("🔎"):        # сам виджет поиска уже в чате; пишем только если что-то не так
+            await message.answer(text)
 
     # ---------------- отмена ----------------
     @r.message(Command(C.CANCEL))
@@ -209,20 +241,15 @@ def build_router(ctx: Ctx) -> Router:
             return await cb.answer("Это не ваш вызов.", show_alert=True)
         if action == "a":
             err = await service.accept(duel_id, cb.from_user.id)
-            await cb.answer(err or "Вызов принят! Дуэль — в личке с ботом.", show_alert=bool(err))
-            text = err or "✅ Вызов принят. Дуэль ждёт в личке с ботом."
-            kb = None if err else InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+            in_dm = not duel.chat_id
+            ok_text = "Вызов принят! Дуэль — в виджете ниже." if in_dm else "Вызов принят! Дуэль — в личке с ботом."
+            await cb.answer(err or ok_text, show_alert=bool(err))
+            kb = None if (err or in_dm) else InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
                 text="Открыть бота", url=f"https://t.me/{ctx.bot_username}")]])
+            await service.update_invite(duel, err or ("✅ " + ok_text), kb)
         else:
             ok = await service.decline(duel_id, cb.from_user.id)
             await cb.answer("Вы отказались." if ok else "Вызов уже недействителен.")
-            return  # service.decline сам обновит эфемерное сообщение
-        if duel.ephemeral_id:
-            try:
-                await raw.edit_ephemeral_text(duel.chat_id, duel.target_id, duel.ephemeral_id, text,
-                                              reply_markup=kb.model_dump(exclude_none=True) if kb else None)
-            except BotApiError:
-                pass
 
     async def on_rematch(cb: CallbackQuery, old) -> None:
         uid = cb.from_user.id

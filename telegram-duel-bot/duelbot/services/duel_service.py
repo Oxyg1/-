@@ -72,6 +72,7 @@ class DuelService:
         self.last_state: dict[tuple[int, int], str] = {}
         self._bg_seen: dict[tuple[int, int], float] = {}
         self._start_lock = asyncio.Lock()
+        self._match_lock = asyncio.Lock()
         self._tasks: set[asyncio.Task] = set()
 
     # ------------------------------------------------------------------ helpers
@@ -123,6 +124,8 @@ class DuelService:
         return False
 
     async def _group(self, duel: Duel, text: str, markup=None) -> None:
+        if not duel.chat_id:      # дуэль из лички или из поиска: группы нет, итог виден в виджетах
+            return
         try:
             await self.bot.send_message(duel.chat_id, text, parse_mode="HTML", reply_markup=markup)
         except Exception:  # noqa: BLE001
@@ -158,9 +161,24 @@ class DuelService:
             InlineKeyboardButton(text="🤠 Принять", callback_data=f"d:a:{duel.id}"),
             InlineKeyboardButton(text="Отказаться", callback_data=f"d:d:{duel.id}"),
         ]])
+        await self._leave_queue(challenger.user_id, "q")   # вызвал конкретного игрока — поиск не нужен
+        ttl_min = self.s.challenge_ttl // 60
+        if not chat_id:
+            # вызов из лички: приглашение приходит сопернику в его личку с ботом
+            try:
+                msg = await self.bot.send_message(target.user_id, challenge_text(challenger, duel, ttl_min, True),
+                                                  parse_mode="HTML", reply_markup=kb)
+            except Exception as e:  # noqa: BLE001
+                log.info("private challenge to %s failed: %s", target.user_id, e)
+                await self.cancel_duel(duel.id, Reason.ABORTED)
+                return (f"{escape(target.display)} ещё не запускал бота, поэтому вызов не дошёл. Перешли ему "
+                        f"ссылку t.me/{self.bot_username} — пусть нажмёт Start — или вызови его в общей группе.")
+            await self.db.update_duel(duel.id, ephemeral_id=msg.message_id)
+            return (f"Вызов отправлен {escape(target.display)} в личку (ставка: {stake_label(duel)}). "
+                    f"Ждём {ttl_min} мин. Передумал — /{C.CANCEL}.")
         try:
             sent = await self.raw.send_ephemeral(
-                challenge_text(challenger, duel, self.s.challenge_ttl // 60),
+                challenge_text(challenger, duel, ttl_min),
                 chat_id=chat_id, receiver_user_id=target.user_id,
                 reply_markup=kb.model_dump(exclude_none=True))
         except BotApiError as e:
@@ -170,7 +188,85 @@ class DuelService:
                     "только так он может писать эфемерные сообщения любому участнику.")
         await self.db.update_duel(duel.id, ephemeral_id=sent.get("ephemeral_message_id"))
         return (f"Вызов отправлен {escape(target.display)} (ставка: {stake_label(duel)}). "
-                f"Ждём {self.s.challenge_ttl // 60} мин. Передумал — /{C.CANCEL}.")
+                f"Ждём {ttl_min} мин. Передумал — /{C.CANCEL}.")
+
+    async def update_invite(self, duel: Duel, text: str, markup: InlineKeyboardMarkup | None = None) -> None:
+        """Обновить приглашение у вызванного: эфемерное в группе или обычное сообщение в личке."""
+        if not duel.ephemeral_id:
+            return
+        try:
+            if duel.chat_id:
+                kb = markup.model_dump(exclude_none=True) if markup else None
+                await self.raw.edit_ephemeral_text(duel.chat_id, duel.target_id, duel.ephemeral_id, text,
+                                                   reply_markup=kb)
+            else:
+                await self.bot.edit_message_text(text=text, chat_id=duel.target_id, message_id=duel.ephemeral_id,
+                                                 parse_mode="HTML", reply_markup=markup)
+        except Exception as e:  # noqa: BLE001
+            log.info("invite update for duel %s failed: %s", duel.id, e)
+
+    # ------------------------------------------------------------------ поиск соперника
+    async def find(self, uid: int) -> str:
+        """/cfind: виджет «Ищем соперника…» в личку и постановка в очередь. BotApiError — если личка закрыта."""
+        if await self.db.active_duel_for(uid):
+            return f"Ты уже в дуэли. Доиграй или отмени её: /{C.CANCEL}"
+        if await self.db.queue_get(uid):
+            return "Уже ищу тебе соперника — виджет поиска в личке с ботом."
+        p = await self.db.get_player(uid)
+        rating = p.rating if p else 1000
+        data = duel_state(self._next_rev(0, uid), "find", rating=rating)
+        msg = await self.raw.send_widget(uid, duel_html(), caption="🔎 Поиск соперника", chat_data=data,
+                                         allow_queries=True, height=320)
+        self.last_state[(0, uid)] = data
+        await self.db.queue_add(uid, rating, msg["message_id"])
+        await self._try_match(uid)
+        return "🔎 Ищу соперника. Как найду — дуэль начнётся прямо в виджете поиска."
+
+    async def _leave_queue(self, uid: int, code: str) -> bool:
+        """Убрать из очереди; виджет поиска показывает почему. code: q — остановлен, nf — никого не нашлось."""
+        q = await self.db.queue_get(uid)
+        if q is None or not await self.db.queue_remove(uid):
+            return False
+        data = duel_state(self._next_rev(0, uid), "cancel", reason_code=code)
+        self.last_state[(0, uid)] = data
+        try:
+            await self.raw.edit_message_widget_data(chat_id=uid, message_id=q.message_id, chat_data=data)
+        except BotApiError as e:
+            log.info("search widget update failed: %s", e)
+        return True
+
+    async def _try_match(self, uid: int) -> None:
+        """Подбирает ближайшего по рейтингу из очереди. Дуэль начинается прямо в виджетах поиска."""
+        async with self._match_lock:
+            me = await self.db.queue_get(uid)
+            if me is None:
+                return
+            others = [q for q in await self.db.queue_all()
+                      if q.user_id != uid and not await self.db.active_duel_for(q.user_id)]
+            if not others:
+                return
+            opp = min(others, key=lambda q: (abs(q.rating - me.rating), q.joined_at))
+            await self.db.queue_remove(uid)
+            await self.db.queue_remove(opp.user_id)
+            first, second = (opp, me) if opp.joined_at <= me.joined_at else (me, opp)
+            duel = await self.create_duel(0, first.user_id, second.user_id, "none", 0)
+            now = time.time()
+            await self.db.transition(duel.id, Status.LOBBY, accepted_at=now, deadline_at=now + self.s.ready_ttl)
+            for q in (first, second):
+                # виджет поиска становится виджетом дуэли; если его открывали — игрок уже «на месте»
+                await self.db.set_dp(duel.id, q.user_id, funded=True, widget_message_id=q.message_id,
+                                     ready=q.seen_at is not None)
+                if q.seen_at is not None:   # время последнего фонового запроса, для паузы перед пингом
+                    self._bg_seen[(duel.id, q.user_id)] = time.monotonic() - (now - q.seen_at)
+            duel = await self.db.get_duel(duel.id)  # type: ignore[assignment]
+            players = await self._players(duel)
+            for q in (first, second):
+                await self._push(duel, q.user_id, "lobby")
+                o = players.get(duel.opponent(q.user_id))
+                if o:
+                    await self._dm(q.user_id, f"🎯 Соперник найден: <b>{escape(o.display)}</b> (рейтинг {o.rating}). "
+                                              "Открой виджет поиска — дуэль уже там.")
+        await self._maybe_start(duel.id)
 
     async def cooldown_left(self, challenger_id: int, target_id: int) -> int:
         """Сколько секунд ещё нельзя вызывать игрока, который недавно отказал этому же вызывающему."""
@@ -180,7 +276,9 @@ class DuelService:
         return max(0, int(last.finished_at + self.s.challenge_cooldown - time.time() + 0.999))
 
     async def withdraw(self, user_id: int) -> str:
-        """/ccancel: участник отменяет свою дуэль, пока раунд не начался."""
+        """/ccancel: остановить поиск или отменить свою дуэль, пока раунд не начался."""
+        if await self._leave_queue(user_id, "q"):
+            return "Поиск соперника остановлен."
         duel = await self.db.active_duel_for(user_id)
         if duel is None:
             return "У тебя нет активных вызовов."
@@ -207,6 +305,8 @@ class DuelService:
         for uid in duel.players:
             if await self.db.active_duel_for(uid, exclude_id=duel.id):
                 return "Один из игроков уже участвует в другой дуэли."
+        for uid in duel.players:
+            await self._leave_queue(uid, "q")
         staking = duel.stake_kind != "none"
         ttl = self.s.stake_ttl if staking else self.s.ready_ttl
         if not await self.db.transition(duel.id, Status.STAKING if staking else Status.LOBBY,
@@ -299,6 +399,15 @@ class DuelService:
         if data.startswith("st:") and data[3:].isdigit():   # карточка игрока просит свежую статистику
             p = await self.db.get_player(int(data[3:]))
             return stats_card(p, await self.db.rank_of(p.user_id)) if p else None
+        q = await self.db.queue_by_widget(uid, message_id)
+        if q is not None:                   # это виджет поиска, дуэли ещё нет
+            if data == "hi":
+                await self.db.queue_seen(uid)
+                return self.last_state.get((0, uid)) or duel_state(self._next_rev(0, uid), "find", rating=q.rating)
+            if data == "unfind":
+                await self._leave_queue(uid, "q")
+                return self.last_state.get((0, uid))
+            return None
         dp = await self.db.find_dp_by_widget(uid, message_id)
         if dp is None:
             return json.dumps({"e": "late"}, separators=(",", ":"))
@@ -567,11 +676,8 @@ class DuelService:
         """Вызов закрыт до принятия: обновить приглашение у вызванного и сообщить вызывающему."""
         target_text = {Reason.DECLINED: "Вы отказались от дуэли.", Reason.TIMEOUT: "Вызов истёк.",
                        Reason.WITHDRAWN: "Вызов отозван."}.get(reason)
-        if duel.ephemeral_id and target_text:
-            try:
-                await self.raw.edit_ephemeral_text(duel.chat_id, duel.target_id, duel.ephemeral_id, target_text)
-            except BotApiError:
-                pass
+        if target_text:
+            await self.update_invite(duel, target_text)
         target = await self.db.get_player(duel.target_id)
         who = escape(target.display) if target else str(duel.target_id)
         # ABORTED (вызов не удалось доставить) и WITHDRAWN (отменил сам) — вызывающий уже в курсе
@@ -583,14 +689,20 @@ class DuelService:
 
     # ------------------------------------------------------------------ фоновые задачи
     async def sweep_once(self) -> None:
-        for duel in await self.db.expired_duels(time.time()):
+        now = time.time()
+        for duel in await self.db.expired_duels(now):
             await self.cancel_duel(duel.id, Reason.TIMEOUT)
+        for q in await self.db.queue_all():
+            if now - q.joined_at > self.s.search_ttl:
+                await self._leave_queue(q.user_id, "nf")
 
     async def recover(self) -> None:
         """После перезапуска раунды в памяти потеряны: отменяем и возвращаем ставки."""
         for duel in await self.db.active_duels():
             if duel.status is Status.ROUND:
                 await self.cancel_duel(duel.id, Reason.ABORTED)
+        for q in await self.db.queue_all():   # очередь могла устареть за время простоя: ищем заново
+            await self._try_match(q.user_id)
 
     async def run_background(self) -> None:
         stars = self.providers.get("stars")

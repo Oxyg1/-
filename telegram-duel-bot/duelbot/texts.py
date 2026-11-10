@@ -28,10 +28,11 @@ def stake_amount_label(kind: str, amount: int) -> str:
     return str(amount) if kind == "stars" else format_ton(amount)
 
 
-def challenge_text(challenger: Player, duel: Duel, ttl_min: int) -> str:
+def challenge_text(challenger: Player, duel: Duel, ttl_min: int, private: bool = False) -> str:
+    tail = "Дуэль начнётся здесь, в виджете." if private else "Этого сообщения больше никто не видит."
     return (f"🤠 <b>{name(challenger)}</b> вызывает тебя на дуэль!\n"
-            f"Ставка: <b>{stake_label(duel)}</b>\n"
-            f"Вызов действует {ttl_min} мин. Этого сообщения больше никто не видит.")
+            f"Рейтинг: <b>{challenger.rating}</b> · ставка: <b>{stake_label(duel)}</b>\n"
+            f"Вызов действует {ttl_min} мин. {tail}")
 
 
 CANCEL_REASONS = {
@@ -128,7 +129,9 @@ HELP = (
     "на его сообщение). Он получит приватное приглашение.\n"
     f"Со ставкой: <code>/{C.DUEL} @username 50 stars</code> или <code>/{C.DUEL} @username 0.5 ton</code> "
     "(если включено).\n"
-    f"<code>/{C.CANCEL}</code> — отменить свой вызов, пока раунд не начался.\n"
+    f"Из лички с ботом: <code>/{C.DUEL} @username</code> — вызов придёт сопернику в его личку.\n"
+    f"<code>/{C.FIND}</code> — найти случайного соперника с близким рейтингом.\n"
+    f"<code>/{C.CANCEL}</code> — отменить свой вызов или поиск, пока раунд не начался.\n"
     f"<code>/{C.STATS}</code> — карточка игрока с рейтингом (<code>/{C.STATS} @username</code> — чужая).\n"
     f"<code>/{C.TOP}</code> — табло дуэлянтов.\n"
     f"<code>/{C.HELP}</code> — эта справка.\n\n"
