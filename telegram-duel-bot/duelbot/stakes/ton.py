@@ -19,13 +19,17 @@ import time
 from decimal import Decimal
 
 from ..config import Settings
-from ..engine.models import Outcome, RoundResult
+from ..engine.models import RoundResult
 from ..engine.settlement import ton_claim
 from ..storage.db import Database, Duel, Player, TonClaim
 from .base import StakeKind, StakeSpec
 from .ton_client import ToncenterClient
 from .ton_utils import (
-    NANO, build_transaction, format_ton, match_payment, parse_address, same_address,
+    NANO,
+    build_transaction,
+    format_ton,
+    match_payment,
+    parse_address,
 )
 
 log = logging.getLogger(__name__)

@@ -4,7 +4,7 @@ import pytest
 
 from duelbot.engine.judge import evaluate
 from duelbot.engine.models import JudgeConfig, Outcome, PlayerState, Reason, RoundResult
-from duelbot.engine.rating import Stats, apply_result, leaderboard_sort
+from duelbot.engine.rating import Stats, apply_result, elo_delta, leaderboard_sort, rating_deltas
 from duelbot.engine.settlement import StarsAction, stars_plan, ton_claim
 from duelbot.engine.states import InvalidTransition, Status, can_transition, require_transition
 from duelbot.engine.timing import estimate_rtt, random_delay, reaction_ms
@@ -185,18 +185,44 @@ def test_leaderboard_sort_and_tiebreaks():
         Stats(1, wins=5, losses=2, best_ms=250),
         Stats(2, wins=5, losses=1, best_ms=300),   # меньше поражений
         Stats(3, wins=5, losses=1, best_ms=210),   # то же, но быстрее
-        Stats(4, wins=7, losses=9),
-        Stats(5, wins=0, losses=3),                # без побед не попадает
+        Stats(4, wins=7, losses=9),                # больше побед при равном рейтинге
+        Stats(5, wins=0, losses=3, rating=1100),   # рейтинг решает первым
         Stats(6, wins=5, losses=1, best_ms=210),   # полное равенство → по id
+        Stats(7),                                  # не играл — не попадает
     ]
-    assert [s.user_id for s in leaderboard_sort(rows)] == [4, 3, 6, 2, 1]
+    assert [s.user_id for s in leaderboard_sort(rows)] == [5, 4, 3, 6, 2, 1]
     assert len(leaderboard_sort(rows, limit=2)) == 2
 
 
 def test_leaderboard_top10_limit():
-    rows = [Stats(i, wins=i) for i in range(1, 30)]
+    rows = [Stats(i, wins=1, rating=1000 + i) for i in range(1, 30)]
     top = leaderboard_sort(rows, limit=10)
     assert [s.user_id for s in top] == list(range(29, 19, -1))
+
+
+def test_elo_is_zero_sum_and_favours_upsets():
+    assert elo_delta(1000, 1000, 1.0) == 16
+    assert elo_delta(1000, 1000, 0.5) == 0
+    # аутсайдер, обыгравший фаворита, получает больше, чем фаворит за победу над аутсайдером
+    assert elo_delta(900, 1200, 1.0) > elo_delta(1200, 900, 1.0) > 0
+    win = _win_result(1, 2)
+    d = rating_deltas(win, Stats(1), Stats(2))
+    assert d == {1: 16, 2: -16}
+    assert rating_deltas(RoundResult(Outcome.CANCELLED, Reason.TIMEOUT), Stats(1), Stats(2)) == {1: 0, 2: 0}
+
+
+def test_streaks_and_average_reaction():
+    s = Stats(1)
+    for ms in (200.0, 240.0, 220.0):
+        s = apply_result(s, _win_result(1, 2, wms=ms), 10)
+    assert (s.streak, s.best_streak, s.rating) == (3, 3, 1030)
+    assert s.avg_ms == 220.0 and s.best_ms == 200.0
+    s = apply_result(s, _win_result(2, 1, wms=150.0, lms=260.0), -10)
+    assert (s.streak, s.best_streak) == (0, 3)
+    assert s.react_n == 4                       # честное поражение тоже даёт замер реакции
+    # фальстарт и «слишком быстро» в среднее не идут
+    s2 = apply_result(Stats(1), RoundResult(Outcome.WIN, Reason.TOO_FAST, 2, 1, {1: 40.0, 2: 200.0}))
+    assert s2.react_n == 0 and s2.best_ms is None and s2.false_starts == 1
 
 
 # ---------- автомат ----------

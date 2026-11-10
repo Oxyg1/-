@@ -39,7 +39,30 @@ CANCEL_REASONS = {
     Reason.NO_RESPONSE: "никто не нажал вовремя",
     Reason.ONE_SIDED_TIMEOUT: "один из игроков не ответил в раунде",
     Reason.ABORTED: "сбой бота",
+    Reason.WITHDRAWN: "участник отменил вызов",
 }
+
+
+def plural(n: int, one: str, few: str, many: str) -> str:
+    """plural(3, 'победа', 'победы', 'побед') -> '3 победы'."""
+    m10, m100 = n % 10, n % 100
+    word = one if m10 == 1 and m100 != 11 else few if 2 <= m10 <= 4 and not 12 <= m100 <= 14 else many
+    return f"{n} {word}"
+
+
+def signed(n: int) -> str:
+    return f"+{n}" if n > 0 else (f"−{-n}" if n < 0 else "±0")
+
+
+def rating_line(duel: Duel, players: dict[int, Player]) -> str:
+    """«📈 @a 1016 (+16) · @b 984 (−16)». Пусто, если рейтинг не менялся."""
+    parts = []
+    for uid in duel.players:
+        d, p = duel.delta_for(uid), players.get(uid)
+        if d is None or p is None:
+            continue
+        parts.append(f"{name(p)} {p.rating} ({signed(d)})")
+    return ("📈 " + " · ".join(parts)) if parts else ""
 
 
 def result_text(duel: Duel, result: RoundResult, players: dict[int, Player], settlement: str = "") -> str:
@@ -68,17 +91,48 @@ def result_text(duel: Duel, result: RoundResult, players: dict[int, Player], set
             head = f"🤝 Ничья: {n(a)} {ms(a)}, {n(b)} {ms(b)} — разница в пределах погрешности."
     else:
         head = f"⏹ Дуэль {n(a)} и {n(b)} отменена: {CANCEL_REASONS.get(result.reason, 'сбой')}."
+    if result.outcome is not Outcome.CANCELLED:
+        if line := rating_line(duel, players):
+            head += "\n" + line
+        w = players.get(result.winner_id) if result.winner_id else None
+        if w and w.streak >= 3:
+            head += f"\n🔥 {name(w)}: {plural(w.streak, 'победа', 'победы', 'побед')} подряд!"
     return head + (f"\n{settlement}" if settlement else "")
+
+
+def stats_text(p: Player, rank: int | None) -> str:
+    st = p.stats
+    if st.games == 0:
+        return f"🤠 <b>{name(p)}</b> ещё не провёл ни одной дуэли. Рейтинг: <b>{p.rating}</b>."
+    lines = [f"🤠 <b>{name(p)}</b>",
+             f"Рейтинг: <b>{p.rating}</b>" + (f" · место #{rank}" if rank else ""),
+             f"Дуэлей: {st.games} · 🏆 {st.wins} · 💀 {st.losses} · 🤝 {st.draws} "
+             f"({round((st.win_rate or 0) * 100)}% побед)"]
+    react = []
+    if st.best_ms is not None:
+        react.append(f"лучшая {st.best_ms:.0f} мс")
+    if st.avg_ms is not None:
+        react.append(f"средняя {st.avg_ms:.0f} мс")
+    if react:
+        lines.append("⚡ Реакция: " + ", ".join(react))
+    lines.append(f"🔥 Серия побед: {st.streak} (рекорд {st.best_streak})")
+    if st.false_starts:
+        lines.append(f"🚫 Фальстартов: {st.false_starts}")
+    return "\n".join(lines)
 
 
 HELP = (
     "🤠 <b>Ковбойская дуэль</b>\n\n"
-    "В группе: <code>/duel @username</code> — вызвать игрока. Он получит приватное приглашение.\n"
+    "В группе: <code>/duel @username</code> — вызвать игрока (или ответь командой <code>/duel</code> "
+    "на его сообщение). Он получит приватное приглашение.\n"
     "Со ставкой: <code>/duel @username 50 stars</code> или <code>/duel @username 0.5 ton</code> "
     "(если включено).\n"
-    "<code>/leaderboard</code> — табло дуэлянтов.\n\n"
+    "<code>/cancel</code> — отменить свой вызов, пока раунд не начался.\n"
+    "<code>/stats</code> — твоя статистика и рейтинг (<code>/stats @username</code> — чужая).\n"
+    "<code>/top</code> — табло дуэлянтов.\n\n"
     "Дуэль идёт в личке с ботом: на экране «Приготовься…», потом он становится красным — "
-    "жми первым. Нажал раньше — фальстарт и поражение.\n"
+    "жми первым. Нажал раньше — фальстарт и поражение. Задержка сети вычитается, так что лаг не мешает.\n"
+    "После дуэли под итогом в группе есть кнопка «🔁 Реванш».\n\n"
     "Чтобы получать дуэли, нажми Start у бота."
 )
 

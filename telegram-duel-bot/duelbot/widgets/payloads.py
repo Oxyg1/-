@@ -13,6 +13,7 @@ REASON_CODE = {
     Reason.FASTER: "f", Reason.FALSE_START: "fs", Reason.TOO_FAST: "tf", Reason.OPPONENT_TIMEOUT: "ot",
     Reason.TIE: "tie", Reason.BOTH_FALSE_START: "bfs", Reason.NO_RESPONSE: "nr",
     Reason.ONE_SIDED_TIMEOUT: "os", Reason.TIMEOUT: "to", Reason.DECLINED: "dc", Reason.ABORTED: "ab",
+    Reason.WITHDRAWN: "wd",
 }
 
 
@@ -39,7 +40,8 @@ def trunc(text: str, max_bytes: int) -> str:
 def duel_state(rev: int, phase: str, *, duel_id: int | None = None, opponent: str | None = None,
                stake_kind: str | None = None, stake_label: str | None = None, nonce: int | None = None,
                ms: float | None = None, opp_ms: float | None = None, reason: Reason | None = None,
-               claim: str | None = None, error: str | None = None) -> str:
+               claim: str | None = None, error: str | None = None,
+               rating: int | None = None, delta: int | None = None) -> str:
     """phase: stake | lobby | wait | go | win | lose | fs | draw | cancel."""
     d: dict[str, Any] = {"r": rev, "p": phase}
     if duel_id is not None:
@@ -62,6 +64,10 @@ def duel_state(rev: int, phase: str, *, duel_id: int | None = None, opponent: st
         d.setdefault("a", stake_label)
     if error:
         d["e"] = error
+    if rating is not None:
+        d["rt"] = rating
+    if delta is not None:
+        d["dr"] = delta
     return dumps(d)
 
 
@@ -75,10 +81,10 @@ def final_phase(result: RoundResult, uid: int) -> str:
     return "fs" if result.reason in (Reason.FALSE_START, Reason.TOO_FAST) else "lose"
 
 
-def leaderboard_public(rev: int, top: list[tuple[str, int, int]], last: list[tuple[str, str, float | None]],
+def leaderboard_public(rev: int, top: list[tuple], last: list[tuple[str, str, float | None]],
                        name_bytes: int = 14) -> str:
-    """Топ-10 и последние дуэли в ≤1024 байт. При нехватке места сначала режем последние дуэли,
-    потом укорачиваем имена. Топ-10 не сокращается."""
+    """Топ-10 и последние дуэли в ≤1024 байт. Строка топа: (имя, победы, поражения[, рейтинг]).
+    При нехватке места сначала режем последние дуэли, потом укорачиваем имена. Топ-10 не сокращается."""
     top = top[:10]
     last = list(last[:5])
     for nb in (name_bytes, 10, 8, 6):
@@ -86,7 +92,7 @@ def leaderboard_public(rev: int, top: list[tuple[str, int, int]], last: list[tup
         while True:
             payload = {
                 "r": rev,
-                "t": [[trunc(n, nb), w, l] for n, w, l in top],
+                "t": [[trunc(n, nb), *rest] for n, *rest in top],
                 "l": [[trunc(a, nb), trunc(b, nb), None if ms is None else round(ms)] for a, b, ms in last[:n_last]],
             }
             s = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

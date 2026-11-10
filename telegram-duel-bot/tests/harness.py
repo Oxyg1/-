@@ -16,6 +16,7 @@ from duelbot.stakes.base import StakeProvider
 class FakeBot:
     def __init__(self):
         self.messages: list[tuple[int, str]] = []
+        self.markups: list[object] = []
         self.invoices: list[dict] = []
         self.refunds: list[tuple[int, str]] = []
         self.gifts: list[dict] = []
@@ -23,6 +24,7 @@ class FakeBot:
 
     async def send_message(self, chat_id, text, **kw):
         self.messages.append((chat_id, text))
+        self.markups.append(kw.get("reply_markup"))
 
     async def send_invoice(self, **kw):
         self.invoices.append(kw)
@@ -51,7 +53,7 @@ class Player:
 class FakeRaw:
     """Заменяет RawBotApi. Каждый edit_message_widget_data «доставляется» в виджет игрока и запускает его поведение."""
 
-    def __init__(self, harness: "Harness"):
+    def __init__(self, harness: Harness):
         self.h = harness
         self.answers: list[tuple[str, str | None]] = []
         self.shared_edits: list[tuple[str, str]] = []

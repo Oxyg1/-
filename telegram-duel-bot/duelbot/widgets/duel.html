@@ -7,6 +7,9 @@ body{background:#1c1109;color:#ecd9b0;font:15px/1.3 system-ui,sans-serif;text-al
 #b:active{background:#6e4521}
 #b[hidden]{display:none}
 #m{min-height:18px;font-size:13px;color:#a98a55}
+#r{margin-top:10px;font:700 18px system-ui,sans-serif}
+#r i{font-style:normal;font-size:15px}
+.up{color:#8fd16a}.dn{color:#e0705a}
 .p-go{background:#c4160f}
 .p-go #s,.p-go #m{color:#ffd9c0}
 .p-go #b{background:#ffe3b3;border-color:#7a0b07;color:#b00e08;font-size:30px}
@@ -18,15 +21,16 @@ body{background:#1c1109;color:#ecd9b0;font:15px/1.3 system-ui,sans-serif;text-al
 <div id=s>Загрузка…</div>
 <button id=b hidden></button>
 <div id=m></div>
+<div id=r></div>
 <script>
 (function(){
-var W=window.TelegramWidget,D=document,E=function(i){return D.getElementById(i)},seen=-1,st=null,pend=0,pr=0,lastN=null,note='';
-var R={f:'быстрее',fs:'нажал до сигнала',tf:'слишком рано',ot:'соперник не нажал',tie:'разница в пределах погрешности',bfs:'оба нажали до сигнала',nr:'никто не нажал',os:'соперник не нажал',to:'время вышло',dc:'отказ',ab:'сбой, ставки возвращены'};
+var W=window.TelegramWidget,D=document,E=function(i){return D.getElementById(i)},seen=-1,st=null,pend=0,pr=0,lastN=null,note='',hp='';
+var R={f:'быстрее',fs:'нажал до сигнала',tf:'слишком рано',ot:'соперник не нажал',tie:'разница в пределах погрешности',bfs:'оба нажали до сигнала',nr:'никто не нажал',os:'соперник не нажал',to:'время вышло',dc:'отказ',ab:'сбой, ставки возвращены',wd:'вызов отменён'};
 var X={low:'Недостаточно TON на кошельке',nw:'Нет TON-кошелька',bad:'Не удалось',late:'Поздно'};
 function J(s){try{return JSON.parse(s)}catch(e){return null}}
 function set(o){if(o&&o.p&&o.r>=seen){seen=o.r;st=o}if(o&&o.e)note=X[o.e]||o.e;draw()}
 function draw(){
-var s=st||{p:'lobby'},p=s.p,T='',B='',M=[];
+var s=st||{p:'lobby'},p=s.p,T='',B='',M=[];E('r').textContent='';
 D.body.className='p-'+p;
 if(p=='stake'){T='Ставка: '+s.a+(s.k=='s'?' ⭐':' TON');if(s.k=='t')B='Принять';else M.push('Оплатите счёт в чате выше')}
 else if(p=='lobby'){T='Ждём соперника…';if(s.o)M.push('против '+s.o)}
@@ -35,11 +39,12 @@ else if(p=='go'){T='СТРЕЛЯЙ!';B='ЖМИ!'}
 else{T={win:'🏆 Победа!',lose:'💀 Поражение',fs:'🚫 Фальстарт',draw:'🤝 Ничья',cancel:'Дуэль отменена'}[p]||p;
 if(s.ms!=null)M.push('ты '+s.ms+' мс'+(s.oms!=null?', он '+s.oms+' мс':''));
 if(R[s.w])M.push(R[s.w]);
+if(s.rt!=null){var r=E('r');r.textContent='Рейтинг '+s.rt+' ';if(s.dr!=null){var i=D.createElement('i');i.className=s.dr>0?'up':s.dr<0?'dn':'';i.textContent='('+(s.dr>0?'+':s.dr<0?'−':'±')+Math.abs(s.dr)+')';r.appendChild(i)}}
 if(s.q=='o')B='Заплатить '+s.a+' TON';else if(s.q=='w')M.push('ждём оплату '+s.a+' TON');else if(s.q=='p')M.push('оплачено ✅');else if(s.q=='u')M.push('не оплачено ⚠')}
 E('s').textContent=T;
 var b=E('b');b.hidden=!B;b.textContent=B;b.disabled=!!pend||(pr&&(p=='wait'||p=='go'));
 E('m').textContent=(note?note+' · ':'')+M.join(' · ');
-if(p=='go'){try{W.HapticFeedback.notificationOccurred('warning')}catch(e){}}
+if(p!=hp){hp=p;var h={go:'warning',win:'success',lose:'error',fs:'error'}[p];if(h){try{W.HapticFeedback.notificationOccurred(h)}catch(e){}}}
 }
 function done(a){pend=0;set(a&&J(a.result))}
 function fail(e){pend=0;note=e&&e.code?e.code:'ошибка';draw()}

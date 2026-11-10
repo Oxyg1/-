@@ -29,6 +29,8 @@ from .leaderboard_service import LeaderboardService
 
 log = logging.getLogger(__name__)
 
+PRE_ROUND = (Status.CHALLENGED, Status.STAKING, Status.LOBBY)  # до раунда дуэль ещё можно отменить
+
 ACK_TIMEOUT = 4.0
 BG_REQUEST_GAP = 5.3   # документация: фоновые запросы виджета — не чаще раза в 5 секунд
 ROUND_HARD_CAP = 90    # потолок жизни статуса ROUND на случай зависания
@@ -134,6 +136,23 @@ class DuelService:
     # ------------------------------------------------------------------ создание и принятие
     async def create_duel(self, chat_id: int, challenger_id: int, target_id: int, kind: str, amount: int) -> Duel:
         return await self.db.create_duel(chat_id, challenger_id, target_id, kind, amount, self.s.challenge_ttl)
+
+    async def cooldown_left(self, challenger_id: int, target_id: int) -> int:
+        """Сколько секунд ещё нельзя вызывать игрока, который недавно отказал этому же вызывающему."""
+        last = await self.db.last_duel_between(challenger_id, target_id)
+        if last is None or last.reason != Reason.DECLINED.value or not last.finished_at:
+            return 0
+        return max(0, int(last.finished_at + self.s.challenge_cooldown - time.time() + 0.999))
+
+    async def withdraw(self, user_id: int) -> str:
+        """/cancel: участник отменяет свою дуэль, пока раунд не начался."""
+        duel = await self.db.active_duel_for(user_id)
+        if duel is None:
+            return "У тебя нет активных вызовов."
+        if duel.status not in PRE_ROUND:
+            return "Раунд уже идёт — отменить нельзя."
+        await self.cancel_duel(duel.id, Reason.WITHDRAWN, by=user_id)
+        return f"Дуэль №{duel.id} отменена."
 
     async def decline(self, duel_id: int, user_id: int) -> bool:
         duel = await self.db.get_duel(duel_id)
@@ -413,7 +432,7 @@ class DuelService:
         rt.changed.clear()
         try:
             await asyncio.wait_for(rt.changed.wait(), timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
     async def _measure(self, duel: Duel, rt: Runtime) -> None:
@@ -437,7 +456,7 @@ class DuelService:
             await asyncio.wait_for(ack.event.wait(), ACK_TIMEOUT)
             if ack.rtt is not None:
                 out.append(ack.rtt)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log.info("no ping ack from %s, using default RTT", uid)
 
     # ------------------------------------------------------------------ завершение
@@ -446,7 +465,7 @@ class DuelService:
         if current is None or current.status in (Status.FINISHED, Status.CANCELLED):
             return
         provider = self.provider(duel)
-        if not await self.db.finish_duel(duel, result):
+        if not await self.db.finish_duel(duel, result, k=self.s.elo_k):
             return
         try:
             settlement = (await provider.cancel(duel)) if result.outcome is Outcome.CANCELLED \
@@ -457,18 +476,25 @@ class DuelService:
         if settlement:
             await self.db.update_duel(duel.id, settlement=settlement)
         duel = await self.db.get_duel(duel.id)  # type: ignore[assignment]
+        players = await self._players(duel)
         claim = await self.db.get_claim(duel.id) if duel.stake_kind == "ton" else None
         for uid in duel.players:
-            kw = {"claim": "o" if uid == claim.payer_id else "w"} if claim else {}
+            kw: dict = {"claim": "o" if uid == claim.payer_id else "w"} if claim else {}
+            delta = duel.delta_for(uid)
+            if delta is not None and players.get(uid):
+                kw.update(rating=players[uid].rating, delta=delta)
             await self._push(duel, uid, final_phase(result, uid), ms=result.reaction_ms.get(uid),
                              opp_ms=result.reaction_ms.get(duel.opponent(uid)), reason=result.reason, **kw)
         if duel.accepted_at:
-            players = await self._players(duel)
-            await self._group(duel, result_text(duel, result, players, settlement))
+            markup = None
+            if result.outcome is not Outcome.CANCELLED:
+                markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+                    text="🔁 Реванш", callback_data=f"d:r:{duel.id}")]])
+            await self._group(duel, result_text(duel, result, players, settlement), markup)
         if result.outcome is not Outcome.CANCELLED:
             self.leaderboard.request_refresh()
 
-    async def cancel_duel(self, duel_id: int, reason: Reason) -> None:
+    async def cancel_duel(self, duel_id: int, reason: Reason, by: int | None = None) -> None:
         duel = await self.db.get_duel(duel_id)
         if duel is None or duel.status in (Status.FINISHED, Status.CANCELLED):
             return
@@ -480,19 +506,28 @@ class DuelService:
         await self._finish(duel, RoundResult(Outcome.CANCELLED, reason))
         if was_challenge:
             await self._tell_challenge_closed(duel, reason)
+        elif reason is Reason.WITHDRAWN and by is not None:
+            # после принятия: второй игрок узнаёт об отмене в личке (виджет и так покажет «отменена»)
+            other = duel.opponent(by)
+            p = await self.db.get_player(by)
+            await self._dm(other, f"⏹ {escape(p.display) if p else 'Соперник'} отменил дуэль №{duel.id}.")
 
     async def _tell_challenge_closed(self, duel: Duel, reason: Reason) -> None:
-        text = ("Вы отказались от дуэли." if reason is Reason.DECLINED else "Вызов истёк.")
-        if duel.ephemeral_id:
+        """Вызов закрыт до принятия: обновить приглашение у вызванного и сообщить вызывающему."""
+        target_text = {Reason.DECLINED: "Вы отказались от дуэли.", Reason.TIMEOUT: "Вызов истёк.",
+                       Reason.WITHDRAWN: "Вызов отозван."}.get(reason)
+        if duel.ephemeral_id and target_text:
             try:
-                await self.raw.edit_ephemeral_text(duel.chat_id, duel.target_id, duel.ephemeral_id, text)
+                await self.raw.edit_ephemeral_text(duel.chat_id, duel.target_id, duel.ephemeral_id, target_text)
             except BotApiError:
                 pass
-        challenger = await self.db.get_player(duel.challenger_id)
         target = await self.db.get_player(duel.target_id)
         who = escape(target.display) if target else str(duel.target_id)
-        msg = f"{who} отказался от дуэли." if reason is Reason.DECLINED else f"{who} не принял вызов вовремя."
-        if challenger and challenger.can_dm:
+        # ABORTED (вызов не удалось доставить) и WITHDRAWN (отменил сам) — вызывающий уже в курсе
+        msg = {Reason.DECLINED: f"{who} отказался от дуэли.",
+               Reason.TIMEOUT: f"{who} не принял вызов вовремя."}.get(reason)
+        challenger = await self.db.get_player(duel.challenger_id)
+        if msg and challenger and challenger.can_dm:
             await self._dm(duel.challenger_id, msg)
 
     # ------------------------------------------------------------------ фоновые задачи

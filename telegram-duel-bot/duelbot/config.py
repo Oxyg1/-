@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .engine.models import JudgeConfig
@@ -16,22 +16,26 @@ class Settings(BaseSettings):
     widgets_in_groups: bool = False
     ephemeral_commands: bool = True
     db_path: str = "duelbot.db"
+    log_level: str = Field("INFO", pattern="^(DEBUG|INFO|WARNING|ERROR)$")
 
-    challenge_ttl: int = 300
-    stake_ttl: int = 180
-    ready_ttl: int = 90
-    delay_min: float = 2.0
-    delay_max: float = 6.0
-    response_timeout: float = 5.0
+    challenge_ttl: int = Field(300, gt=0)
+    stake_ttl: int = Field(180, gt=0)
+    ready_ttl: int = Field(90, gt=0)
+    # сколько секунд нельзя снова вызывать игрока, который отказался (защита от спама вызовами)
+    challenge_cooldown: int = Field(60, ge=0)
+    delay_min: float = Field(2.0, ge=0)
+    delay_max: float = Field(6.0, ge=0)
+    response_timeout: float = Field(5.0, gt=0)
     ping_samples: int = Field(1, ge=0, le=3)
-    default_rtt_ms: float = 150.0
-    max_rtt_ms: float = 400.0
-    min_human_ms: float = 80.0
-    tie_ms: float = 20.0
+    default_rtt_ms: float = Field(150.0, ge=0)
+    max_rtt_ms: float = Field(400.0, ge=0)
+    min_human_ms: float = Field(80.0, ge=0)
+    tie_ms: float = Field(20.0, ge=0)
     one_sided_policy: str = Field("cancel", pattern="^(cancel|win)$")
+    elo_k: int = Field(32, ge=1, le=100)
 
     enable_stars_stakes: bool = False
-    stars_min: int = 1
+    stars_min: int = Field(1, ge=1)
     stars_max: int = 500
     stars_winner_gift_id: str = ""
 
@@ -42,7 +46,21 @@ class Settings(BaseSettings):
     ton_min: float = 0.1
     ton_max: float = 10.0
     ton_fee_reserve: float = 0.05
-    ton_claim_ttl: int = 900
+    ton_claim_ttl: int = Field(900, gt=0)
+
+    @model_validator(mode="after")
+    def _check_ranges(self) -> Settings:
+        if self.delay_min > self.delay_max:
+            raise ValueError("DELAY_MIN must be <= DELAY_MAX")
+        if self.default_rtt_ms > self.max_rtt_ms:
+            raise ValueError("DEFAULT_RTT_MS must be <= MAX_RTT_MS")
+        if self.stars_min > self.stars_max:
+            raise ValueError("STARS_MIN must be <= STARS_MAX")
+        if not (0 < self.ton_min <= self.ton_max):
+            raise ValueError("need 0 < TON_MIN <= TON_MAX")
+        if self.ton_network not in ("-239", "-3"):
+            raise ValueError("TON_NETWORK must be -239 (mainnet) or -3 (testnet)")
+        return self
 
     def judge_config(self) -> JudgeConfig:
         return JudgeConfig(

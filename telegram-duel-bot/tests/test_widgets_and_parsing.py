@@ -2,13 +2,17 @@ import json
 
 import pytest
 
+from duelbot.engine.models import Outcome, Reason, RoundResult
 from duelbot.handlers.parsing import StakeParseError, first_username, parse_stake
 from duelbot.stakes.base import StakeKind
 from duelbot.widgets.payloads import MAX_DATA_BYTES, duel_state, final_phase, leaderboard_public, trunc
 from duelbot.widgets.render import (
-    MAX_COMPRESSED_BYTES, check_limits, compressed_size, duel_html, leaderboard_html,
+    MAX_COMPRESSED_BYTES,
+    check_limits,
+    compressed_size,
+    duel_html,
+    leaderboard_html,
 )
-from duelbot.engine.models import Outcome, Reason, RoundResult
 
 
 def test_widget_html_within_telegram_limits():

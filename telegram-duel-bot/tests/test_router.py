@@ -1,5 +1,4 @@
 """Интеграция с aiogram: перехват widget_query (его нет в aiogram 3.31) и обычные хендлеры."""
-import asyncio
 import json
 
 import pytest
@@ -8,7 +7,6 @@ from aiogram.client.session.base import BaseSession
 
 from duelbot.bot_api_raw import BotApiError
 from duelbot.handlers.router import Ctx, DuelDispatcher, RegisterMiddleware, build_router, install_widget_handler
-from duelbot.services.leaderboard_service import LeaderboardService
 from tests.harness import Harness, Player
 
 

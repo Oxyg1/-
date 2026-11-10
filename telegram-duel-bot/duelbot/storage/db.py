@@ -9,7 +9,7 @@ from typing import Any
 import aiosqlite
 
 from ..engine.models import Outcome, RoundResult
-from ..engine.rating import Stats, apply_result
+from ..engine.rating import DEFAULT_K, Stats, apply_result, rating_deltas
 from ..engine.states import ACTIVE, Status, require_transition
 
 
@@ -25,10 +25,20 @@ class Player:
     false_starts: int = 0
     best_ms: float | None = None
     ton_blocked: bool = False
+    rating: int = 1000
+    streak: int = 0
+    best_streak: int = 0
+    react_sum: float = 0.0
+    react_n: int = 0
 
     @property
     def display(self) -> str:
         return f"@{self.username}" if self.username else (self.first_name or str(self.user_id))
+
+    @property
+    def stats(self) -> Stats:
+        return Stats(self.user_id, self.wins, self.losses, self.draws, self.false_starts, self.best_ms,
+                     self.rating, self.streak, self.best_streak, self.react_sum, self.react_n)
 
 
 @dataclass
@@ -52,6 +62,8 @@ class Duel:
     challenger_ms: float | None
     target_ms: float | None
     settlement: str | None
+    challenger_delta: int | None = None
+    target_delta: int | None = None
 
     @property
     def players(self) -> tuple[int, int]:
@@ -59,6 +71,9 @@ class Duel:
 
     def opponent(self, uid: int) -> int:
         return self.target_id if uid == self.challenger_id else self.challenger_id
+
+    def delta_for(self, uid: int) -> int | None:
+        return self.challenger_delta if uid == self.challenger_id else self.target_delta
 
 
 @dataclass
@@ -110,21 +125,43 @@ _CLAIM_COLS = {"payer_address", "reported_sender", "status", "reported_msg_hash"
                "confirmed_at", "deadline_at"}
 _PAY_COLS = {"status", "note"}
 
+# Колонки, добавленные после первой версии схемы. CREATE TABLE IF NOT EXISTS не меняет старые таблицы,
+# поэтому недостающие колонки доливаем ALTER TABLE при старте.
+_MIGRATIONS: list[tuple[str, str, str]] = [
+    ("players", "rating", "INTEGER NOT NULL DEFAULT 1000"),
+    ("players", "streak", "INTEGER NOT NULL DEFAULT 0"),
+    ("players", "best_streak", "INTEGER NOT NULL DEFAULT 0"),
+    ("players", "react_sum", "REAL NOT NULL DEFAULT 0"),
+    ("players", "react_n", "INTEGER NOT NULL DEFAULT 0"),
+    ("duels", "challenger_delta", "INTEGER"),
+    ("duels", "target_delta", "INTEGER"),
+]
+
 
 class Database:
     def __init__(self, conn: aiosqlite.Connection):
         self._c = conn
 
     @classmethod
-    async def connect(cls, path: str) -> "Database":
+    async def connect(cls, path: str) -> Database:
         conn = await aiosqlite.connect(path)
         conn.row_factory = aiosqlite.Row
         await conn.execute("PRAGMA journal_mode=WAL")
         await conn.execute("PRAGMA foreign_keys=ON")
+        await conn.execute("PRAGMA busy_timeout=5000")
         schema = resources.files("duelbot.storage").joinpath("schema.sql").read_text(encoding="utf-8")
         await conn.executescript(schema)
+        await cls._migrate(conn)
         await conn.commit()
         return cls(conn)
+
+    @staticmethod
+    async def _migrate(conn: aiosqlite.Connection) -> None:
+        for table, col, ddl in _MIGRATIONS:
+            async with conn.execute(f"PRAGMA table_info({table})") as cur:
+                cols = {r[1] for r in await cur.fetchall()}
+            if col not in cols:
+                await conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
 
     async def close(self) -> None:
         await self._c.close()
@@ -152,7 +189,8 @@ class Database:
     @staticmethod
     def _player(r) -> Player:
         return Player(r["user_id"], r["username"], r["first_name"], bool(r["can_dm"]), r["wins"], r["losses"],
-                      r["draws"], r["false_starts"], r["best_ms"], bool(r["ton_blocked"]))
+                      r["draws"], r["false_starts"], r["best_ms"], bool(r["ton_blocked"]), r["rating"],
+                      r["streak"], r["best_streak"], r["react_sum"], r["react_n"])
 
     async def upsert_player(self, user_id: int, username: str | None, first_name: str,
                             can_dm: bool | None = None) -> None:
@@ -220,13 +258,15 @@ class Database:
             require_transition(duel.status, dst)
         except ValueError:
             return False
-        cur = await self._c.execute("UPDATE duels SET status=? WHERE id=? AND status=?",
-                                    (dst.value, duel_id, duel.status.value))
+        bad = set(fields) - _DUEL_COLS
+        if bad:
+            raise ValueError(f"unknown columns {bad}")
+        # статус и сопутствующие поля — одной записью: не бывает «статус сменился, а дедлайн старый»
+        sets = ", ".join(["status=?", *(f"{k}=?" for k in fields)])
+        cur = await self._c.execute(f"UPDATE duels SET {sets} WHERE id=? AND status=?",
+                                    (dst.value, *fields.values(), duel_id, duel.status.value))
         await self._c.commit()
-        if cur.rowcount != 1:
-            return False
-        await self.update_duel(duel_id, **fields)
-        return True
+        return cur.rowcount == 1
 
     async def active_duel_for(self, user_id: int, exclude_id: int | None = None) -> Duel | None:
         marks = ",".join("?" for _ in ACTIVE)
@@ -241,6 +281,11 @@ class Database:
             f"SELECT * FROM duels WHERE status IN ({marks}) AND deadline_at < ?",
             *[s.value for s in ACTIVE], now)
         return [self._duel(r) for r in rows]
+
+    async def last_duel_between(self, challenger_id: int, target_id: int) -> Duel | None:
+        r = await self._one("SELECT * FROM duels WHERE challenger_id=? AND target_id=? ORDER BY id DESC LIMIT 1",
+                            challenger_id, target_id)
+        return self._duel(r) if r else None
 
     async def active_duels(self) -> list[Duel]:
         marks = ",".join("?" for _ in ACTIVE)
@@ -273,8 +318,9 @@ class Database:
         return self._dp(r) if r else None
 
     # ---------- результат и рейтинг ----------
-    async def finish_duel(self, duel: Duel, result: RoundResult, settlement: str | None = None) -> bool:
-        """Записывает итог и обновляет статистику обоих игроков одной транзакцией.
+    async def finish_duel(self, duel: Duel, result: RoundResult, settlement: str | None = None,
+                          k: int = DEFAULT_K) -> bool:
+        """Записывает итог, рейтинг и статистику обоих игроков одной транзакцией.
 
         Возвращает False, если дуэль уже завершена (идемпотентность).
         """
@@ -284,33 +330,53 @@ class Database:
             return False
         require_transition(cur_duel.status, dst)
         now = time.time()
-        await self._c.execute(
+        players = {uid: await self.get_player(uid) for uid in duel.players}
+        deltas: dict[int, int] = {}
+        if all(players.values()) and result.outcome is not Outcome.CANCELLED:
+            a, b = (players[u].stats for u in duel.players)  # type: ignore[union-attr]
+            deltas = rating_deltas(result, a, b, k)
+        cur = await self._c.execute(
             """UPDATE duels SET status=?, finished_at=?, outcome=?, reason=?, winner_id=?, loser_id=?,
-               challenger_ms=?, target_ms=?, settlement=COALESCE(?, settlement) WHERE id=? AND status=?""",
+               challenger_ms=?, target_ms=?, settlement=COALESCE(?, settlement),
+               challenger_delta=?, target_delta=? WHERE id=? AND status=?""",
             (dst.value, now, result.outcome.value, result.reason.value, result.winner_id, result.loser_id,
              result.reaction_ms.get(duel.challenger_id), result.reaction_ms.get(duel.target_id),
-             settlement, duel.id, cur_duel.status.value))
-        for uid in duel.players:
-            p = await self.get_player(uid)
+             settlement, deltas.get(duel.challenger_id), deltas.get(duel.target_id),
+             duel.id, cur_duel.status.value))
+        if cur.rowcount != 1:
+            await self._c.commit()
+            return False
+        for uid, p in players.items():
             if p is None:
                 continue
-            s = apply_result(Stats(uid, p.wins, p.losses, p.draws, p.false_starts, p.best_ms), result)
+            s = apply_result(p.stats, result, deltas.get(uid, 0))
             await self._c.execute(
-                "UPDATE players SET wins=?, losses=?, draws=?, false_starts=?, best_ms=? WHERE user_id=?",
-                (s.wins, s.losses, s.draws, s.false_starts, s.best_ms, uid))
+                """UPDATE players SET wins=?, losses=?, draws=?, false_starts=?, best_ms=?, rating=?, streak=?,
+                   best_streak=?, react_sum=?, react_n=? WHERE user_id=?""",
+                (s.wins, s.losses, s.draws, s.false_starts, s.best_ms, s.rating, s.streak, s.best_streak,
+                 s.react_sum, s.react_n, uid))
         await self._c.commit()
         return True
 
     async def all_stats(self) -> list[Stats]:
-        rows = await self._all("SELECT user_id, wins, losses, draws, false_starts, best_ms FROM players WHERE wins>0")
-        return [Stats(r["user_id"], r["wins"], r["losses"], r["draws"], r["false_starts"], r["best_ms"])
-                for r in rows]
+        rows = await self._all("SELECT * FROM players WHERE wins + losses + draws > 0")
+        return [self._player(r).stats for r in rows]
+
+    async def rank_of(self, user_id: int) -> int | None:
+        """Место игрока в общей таблице (по рейтингу) или None, если он ещё не играл."""
+        p = await self.get_player(user_id)
+        if p is None or p.stats.games == 0:
+            return None
+        r = await self._one("SELECT COUNT(*) AS n FROM players WHERE wins + losses + draws > 0 AND rating > ?",
+                            p.rating)
+        return int(r["n"]) + 1
 
     async def names_for(self, user_ids: list[int]) -> dict[int, str]:
         if not user_ids:
             return {}
         marks = ",".join("?" for _ in user_ids)
-        rows = await self._all(f"SELECT user_id, username, first_name FROM players WHERE user_id IN ({marks})", *user_ids)
+        rows = await self._all(
+            f"SELECT user_id, username, first_name FROM players WHERE user_id IN ({marks})", *user_ids)
         return {r["user_id"]: (r["username"] or r["first_name"] or str(r["user_id"])) for r in rows}
 
     async def last_duels(self, limit: int = 5) -> list[dict]:
@@ -380,8 +446,9 @@ class Database:
         return [self._claim(r) for r in rows]
 
     async def open_claim_for_payer(self, user_id: int) -> TonClaim | None:
-        r = await self._one("SELECT * FROM ton_claims WHERE payer_id=? AND status IN ('pending','tx_reported','unpaid') "
-                            "ORDER BY created_at DESC", user_id)
+        r = await self._one(
+            "SELECT * FROM ton_claims WHERE payer_id=? AND status IN ('pending','tx_reported','unpaid') "
+            "ORDER BY created_at DESC", user_id)
         return self._claim(r) if r else None
 
     # ---------- kv ----------
@@ -390,6 +457,6 @@ class Database:
         return r["value"] if r else None
 
     async def kv_set(self, key: str, value: str) -> None:
-        await self._c.execute("INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                              (key, value))
+        await self._c.execute(
+            "INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
         await self._c.commit()

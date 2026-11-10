@@ -26,7 +26,7 @@ class LeaderboardService:
     async def build_public(self) -> str:
         stats = leaderboard_sort(await self.db.all_stats(), limit=10)
         names = await self.db.names_for([s.user_id for s in stats])
-        top = [(names.get(s.user_id, str(s.user_id)), s.wins, s.losses) for s in stats]
+        top = [(names.get(s.user_id, str(s.user_id)), s.wins, s.losses, s.rating) for s in stats]
         last = [(d["winner"], d["loser"], d["ms"]) for d in await self.db.last_duels(5)]
         return leaderboard_public(int(time.time() * 1000), top, last)
 

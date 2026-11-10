@@ -27,6 +27,7 @@ ALLOWED_UPDATES = ["message", "callback_query", "pre_checkout_query", "widget_qu
 
 async def run() -> None:
     s = get_settings()
+    logging.getLogger().setLevel(s.log_level)
     session = AiohttpSession(api=TEST if s.use_test_server else PRODUCTION)
     bot = Bot(s.bot_token, session=session, default=DefaultBotProperties(parse_mode="HTML"))
     raw = RawBotApi(s.bot_token, s.api_base)
@@ -49,13 +50,19 @@ async def run() -> None:
         dp.include_router(build_router(ctx))
         install_widget_handler(dp, ctx)
 
+        eph = s.ephemeral_commands
         await bot.set_my_commands(
-            [BotCommand(command="duel", description="Вызвать игрока на дуэль", is_ephemeral=s.ephemeral_commands),
-             BotCommand(command="leaderboard", description="Табло дуэлянтов")],
+            [BotCommand(command="duel", description="Вызвать игрока на дуэль", is_ephemeral=eph),
+             BotCommand(command="cancel", description="Отменить свой вызов", is_ephemeral=eph),
+             BotCommand(command="stats", description="Моя статистика и рейтинг", is_ephemeral=eph),
+             BotCommand(command="top", description="Табло дуэлянтов"),
+             BotCommand(command="help", description="Правила")],
             scope=BotCommandScopeAllGroupChats())
         await bot.set_my_commands(
             [BotCommand(command="start", description="Начать"), BotCommand(command="help", description="Правила"),
-             BotCommand(command="leaderboard", description="Табло дуэлянтов"),
+             BotCommand(command="stats", description="Моя статистика и рейтинг"),
+             BotCommand(command="top", description="Табло дуэлянтов"),
+             BotCommand(command="cancel", description="Отменить свою дуэль"),
              BotCommand(command="terms", description="Условия"),
              BotCommand(command="paysupport", description="Поддержка по платежам")],
             scope=BotCommandScopeAllPrivateChats())

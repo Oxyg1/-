@@ -48,7 +48,11 @@ async def test_finish_duel_updates_stats_once_and_leaderboard(db):
     assert await db.finish_duel(d, res) is False                # идемпотентность
     a, b = await db.get_player(1), await db.get_player(2)
     assert (a.wins, a.best_ms, b.losses) == (1, 210.0, 1)
-    assert [s.user_id for s in await db.all_stats()] == [1]
+    assert sorted(s.user_id for s in await db.all_stats()) == [1, 2]   # в таблице все, кто играл
+    assert (a.rating, b.rating, a.streak) == (1016, 984, 1)
+    fin = await db.get_duel(d.id)
+    assert (fin.challenger_delta, fin.target_delta) == (16, -16)
+    assert await db.rank_of(1) == 1 and await db.rank_of(2) == 2
     last = await db.last_duels()
     assert last == [{"winner": "alice", "loser": "bob", "ms": 210.0}]
     assert await db.active_duel_for(1) is None
@@ -85,3 +89,35 @@ async def test_kv(db):
     await db.kv_set("k", "1")
     await db.kv_set("k", "2")
     assert await db.kv_get("k") == "2"
+
+
+async def test_transition_updates_fields_atomically(db):
+    await _two(db)
+    d = await db.create_duel(-100, 1, 2, "none", 0, ttl=300)
+    assert await db.transition(d.id, Status.LOBBY, deadline_at=123.0, accepted_at=100.0)
+    d2 = await db.get_duel(d.id)
+    assert (d2.status, d2.deadline_at, d2.accepted_at) == (Status.LOBBY, 123.0, 100.0)
+    with pytest.raises(ValueError):
+        await db.transition(d.id, Status.ROUND, bogus=1)
+    assert (await db.get_duel(d.id)).status is Status.LOBBY
+
+
+async def test_migration_adds_columns_to_old_database(tmp_path):
+    import aiosqlite
+
+    from duelbot.storage.db import Database
+    path = str(tmp_path / "old.db")
+    async with aiosqlite.connect(path) as c:      # схема первой версии: без рейтинга и серий
+        await c.executescript(
+            "CREATE TABLE players (user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT NOT NULL DEFAULT '',"
+            " can_dm INTEGER NOT NULL DEFAULT 0, wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0,"
+            " draws INTEGER NOT NULL DEFAULT 0, false_starts INTEGER NOT NULL DEFAULT 0, best_ms REAL,"
+            " ton_blocked INTEGER NOT NULL DEFAULT 0, updated_at REAL NOT NULL DEFAULT 0);"
+            "INSERT INTO players(user_id, username, wins) VALUES (1, 'old', 4);")
+        await c.commit()
+    db = await Database.connect(path)
+    try:
+        p = await db.get_player(1)
+        assert (p.username, p.wins, p.rating, p.streak) == ("old", 4, 1000, 0)
+    finally:
+        await db.close()

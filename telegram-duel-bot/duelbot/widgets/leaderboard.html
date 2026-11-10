@@ -10,7 +10,7 @@ h4{margin:12px 0 4px;color:#c9a96a;font-size:12px;letter-spacing:1px;text-transf
 .e{color:#a98a55;text-align:center;padding:10px}
 </style>
 <h3>🤠 ТАБЛО ДУЭЛЯНТОВ</h3>
-<h4>Топ по победам</h4>
+<h4>Топ по рейтингу</h4>
 <div id=t></div>
 <h4>Последние дуэли</h4>
 <div id=l></div>
@@ -23,7 +23,7 @@ function fill(c,rows,f){c.textContent='';if(!rows||!rows.length){var e=D.createE
 function draw(){
 var o=J(W.publicData)||{};if(o.r<seen)return;seen=o.r||0;
 var t=D.getElementById('t'),l=D.getElementById('l');
-fill(t,o.t,function(x,i){row(t,i+1,x[0],x[1]+' поб. / '+x[2]+' пор.')});
+fill(t,o.t,function(x,i){row(t,i+1,x[0],(x[3]!=null?x[3]+' · ':'')+x[1]+'–'+x[2])});
 fill(l,o.l,function(x){row(l,'⚔',x[0]+' → '+x[1],x[2]!=null?Math.round(x[2])+' мс':'')})}
 W.onEvent('publicDataChanged',draw);
 try{W.watchPublicData()}catch(e){}

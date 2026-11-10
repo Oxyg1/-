@@ -166,4 +166,5 @@ class StarsStakeProvider:
         for pay in pays:
             if not await self._refund_one(pay, note="cancelled"):
                 failed += 1
-        return "⭐ Внесённые ставки возвращены." + (f" ⚠ {failed} возврат(а) не прошли, бот повторит." if failed else "")
+        tail = f" ⚠ {failed} возврат(а) не прошли, бот повторит." if failed else ""
+        return "⭐ Внесённые ставки возвращены." + tail

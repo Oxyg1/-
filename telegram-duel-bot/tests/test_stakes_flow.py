@@ -2,8 +2,6 @@ import asyncio
 import json
 import time
 
-import pytest
-
 from duelbot.stakes.stars import StarsStakeProvider, make_payload
 from duelbot.stakes.ton import TonStakeProvider
 from duelbot.stakes.ton_utils import comment_boc_b64, friendly

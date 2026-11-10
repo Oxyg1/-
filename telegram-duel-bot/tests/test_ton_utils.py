@@ -1,7 +1,13 @@
 import pytest
 
 from duelbot.stakes.ton_utils import (
-    build_transaction, comment_boc_b64, decode_comment, format_ton, friendly, match_payment, same_address,
+    build_transaction,
+    comment_boc_b64,
+    decode_comment,
+    format_ton,
+    friendly,
+    match_payment,
+    same_address,
     to_nano,
 )
 

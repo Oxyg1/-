@@ -5,23 +5,29 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from html import escape
+from html import escape, unescape
 from typing import Any
 
 from aiogram import BaseMiddleware, Dispatcher, F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import (
-    CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, PreCheckoutQuery, Update, User,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    PreCheckoutQuery,
+    Update,
+    User,
 )
 
 from ..bot_api_raw import BotApiError, RawBotApi
 from ..config import Settings
 from ..engine.models import Reason
-from ..stakes.base import StakeKind, StakeProvider
-from ..storage.db import Database, Player
 from ..services.duel_service import DuelService
 from ..services.leaderboard_service import LeaderboardService
-from ..texts import HELP, PAYSUPPORT, TERMS, challenge_text
+from ..stakes.base import NO_STAKE, StakeKind, StakeProvider, StakeSpec
+from ..storage.db import Database, Player
+from ..texts import HELP, PAYSUPPORT, TERMS, challenge_text, stake_label, stats_text
 from .parsing import StakeParseError, first_username, parse_stake
 
 log = logging.getLogger(__name__)
@@ -87,8 +93,11 @@ def build_router(ctx: Ctx) -> Router:
     async def cmd_start(message: Message, command: CommandObject):
         arg = (command.args or "").strip()
         if arg.startswith("duel_") and arg[5:].isdigit():
-            await service.resume_for_player(int(arg[5:]), message.from_user.id)
             await message.answer("Ок! Сейчас пришлю виджет дуэли.")
+            await service.resume_for_player(int(arg[5:]), message.from_user.id)
+            return
+        if arg == "lb":
+            await send_leaderboard(message, message.chat.id)
             return
         await message.answer(HELP, parse_mode="HTML")
 
@@ -121,9 +130,42 @@ def build_router(ctx: Ctx) -> Router:
                 return await db.get_player(u.id)
         return None
 
+    async def send_challenge(chat_id: int, challenger: Player, target: Player, spec: StakeSpec) -> str:
+        """Создаёт дуэль и шлёт вызванному эфемерное приглашение. Возвращает текст для вызывающего."""
+        if target.user_id == challenger.user_id:
+            return "Дуэль с самим собой — это уже не дуэль 🙂"
+        if not spec.is_none:
+            provider = ctx.providers.get(spec.kind.value)
+            if provider is None:
+                return "Ставки такого типа выключены."
+            if err := provider.validate(spec, challenger, target):
+                return err
+        for p in (challenger, target):
+            if await db.active_duel_for(p.user_id):
+                return f"{escape(p.display)} уже участвует в дуэли."
+        if wait := await service.cooldown_left(challenger.user_id, target.user_id):
+            return f"{escape(target.display)} недавно отказался. Повторный вызов — через {wait} с."
+        duel = await service.create_duel(chat_id, challenger.user_id, target.user_id, spec.kind.value, spec.amount)
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="🤠 Принять", callback_data=f"d:a:{duel.id}"),
+            InlineKeyboardButton(text="Отказаться", callback_data=f"d:d:{duel.id}"),
+        ]])
+        try:
+            sent = await raw.send_ephemeral(
+                challenge_text(challenger, duel, ctx.settings.challenge_ttl // 60),
+                chat_id=chat_id, receiver_user_id=target.user_id,
+                reply_markup=kb.model_dump(exclude_none=True))
+        except BotApiError as e:
+            log.warning("ephemeral challenge failed: %s", e)
+            await service.cancel_duel(duel.id, Reason.ABORTED)
+            return ("Не получилось отправить вызов приватно. Сделайте бота администратором группы: "
+                    "только так он может писать эфемерные сообщения любому участнику.")
+        await db.update_duel(duel.id, ephemeral_id=sent.get("ephemeral_message_id"))
+        return (f"Вызов отправлен {escape(target.display)} (ставка: {stake_label(duel)}). "
+                f"Ждём {ctx.settings.challenge_ttl // 60} мин. Передумал — /cancel.")
+
     @r.message(Command("duel"), F.chat.type.in_(GROUPS))
     async def cmd_duel(message: Message, command: CommandObject):
-        me = message.from_user
         try:
             spec = parse_stake(command.args)
         except StakeParseError as e:
@@ -133,40 +175,35 @@ def build_router(ctx: Ctx) -> Router:
             return await tell(message, "Не знаю такого игрока. Напиши <code>/duel @username</code> — соперник "
                                        "должен хоть раз написать боту или в этот чат — либо ответь командой "
                                        "на его сообщение.")
-        if target.user_id == me.id:
-            return await tell(message, "Дуэль с самим собой — это уже не дуэль 🙂")
-        challenger = await db.get_player(me.id)
+        challenger = await db.get_player(message.from_user.id)
         assert challenger is not None
-        provider = None
-        if not spec.is_none:
-            provider = ctx.providers.get(spec.kind.value)
-            if provider is None:
-                return await tell(message, "Ставки такого типа выключены.")
-            err = provider.validate(spec, challenger, target)
-            if err:
-                return await tell(message, err)
-        for p in (challenger, target):
-            if await db.active_duel_for(p.user_id):
-                return await tell(message, f"{escape(p.display)} уже участвует в дуэли.")
-        duel = await service.create_duel(message.chat.id, me.id, target.user_id, spec.kind.value, spec.amount)
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="🤠 Принять", callback_data=f"d:a:{duel.id}"),
-            InlineKeyboardButton(text="Отказаться", callback_data=f"d:d:{duel.id}"),
-        ]])
-        try:
-            sent = await raw.send_ephemeral(
-                challenge_text(challenger, duel, ctx.settings.challenge_ttl // 60),
-                chat_id=message.chat.id, receiver_user_id=target.user_id,
-                reply_markup=kb.model_dump(exclude_none=True))
-        except BotApiError as e:
-            log.warning("ephemeral challenge failed: %s", e)
-            await service.cancel_duel(duel.id, Reason.ABORTED)
-            return await tell(message, "Не получилось отправить вызов приватно. Сделайте бота администратором "
-                                       "группы: только так он может писать эфемерные сообщения любому участнику.")
-        await db.update_duel(duel.id, ephemeral_id=sent.get("ephemeral_message_id"))
-        await tell(message, f"Вызов отправлен {escape(target.display)} (ставка: "
-                            f"{'на интерес' if spec.is_none else spec.label + (' ⭐' if spec.kind is StakeKind.STARS else ' TON')}). "
-                            f"Ждём {ctx.settings.challenge_ttl // 60} мин.")
+        await tell(message, await send_challenge(message.chat.id, challenger, target, spec))
+
+    @r.message(Command("duel"), F.chat.type == "private")
+    async def cmd_duel_private(message: Message):
+        await message.answer("Дуэли начинаются в группе: добавь бота в чат (администратором) и напиши там "
+                             "<code>/duel @username</code>. Сама дуэль потом придёт сюда, в личку.",
+                             parse_mode="HTML")
+
+    # ---------------- /cancel ----------------
+    @r.message(Command("cancel"))
+    async def cmd_cancel(message: Message):
+        text = await service.withdraw(message.from_user.id)
+        if message.chat.type in GROUPS:
+            await tell(message, text)
+        else:
+            await message.answer(text)
+
+    # ---------------- /stats ----------------
+    @r.message(Command("stats", "me"))
+    async def cmd_stats(message: Message, command: CommandObject):
+        asked = bool(command.args) or message.reply_to_message is not None
+        who = await resolve_target(message, command.args) if asked else await db.get_player(message.from_user.id)
+        text = stats_text(who, await db.rank_of(who.user_id)) if who else "Не знаю такого игрока."
+        if message.chat.type in GROUPS:
+            await tell(message, text)
+        else:
+            await message.answer(text, parse_mode="HTML")
 
     @r.callback_query(F.data.startswith("d:"))
     async def on_duel_button(cb: CallbackQuery):
@@ -176,6 +213,8 @@ def build_router(ctx: Ctx) -> Router:
         except ValueError:
             return await cb.answer()
         duel = await db.get_duel(duel_id)
+        if duel is not None and action == "r":
+            return await on_rematch(cb, duel)
         if duel is None or cb.from_user.id != duel.target_id:
             return await cb.answer("Это не ваш вызов.", show_alert=True)
         if action == "a":
@@ -195,25 +234,42 @@ def build_router(ctx: Ctx) -> Router:
             except BotApiError:
                 pass
 
+    async def on_rematch(cb: CallbackQuery, old) -> None:
+        uid = cb.from_user.id
+        if uid not in old.players:
+            return await cb.answer("Реванш могут предложить только участники дуэли.", show_alert=True)
+        me, opp = await db.get_player(uid), await db.get_player(old.opponent(uid))
+        if me is None or opp is None:
+            return await cb.answer("Игрок не найден.", show_alert=True)
+        spec = NO_STAKE if old.stake_kind == "none" else StakeSpec(StakeKind(old.stake_kind), old.stake_amount)
+        text = unescape(await send_challenge(old.chat_id, me, opp, spec))  # ответ на кнопку — без HTML
+        ok = text.startswith("Вызов отправлен")
+        await cb.answer(("🔁 " + text) if ok else text, show_alert=not ok)
+
     # ---------------- /leaderboard ----------------
-    @r.message(Command("leaderboard"))
-    async def cmd_leaderboard(message: Message):
+    async def send_leaderboard(message: Message, target_chat: int) -> bool:
         uid = message.from_user.id
-        in_group = message.chat.type in GROUPS
-        # В проде виджеты работают только в личных чатах (Bot API 10.4): из группы шлём в личку.
-        to_group = in_group and ctx.settings.widgets_in_groups
-        target_chat = message.chat.id if (to_group or not in_group) else uid
         try:
             await ctx.leaderboard.send_to(target_chat)
+            return True
         except BotApiError as e:
             if e.is_unreachable_user:
                 await db.set_can_dm(uid, False)
                 kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
                     text="Открыть бота и нажать Start", url=f"https://t.me/{ctx.bot_username}?start=lb")]])
-                return await message.reply("Сначала нажми Start у бота — табло приходит в личку.", reply_markup=kb)
+                await message.reply("Сначала нажми Start у бота — табло приходит в личку.", reply_markup=kb)
+                return False
             log.exception("leaderboard failed")
-            return await message.reply("Не получилось отправить табло.")
-        if in_group and not to_group:
+            await message.reply("Не получилось отправить табло.")
+            return False
+
+    @r.message(Command("leaderboard", "top"))
+    async def cmd_leaderboard(message: Message):
+        in_group = message.chat.type in GROUPS
+        # В проде виджеты работают только в личных чатах (Bot API 10.4): из группы шлём в личку.
+        to_group = in_group and ctx.settings.widgets_in_groups
+        target_chat = message.chat.id if (to_group or not in_group) else message.from_user.id
+        if await send_leaderboard(message, target_chat) and in_group and not to_group:
             await message.reply("Табло отправил тебе в личку 🤠")
 
     # ---------------- платежи Stars ----------------

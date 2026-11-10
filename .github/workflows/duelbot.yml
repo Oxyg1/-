@@ -1,0 +1,35 @@
+name: duelbot
+
+on:
+  push:
+    paths: ["telegram-duel-bot/**", ".github/workflows/duelbot.yml"]
+  pull_request:
+    paths: ["telegram-duel-bot/**", ".github/workflows/duelbot.yml"]
+
+defaults:
+  run:
+    working-directory: telegram-duel-bot
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: telegram-duel-bot/pyproject.toml
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: pytest -q
+
+  widgets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+      - run: node tools/widget_check.js

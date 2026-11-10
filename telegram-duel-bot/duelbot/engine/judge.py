@@ -2,7 +2,12 @@
 from __future__ import annotations
 
 from .models import (
-    Evaluation, JudgeConfig, Outcome, PlayerState, Reason, RoundResult,
+    Evaluation,
+    JudgeConfig,
+    Outcome,
+    PlayerState,
+    Reason,
+    RoundResult,
 )
 from .timing import reaction_ms
 

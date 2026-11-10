@@ -95,15 +95,18 @@ const shot = async (p, n) => shots && p.screenshot({ path: path.join(shots, n + 
     assert(/принято/.test(await txt(page, '#m')));
 
     // 7. итог
-    await page.evaluate(() => __setChat({ r: 6, p: 'win', ms: 187, oms: 240, w: 'f', d: 7 }));
+    await page.evaluate(() => __setChat({ r: 6, p: 'win', ms: 187, oms: 240, w: 'f', d: 7, rt: 1016, dr: 16 }));
     assert.strictEqual(await txt(page, '#s'), '🏆 Победа!');
     assert(/ты 187 мс, он 240 мс/.test(await txt(page, '#m')));
+    assert.strictEqual(await txt(page, '#r'), 'Рейтинг 1016 (+16)');
     await shot(page, '4-win');
-    await page.evaluate(() => __setChat({ r: 7, p: 'fs', w: 'fs' }));
+    await page.evaluate(() => __setChat({ r: 7, p: 'fs', w: 'fs', rt: 990, dr: -10 }));
     assert.strictEqual(await txt(page, '#s'), '🚫 Фальстарт');
+    assert.strictEqual(await txt(page, '#r'), 'Рейтинг 990 (−10)');
     await shot(page, '5-false-start');
     await page.evaluate(() => __setChat({ r: 8, p: 'cancel', w: 'nr' }));
     assert.strictEqual(await txt(page, '#s'), 'Дуэль отменена');
+    assert.strictEqual(await txt(page, '#r'), '');                 // без рейтинга строка пустая
     assert.deepStrictEqual(errors, []);
     await page.close();
   }
@@ -158,11 +161,12 @@ const shot = async (p, n) => shots && p.screenshot({ path: path.join(shots, n + 
     await page.waitForTimeout(30);
     assert.strictEqual(await page.evaluate(() => window.__watched), true);
     assert(/Пока пусто/.test(await txt(page, '#t')));
-    const top = Array.from({ length: 10 }, (_, i) => [i === 0 ? '<b>Хакер</b>' : 'Ковбой ' + i, 20 - i, i]);
+    const top = Array.from({ length: 10 }, (_, i) => [i === 0 ? '<b>Хакер</b>' : 'Ковбой ' + i, 20 - i, i, 1200 - 10 * i]);
     await page.evaluate(t => __setPublic({ r: 5, t, l: [['Joe', 'Bill', 187], ['Ann', 'Sam', null]] }), top);
     assert.strictEqual(await page.$$eval('#t .r', e => e.length), 10);
     assert.strictEqual(await page.$eval('#t .r span', e => e.textContent), '<b>Хакер</b>');   // имя — текст, не разметка
     assert.strictEqual(await page.$$eval('#t b', e => e.length), 10);                         // только номера мест
+    assert.strictEqual(await page.$eval('#t .r i', e => e.textContent), '1200 · 20–0');
     assert.strictEqual(await page.$$eval('#l .r', e => e.length), 2);
     await shot(page, '8-leaderboard');
     await page.evaluate(() => __setPublic({ r: 4, t: [], l: [] }));                          // устаревшая ревизия

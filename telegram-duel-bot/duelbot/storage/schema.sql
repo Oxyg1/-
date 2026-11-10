@@ -9,6 +9,11 @@ CREATE TABLE IF NOT EXISTS players (
     false_starts  INTEGER NOT NULL DEFAULT 0,
     best_ms       REAL,
     ton_blocked   INTEGER NOT NULL DEFAULT 0,      -- не оплатил проигрыш в TON
+    rating        INTEGER NOT NULL DEFAULT 1000,   -- Эло
+    streak        INTEGER NOT NULL DEFAULT 0,      -- текущая серия побед
+    best_streak   INTEGER NOT NULL DEFAULT 0,
+    react_sum     REAL NOT NULL DEFAULT 0,         -- сумма «чистых» реакций (для среднего)
+    react_n       INTEGER NOT NULL DEFAULT 0,
     updated_at    REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_players_username ON players(username COLLATE NOCASE);
@@ -32,8 +37,11 @@ CREATE TABLE IF NOT EXISTS duels (
     loser_id        INTEGER,
     challenger_ms   REAL,
     target_ms       REAL,
-    settlement      TEXT                            -- текстовый итог по ставке
+    settlement      TEXT,                           -- текстовый итог по ставке
+    challenger_delta INTEGER,                       -- изменение рейтинга
+    target_delta    INTEGER
 );
+CREATE INDEX IF NOT EXISTS idx_duels_pair ON duels(challenger_id, target_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_duels_status ON duels(status, deadline_at);
 
 CREATE TABLE IF NOT EXISTS duel_players (

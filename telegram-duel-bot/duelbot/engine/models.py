@@ -22,6 +22,7 @@ class Reason(StrEnum):
     ONE_SIDED_TIMEOUT = "one_sided_timeout"  # нажал один, политика «cancel»
     TIMEOUT = "timeout"                    # таймаут до начала раунда (вызов, ставка, готовность)
     DECLINED = "declined"
+    WITHDRAWN = "withdrawn"                # участник сам отменил дуэль до начала раунда
     ABORTED = "aborted"                    # сбой/перезапуск бота
 
 
