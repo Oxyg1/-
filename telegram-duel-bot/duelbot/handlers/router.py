@@ -24,11 +24,13 @@ from .. import commands as C
 from ..bot_api_raw import BotApiError, RawBotApi
 from ..config import Settings
 from ..engine.models import Reason
+from ..engine.rating import leaderboard_sort
 from ..services.duel_service import DuelService
 from ..services.leaderboard_service import LeaderboardService
 from ..stakes.base import NO_STAKE, StakeKind, StakeProvider, StakeSpec
+from ..stakes.ton_utils import friendly, parse_address
 from ..storage.db import Database, Player
-from ..texts import HELP, PAYSUPPORT, TERMS, challenge_text, stake_label, stats_text
+from ..texts import PAYSUPPORT, TERMS, challenge_text, help_text, stake_label, stats_text, top_text
 from .parsing import StakeParseError, first_username, parse_stake
 
 log = logging.getLogger(__name__)
@@ -73,6 +75,7 @@ class DuelDispatcher(Dispatcher):
         if ("widget_query" in extra or "shared_widget_query" in extra) and self.widget_handler:
             await self.widget_handler(extra, t_recv)
             return None
+        kwargs["t_recv"] = t_recv   # хендлеры кнопки «ОГОНЬ» получают время прихода апдейта
         return await super()._listen_update(update, **kwargs)
 
 
@@ -100,12 +103,12 @@ def build_router(ctx: Ctx) -> Router:
         if arg == "lb":
             await send_leaderboard(message, message.chat.id)
             return
-        await message.answer(HELP, parse_mode="HTML")
+        await message.answer(help_text(ctx.settings.group_mode), parse_mode="HTML")
 
     @r.message(Command(C.HELP))
     @r.message(Command("help"), F.chat.type == "private")
     async def cmd_help(message: Message):
-        await message.answer(HELP, parse_mode="HTML")
+        await message.answer(help_text(ctx.settings.group_mode), parse_mode="HTML")
 
     @r.message(Command("terms"))
     async def cmd_terms(message: Message):
@@ -207,13 +210,43 @@ def build_router(ctx: Ctx) -> Router:
         else:
             await message.answer(text, parse_mode="HTML")
 
+    # ---------------- кошелёк для TON-ставок ----------------
+    @r.message(Command(C.WALLET))
+    async def cmd_wallet(message: Message, command: CommandObject):
+        uid = message.from_user.id
+        arg = (command.args or "").strip()
+        if not arg:
+            p = await db.get_player(uid)
+            text = (f"Твой TON-кошелёк: <code>{escape(p.ton_wallet)}</code>" if p and p.ton_wallet else
+                    "Кошелёк не указан.") + f"\nУказать: <code>/{C.WALLET} адрес</code>"
+        else:
+            try:
+                addr = friendly(arg.split()[0])
+                parse_address(addr)
+            except ValueError:
+                addr = None
+            if addr is None:
+                text = "Это не похоже на адрес TON-кошелька."
+            else:
+                await db.set_ton_wallet(uid, addr)
+                text = f"✅ Кошелёк сохранён: <code>{escape(addr)}</code>. На него придёт выигрыш в TON."
+        if message.chat.type in GROUPS:
+            await tell(message, text)
+        else:
+            await message.answer(text, parse_mode="HTML")
+
     @r.callback_query(F.data.startswith("d:"))
-    async def on_duel_button(cb: CallbackQuery):
+    async def on_duel_button(cb: CallbackQuery, t_recv: float | None = None):
+        t = t_recv if t_recv is not None else time.monotonic()
         try:
             _, action, sid = (cb.data or "").split(":")
             duel_id = int(sid)
         except ValueError:
             return await cb.answer()
+        if action == "p":       # «ОГОНЬ»: время уже зафиксировано, остальное не влияет на результат
+            return await cb.answer(service.on_group_press(duel_id, cb.from_user.id, t))
+        if action == "g":
+            return await cb.answer(await service.on_ready(duel_id, cb.from_user.id))
         duel = await db.get_duel(duel_id)
         if duel is not None and action == "r":
             return await on_rematch(cb, duel)
@@ -221,9 +254,11 @@ def build_router(ctx: Ctx) -> Router:
             return await cb.answer("Это не ваш вызов.", show_alert=True)
         if action == "a":
             err = await service.accept(duel_id, cb.from_user.id)
-            await cb.answer(err or "Вызов принят! Дуэль — в личке с ботом.", show_alert=bool(err))
-            text = err or "✅ Вызов принят. Дуэль ждёт в личке с ботом."
-            kb = None if err else InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+            gm = ctx.settings.group_mode
+            ok_text = "Вызов принят! Дуэль — в этом чате." if gm else "Вызов принят! Дуэль — в личке с ботом."
+            await cb.answer(err or ok_text, show_alert=bool(err))
+            text = err or ("✅ " + ok_text)
+            kb = None if (err or gm) else InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
                 text="Открыть бота", url=f"https://t.me/{ctx.bot_username}")]])
         else:
             ok = await service.decline(duel_id, cb.from_user.id)
@@ -268,6 +303,11 @@ def build_router(ctx: Ctx) -> Router:
     @r.message(Command(C.TOP))
     async def cmd_leaderboard(message: Message):
         in_group = message.chat.type in GROUPS
+        if in_group and ctx.settings.group_mode and not ctx.settings.widgets_in_groups:
+            # виджеты в группах в проде не работают — табло текстом прямо в чат
+            stats = leaderboard_sort(await db.all_stats(), limit=10)
+            names = await db.names_for([s.user_id for s in stats])
+            return await message.answer(top_text(stats, names), parse_mode="HTML")
         # В проде виджеты работают только в личных чатах (Bot API 10.4): из группы шлём в личку.
         to_group = in_group and ctx.settings.widgets_in_groups
         target_chat = message.chat.id if (to_group or not in_group) else message.from_user.id

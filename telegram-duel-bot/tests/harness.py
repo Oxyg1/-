@@ -5,6 +5,7 @@ import asyncio
 import json
 import time
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 from duelbot.bot_api_raw import BotApiError
 from duelbot.config import Settings
@@ -17,6 +18,8 @@ class FakeBot:
     def __init__(self):
         self.messages: list[tuple[int, str]] = []
         self.markups: list[object] = []
+        self.edits: list[dict] = []          # правки сообщений в группе (режим group)
+        self._mid = 500
         self.invoices: list[dict] = []
         self.refunds: list[tuple[int, str]] = []
         self.gifts: list[dict] = []
@@ -25,6 +28,13 @@ class FakeBot:
     async def send_message(self, chat_id, text, **kw):
         self.messages.append((chat_id, text))
         self.markups.append(kw.get("reply_markup"))
+        self._mid += 1
+        return SimpleNamespace(message_id=self._mid)
+
+    async def edit_message_text(self, text, chat_id=None, message_id=None, **kw):
+        self.edits.append({"chat_id": chat_id, "message_id": message_id, "text": text,
+                           "reply_markup": kw.get("reply_markup"), "t": time.monotonic()})
+        return True
 
     async def send_invoice(self, **kw):
         self.invoices.append(kw)
@@ -121,7 +131,7 @@ class Harness:
     def __init__(self, db, monkeypatch, providers_factory=None, **settings):
         monkeypatch.setattr(duel_service, "BG_REQUEST_GAP", 0.0)
         monkeypatch.setattr(duel_service, "ACK_TIMEOUT", 0.5)
-        cfg = dict(bot_token="x", delay_min=0.05, delay_max=0.1, response_timeout=0.6, default_rtt_ms=50.0,
+        cfg = dict(bot_token="x", play_mode="dm", delay_min=0.05, delay_max=0.1, response_timeout=0.6, default_rtt_ms=50.0,
                    max_rtt_ms=400.0, min_human_ms=80.0, tie_ms=20.0, ping_samples=1)
         cfg.update(settings)
         self.settings = Settings(_env_file=None, **cfg)

@@ -277,8 +277,13 @@ def test_ton_validation(db, monkeypatch):
     from duelbot.stakes.base import StakeKind, StakeSpec
     from duelbot.storage.db import Player as P
     pa, pb = P(1, "a", "A", True), P(2, "b", "B", True)
-    s = Settings(_env_file=None, bot_token="x", enable_ton_stakes=True, ton_min=0.1, ton_max=2)
+    s = Settings(_env_file=None, bot_token="x", enable_ton_stakes=True, ton_min=0.1, ton_max=2, play_mode="dm")
     ton = TonStakeProvider(None, s, None)
+    # в режиме группы кошельки нужны заранее (/cwallet)
+    gs = Settings(_env_file=None, bot_token="x", enable_ton_stakes=True, ton_min=0.1, ton_max=2)
+    assert "/cwallet" in TonStakeProvider(None, gs, None).validate(StakeSpec(StakeKind.TON, 500_000_000), pa, pb)
+    pw = P(1, "a", "A", True, ton_wallet="UQx"), P(2, "b", "B", True, ton_wallet="UQy")
+    assert TonStakeProvider(None, gs, None).validate(StakeSpec(StakeKind.TON, 500_000_000), *pw) is None
     assert ton.validate(StakeSpec(StakeKind.TON, 500_000_000), pa, pb) is None
     assert ton.validate(StakeSpec(StakeKind.TON, 50_000_000), pa, pb)               # меньше минимума
     assert ton.validate(StakeSpec(StakeKind.TON, 3_000_000_000), pa, pb)            # больше максимума

@@ -57,6 +57,7 @@ async def run() -> None:
              BotCommand(command=C.CANCEL, description="Отменить свой вызов", is_ephemeral=eph),
              BotCommand(command=C.STATS, description="Моя статистика и рейтинг", is_ephemeral=eph),
              BotCommand(command=C.TOP, description="Табло дуэлянтов"),
+             BotCommand(command=C.WALLET, description="Мой TON-кошелёк для ставок", is_ephemeral=eph),
              BotCommand(command=C.HELP, description="Правила дуэли")],
             scope=BotCommandScopeAllGroupChats())
         await bot.set_my_commands(
@@ -64,6 +65,7 @@ async def run() -> None:
              BotCommand(command=C.STATS, description="Моя статистика и рейтинг"),
              BotCommand(command=C.TOP, description="Табло дуэлянтов"),
              BotCommand(command=C.CANCEL, description="Отменить свою дуэль"),
+             BotCommand(command=C.WALLET, description="Мой TON-кошелёк для ставок"),
              BotCommand(command="terms", description="Условия"),
              BotCommand(command="paysupport", description="Поддержка по платежам")],
             scope=BotCommandScopeAllPrivateChats())

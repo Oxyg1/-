@@ -30,6 +30,7 @@ class Player:
     best_streak: int = 0
     react_sum: float = 0.0
     react_n: int = 0
+    ton_wallet: str | None = None
 
     @property
     def display(self) -> str:
@@ -64,6 +65,7 @@ class Duel:
     settlement: str | None
     challenger_delta: int | None = None
     target_delta: int | None = None
+    group_message_id: int | None = None
 
     @property
     def players(self) -> tuple[int, int]:
@@ -103,6 +105,13 @@ class TonClaim:
     reported_msg_hash: str | None
     tx_hash: str | None
     confirmed_at: float | None
+    fee_address: str | None = None
+    fee_nano: int = 0
+    fee_tx_hash: str | None = None
+
+    @property
+    def fully_paid(self) -> bool:
+        return bool(self.tx_hash) and (self.fee_nano <= 0 or bool(self.fee_tx_hash))
 
 
 @dataclass
@@ -119,10 +128,11 @@ class StarPayment:
 _DUEL_COLS = {
     "status", "ephemeral_id", "accepted_at", "finished_at", "outcome", "reason", "winner_id",
     "loser_id", "challenger_ms", "target_ms", "settlement", "deadline_at", "stake_kind", "stake_amount",
+    "group_message_id",
 }
 _DP_COLS = {"widget_message_id", "ready", "funded", "wallet_address", "wallet_balance"}
 _CLAIM_COLS = {"payer_address", "reported_sender", "status", "reported_msg_hash", "tx_hash",
-               "confirmed_at", "deadline_at"}
+               "confirmed_at", "deadline_at", "fee_tx_hash"}
 _PAY_COLS = {"status", "note"}
 
 # Колонки, добавленные после первой версии схемы. CREATE TABLE IF NOT EXISTS не меняет старые таблицы,
@@ -135,6 +145,11 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("players", "react_n", "INTEGER NOT NULL DEFAULT 0"),
     ("duels", "challenger_delta", "INTEGER"),
     ("duels", "target_delta", "INTEGER"),
+    ("players", "ton_wallet", "TEXT"),
+    ("duels", "group_message_id", "INTEGER"),
+    ("ton_claims", "fee_address", "TEXT"),
+    ("ton_claims", "fee_nano", "INTEGER NOT NULL DEFAULT 0"),
+    ("ton_claims", "fee_tx_hash", "TEXT"),
 ]
 
 
@@ -190,7 +205,7 @@ class Database:
     def _player(r) -> Player:
         return Player(r["user_id"], r["username"], r["first_name"], bool(r["can_dm"]), r["wins"], r["losses"],
                       r["draws"], r["false_starts"], r["best_ms"], bool(r["ton_blocked"]), r["rating"],
-                      r["streak"], r["best_streak"], r["react_sum"], r["react_n"])
+                      r["streak"], r["best_streak"], r["react_sum"], r["react_n"], r["ton_wallet"])
 
     async def upsert_player(self, user_id: int, username: str | None, first_name: str,
                             can_dm: bool | None = None) -> None:
@@ -216,6 +231,10 @@ class Database:
         r = await self._one("SELECT * FROM players WHERE username=? COLLATE NOCASE ORDER BY updated_at DESC",
                             username.lstrip("@"))
         return self._player(r) if r else None
+
+    async def set_ton_wallet(self, user_id: int, address: str | None) -> None:
+        await self._c.execute("UPDATE players SET ton_wallet=? WHERE user_id=?", (address, user_id))
+        await self._c.commit()
 
     async def set_ton_blocked(self, user_id: int, blocked: bool) -> None:
         await self._c.execute("UPDATE players SET ton_blocked=? WHERE user_id=?", (int(blocked), user_id))
@@ -422,12 +441,15 @@ class Database:
         return TonClaim(**dict(r))
 
     async def create_claim(self, duel_id: int, payer_id: int, payee_id: int, payee_address: str,
-                           payer_address: str | None, amount_nano: int, comment: str, ttl: float) -> TonClaim:
+                           payer_address: str | None, amount_nano: int, comment: str, ttl: float,
+                           fee_address: str | None = None, fee_nano: int = 0) -> TonClaim:
         now = time.time()
         await self._c.execute(
             """INSERT INTO ton_claims(duel_id, payer_id, payee_id, payee_address, payer_address, amount_nano,
-               comment, created_at, deadline_at, status) VALUES(?,?,?,?,?,?,?,?,?,'pending')""",
-            (duel_id, payer_id, payee_id, payee_address, payer_address, amount_nano, comment, now, now + ttl))
+               comment, created_at, deadline_at, status, fee_address, fee_nano)
+               VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?)""",
+            (duel_id, payer_id, payee_id, payee_address, payer_address, amount_nano, comment, now, now + ttl,
+             fee_address, fee_nano))
         await self._c.commit()
         return await self.get_claim(duel_id)  # type: ignore[return-value]
 

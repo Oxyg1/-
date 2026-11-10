@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS players (
     best_streak   INTEGER NOT NULL DEFAULT 0,
     react_sum     REAL NOT NULL DEFAULT 0,         -- сумма «чистых» реакций (для среднего)
     react_n       INTEGER NOT NULL DEFAULT 0,
+    ton_wallet    TEXT,                            -- кошелёк для TON-ставок в режиме группы (/cwallet)
     updated_at    REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_players_username ON players(username COLLATE NOCASE);
@@ -39,7 +40,8 @@ CREATE TABLE IF NOT EXISTS duels (
     target_ms       REAL,
     settlement      TEXT,                           -- текстовый итог по ставке
     challenger_delta INTEGER,                       -- изменение рейтинга
-    target_delta    INTEGER
+    target_delta    INTEGER,
+    group_message_id INTEGER                        -- сообщение раунда в группе (режим group)
 );
 CREATE INDEX IF NOT EXISTS idx_duels_pair ON duels(challenger_id, target_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_duels_status ON duels(status, deadline_at);
@@ -74,7 +76,10 @@ CREATE TABLE IF NOT EXISTS ton_claims (
     payee_address   TEXT NOT NULL,
     payer_address   TEXT,                          -- адрес из карточки; настоящий отправитель — wallet из sent_transaction
     reported_sender TEXT,
-    amount_nano     INTEGER NOT NULL,
+    amount_nano     INTEGER NOT NULL,              -- победителю (ставка минус комиссия)
+    fee_address     TEXT,                          -- кошелёк комиссии
+    fee_nano        INTEGER NOT NULL DEFAULT 0,
+    fee_tx_hash     TEXT,
     comment         TEXT NOT NULL,
     created_at      REAL NOT NULL,
     deadline_at     REAL NOT NULL,

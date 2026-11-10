@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     use_test_server: bool = False
     widgets_in_groups: bool = False
     ephemeral_commands: bool = True
+    # group: дуэль прямо в группе (сообщение с кнопкой); dm: виджет в личке с ботом (с замером пинга)
+    play_mode: str = Field("group", pattern="^(group|dm)$")
     db_path: str = "duelbot.db"
     log_level: str = Field("INFO", pattern="^(DEBUG|INFO|WARNING|ERROR)$")
 
@@ -47,6 +49,13 @@ class Settings(BaseSettings):
     ton_max: float = 10.0
     ton_fee_reserve: float = 0.05
     ton_claim_ttl: int = Field(900, gt=0)
+    # комиссия владельца бота с TON-ставок: доля проигрыша уходит на этот кошелёк
+    ton_fee_percent: float = Field(0.0, ge=0, lt=50)
+    ton_fee_wallet: str = ""
+
+    @property
+    def group_mode(self) -> bool:
+        return self.play_mode == "group"
 
     @model_validator(mode="after")
     def _check_ranges(self) -> Settings:
@@ -60,6 +69,12 @@ class Settings(BaseSettings):
             raise ValueError("need 0 < TON_MIN <= TON_MAX")
         if self.ton_network not in ("-239", "-3"):
             raise ValueError("TON_NETWORK must be -239 (mainnet) or -3 (testnet)")
+        if self.ton_fee_percent > 0:
+            from .stakes.ton_utils import parse_address
+            try:
+                parse_address(self.ton_fee_wallet)
+            except ValueError as e:
+                raise ValueError("TON_FEE_PERCENT > 0 needs a valid TON_FEE_WALLET") from e
         return self
 
     def judge_config(self) -> JudgeConfig:
