@@ -101,6 +101,13 @@ const shot = async (p, n) => shots && p.screenshot({ path: path.join(shots, n + 
     assert.strictEqual(await page.$eval('#v .c2', e => e.classList.contains('h')), true);   // подсвечен победитель
     assert(/быстрее/.test(await txt(page, '#m')));
     assert.strictEqual(await txt(page, '#t'), '★ ДУЭЛЬ №7 ★');
+    // реванш прямо из виджета: одна заявка, потом кнопка прячется
+    assert.strictEqual(await txt(page, '#b'), '🔁 Реванш');
+    await page.evaluate(() => { __answer = () => ({ result: '{"e":"вызов отправлен в группу 🤠"}' }); });
+    await page.click('#b'); await page.waitForTimeout(50);
+    assert.strictEqual(await page.evaluate(() => __reqs.filter(r => r[0] === 'rematch').length), 1);
+    assert(/вызов отправлен/.test(await txt(page, '#m')));
+    assert.strictEqual(await vis(page, '#b'), false);
     assert.strictEqual(await txt(page, '#r'), 'Рейтинг 1016 (+16)');
     await shot(page, '4-win');
     await page.evaluate(() => __setChat({ r: 7, p: 'fs', w: 'fs', rt: 990, dr: -10 }));
@@ -153,6 +160,27 @@ const shot = async (p, n) => shots && p.screenshot({ path: path.join(shots, n + 
     await page.waitForTimeout(30);
     await page.click('#b');
     assert(/Нет кошелька/.test(await txt(page, '#m')));
+    await page.close();
+  }
+
+  // ---------- карточка игрока ----------
+  {
+    const page = await browser.newPage({ viewport: { width: 320, height: 320 }, deviceScaleFactor: 2 });
+    const errors = []; page.on('pageerror', e => errors.push(String(e)));
+    const html = fs.readFileSync(path.join(root, 'stats.html'), 'utf8');
+    await page.setContent(`<!doctype html><html><head>${THEME}<script>${STUB}
+      TelegramWidget.chatData=JSON.stringify({u:5,n:'@billy',rt:1016,w:1,l:0,d:0,s:1,bs:1,f:0});
+      __answer=(d)=>({result:JSON.stringify({u:5,n:'@billy',rt:1048,rk:2,w:3,l:1,d:0,b:187,a:231,s:2,bs:2,f:1})});
+    </script></head><body>${html}</body></html>`);
+    await page.waitForTimeout(80);
+    // при открытии карточка спрашивает свежие цифры и показывает их
+    assert.deepStrictEqual(await page.evaluate(() => __reqs), [['st:5', null]]);
+    assert.strictEqual(await txt(page, '#rt'), '1048');
+    assert.strictEqual(await txt(page, '#rk'), '#2 в табло');
+    assert.deepStrictEqual(await page.$$eval('#g .t b', e => e.map(x => x.textContent)), ['3', '1', '0', '187', '231', '2']);
+    assert(/75% побед/.test(await txt(page, '#f')));
+    await shot(page, '9-stats');
+    assert.deepStrictEqual(errors, []);
     await page.close();
   }
 

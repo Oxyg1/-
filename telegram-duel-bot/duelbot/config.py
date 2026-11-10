@@ -15,8 +15,6 @@ class Settings(BaseSettings):
     use_test_server: bool = False
     widgets_in_groups: bool = False
     ephemeral_commands: bool = True
-    # group: дуэль прямо в группе (сообщение с кнопкой); dm: виджет в личке с ботом (с замером пинга)
-    play_mode: str = Field("group", pattern="^(group|dm)$")
     db_path: str = "duelbot.db"
     log_level: str = Field("INFO", pattern="^(DEBUG|INFO|WARNING|ERROR)$")
 
@@ -52,10 +50,6 @@ class Settings(BaseSettings):
     # комиссия владельца бота с TON-ставок: доля проигрыша уходит на этот кошелёк
     ton_fee_percent: float = Field(0.0, ge=0, lt=50)
     ton_fee_wallet: str = ""
-
-    @property
-    def group_mode(self) -> bool:
-        return self.play_mode == "group"
 
     @model_validator(mode="after")
     def _check_ranges(self) -> Settings:

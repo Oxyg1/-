@@ -8,22 +8,23 @@ import logging
 import random
 import time
 from dataclasses import dataclass, field, replace
-from html import escape
+from html import escape, unescape
 
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from .. import commands as C
 from ..bot_api_raw import BotApiError, RawBotApi
 from ..config import Settings
 from ..engine.judge import evaluate
 from ..engine.models import Outcome, PlayerState, Reason, RoundResult
 from ..engine.states import Status
 from ..engine.timing import estimate_rtt, random_delay
-from ..stakes.base import NoStakeProvider, StakeError, StakeProvider
-from ..stakes.ton_utils import format_ton, transfer_link
-from ..storage.db import Database, Duel
-from ..texts import go_text, lobby_text, result_text, stake_amount_label, wait_text
-from ..widgets.payloads import duel_state, final_phase
+from ..stakes.base import NO_STAKE, NoStakeProvider, StakeError, StakeKind, StakeProvider, StakeSpec
+from ..stakes.ton_utils import format_ton
+from ..storage.db import Database, Duel, Player
+from ..texts import challenge_text, result_text, stake_amount_label, stake_label
+from ..widgets.payloads import duel_state, final_phase, stats_card, trunc
 from ..widgets.render import duel_html
 from .leaderboard_service import LeaderboardService
 
@@ -70,7 +71,6 @@ class DuelService:
         self._rev: dict[tuple[int, int], int] = {}
         self.last_state: dict[tuple[int, int], str] = {}
         self._bg_seen: dict[tuple[int, int], float] = {}
-        self.group = settings.group_mode   # раунд прямо в группе, а не в виджете в личке
         self._start_lock = asyncio.Lock()
         self._tasks: set[asyncio.Task] = set()
 
@@ -128,20 +128,6 @@ class DuelService:
         except Exception:  # noqa: BLE001
             log.exception("failed to post to group %s", duel.chat_id)
 
-    async def _edit_group(self, duel: Duel, text: str, markup=None) -> bool:
-        """Правит сообщение раунда в группе. False, если править нечего или не вышло."""
-        if not duel.group_message_id:
-            return False
-        try:
-            await self.bot.edit_message_text(text=text, chat_id=duel.chat_id, message_id=duel.group_message_id,
-                                             parse_mode="HTML", reply_markup=markup)
-            return True
-        except Exception as e:  # noqa: BLE001
-            if "not modified" in str(e).lower():
-                return True
-            log.warning("edit group message of duel %s failed: %s", duel.id, e)
-            return False
-
     async def _dm(self, uid: int, text: str) -> None:
         try:
             await self.bot.send_message(uid, text, parse_mode="HTML")
@@ -151,6 +137,40 @@ class DuelService:
     # ------------------------------------------------------------------ создание и принятие
     async def create_duel(self, chat_id: int, challenger_id: int, target_id: int, kind: str, amount: int) -> Duel:
         return await self.db.create_duel(chat_id, challenger_id, target_id, kind, amount, self.s.challenge_ttl)
+
+    async def challenge(self, chat_id: int, challenger: Player, target: Player, spec: StakeSpec) -> str:
+        """Создаёт дуэль и шлёт вызванному эфемерное приглашение. Возвращает текст для вызывающего."""
+        if target.user_id == challenger.user_id:
+            return "Дуэль с самим собой — это уже не дуэль 🙂"
+        if not spec.is_none:
+            provider = self.providers.get(spec.kind.value)
+            if provider is None:
+                return "Ставки такого типа выключены."
+            if err := provider.validate(spec, challenger, target):
+                return err
+        for p in (challenger, target):
+            if await self.db.active_duel_for(p.user_id):
+                return f"{escape(p.display)} уже участвует в дуэли."
+        if wait := await self.cooldown_left(challenger.user_id, target.user_id):
+            return f"{escape(target.display)} недавно отказался. Повторный вызов — через {wait} с."
+        duel = await self.create_duel(chat_id, challenger.user_id, target.user_id, spec.kind.value, spec.amount)
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="🤠 Принять", callback_data=f"d:a:{duel.id}"),
+            InlineKeyboardButton(text="Отказаться", callback_data=f"d:d:{duel.id}"),
+        ]])
+        try:
+            sent = await self.raw.send_ephemeral(
+                challenge_text(challenger, duel, self.s.challenge_ttl // 60),
+                chat_id=chat_id, receiver_user_id=target.user_id,
+                reply_markup=kb.model_dump(exclude_none=True))
+        except BotApiError as e:
+            log.warning("ephemeral challenge failed: %s", e)
+            await self.cancel_duel(duel.id, Reason.ABORTED)
+            return ("Не получилось отправить вызов приватно. Сделайте бота администратором группы: "
+                    "только так он может писать эфемерные сообщения любому участнику.")
+        await self.db.update_duel(duel.id, ephemeral_id=sent.get("ephemeral_message_id"))
+        return (f"Вызов отправлен {escape(target.display)} (ставка: {stake_label(duel)}). "
+                f"Ждём {self.s.challenge_ttl // 60} мин. Передумал — /{C.CANCEL}.")
 
     async def cooldown_left(self, challenger_id: int, target_id: int) -> int:
         """Сколько секунд ещё нельзя вызывать игрока, который недавно отказал этому же вызывающему."""
@@ -196,7 +216,7 @@ class DuelService:
             for uid in duel.players:
                 await self.db.set_dp(duel.id, uid, funded=True)
         duel = await self.db.get_duel(duel.id)  # type: ignore[assignment]
-        unreachable = [] if self.group else await self._send_widgets(duel)
+        unreachable = await self._send_widgets(duel)
         if staking:
             for uid in duel.players:
                 if uid in unreachable:
@@ -209,58 +229,7 @@ class DuelService:
                     return "Не удалось выставить ставку, дуэль отменена."
         for uid in unreachable:
             await self._ask_to_start(duel, uid)
-        if staking:
-            await self._on_funded(duel.id)   # TON в режиме группы: кошельки известны, ставка уже «внесена»
-        elif self.group:
-            await self._post_lobby(duel)
         return None
-
-    # ------------------------------------------------------------------ режим группы
-    async def _post_lobby(self, duel: Duel) -> None:
-        """Сообщение дуэли в группе: оба жмут «Готов», потом это же сообщение станет раундом."""
-        players = await self._players(duel)
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-            text="✋ Готов", callback_data=f"d:g:{duel.id}")]])
-        try:
-            msg = await self.bot.send_message(duel.chat_id, lobby_text(duel, players, set(), self.s.ready_ttl),
-                                              parse_mode="HTML", reply_markup=kb)
-        except Exception:  # noqa: BLE001
-            log.exception("cannot post duel %s to group", duel.id)
-            await self.cancel_duel(duel.id, Reason.ABORTED)
-            return
-        await self.db.update_duel(duel.id, group_message_id=msg.message_id)
-
-    async def on_ready(self, duel_id: int, uid: int) -> str:
-        """Кнопка «Готов» в группе. Возвращает текст всплывающего ответа."""
-        duel = await self.db.get_duel(duel_id)
-        if duel is None or uid not in duel.players:
-            return "Это не твоя дуэль 🙂"
-        if duel.status is not Status.LOBBY:
-            return "Дуэль уже идёт или закончилась."
-        await self.db.set_dp(duel_id, uid, ready=True)
-        ready = {dp.user_id for dp in await self.db.list_dp(duel_id) if dp.ready}
-        if len(ready) < 2:
-            kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-                text="✋ Готов", callback_data=f"d:g:{duel.id}")]])
-            await self._edit_group(duel, lobby_text(duel, await self._players(duel), ready, None), kb)
-        await self._maybe_start(duel_id)
-        return "Готов! Жди сигнала и не жми раньше." if len(ready) < 2 else "Поехали!"
-
-    def on_group_press(self, duel_id: int, uid: int, t: float) -> str:
-        """Нажатие «ОГОНЬ» в группе. t — время получения апдейта ботом."""
-        rt = self.rt.get(duel_id)
-        if rt is None or uid not in rt.players:
-            return "Это не твоя дуэль 🙂"
-        if rt.phase not in ("wait", "go"):
-            return "Ещё рано."
-        if not self.record_press(duel_id, uid, t):
-            return "Выстрел уже засчитан."
-        return "🚫 Фальстарт!" if rt.states[uid].early else "💥 Выстрел засчитан!"
-
-    def _fire_kb(self, duel_id: int) -> InlineKeyboardMarkup:
-        # одна и та же кнопка до и после сигнала: по кнопке нельзя понять, что сигнал уже был
-        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-            text="🔫 ОГОНЬ", callback_data=f"d:p:{duel_id}")]])
 
     async def _send_widgets(self, duel: Duel, only: int | None = None) -> list[int]:
         """Шлёт виджет дуэли в личку. Возвращает тех, кому написать нельзя (не нажали Start)."""
@@ -327,6 +296,9 @@ class DuelService:
         qtype = wq.get("type") or {"type": "data"}
         if uid is None or chat.get("id") is None or message_id is None:
             return None
+        if data.startswith("st:") and data[3:].isdigit():   # карточка игрока просит свежую статистику
+            p = await self.db.get_player(int(data[3:]))
+            return stats_card(p, await self.db.rank_of(p.user_id)) if p else None
         dp = await self.db.find_dp_by_widget(uid, message_id)
         if dp is None:
             return json.dumps({"e": "late"}, separators=(",", ":"))
@@ -337,6 +309,8 @@ class DuelService:
         if data == "p":
             self.record_press(duel.id, uid, t_recv)
             return json.dumps({"e": "принято"}, ensure_ascii=False)
+        if data == "rematch":
+            return json.dumps({"e": await self._rematch(duel, uid)}, ensure_ascii=False)
         if qtype.get("type") == "sent_transaction":
             ton = self.providers.get("ton")
             if ton and hasattr(ton, "on_sent_transaction"):
@@ -367,6 +341,17 @@ class DuelService:
             tx = await ton.on_pay_request(duel, uid, qtype.get("wallet_card"))
             return json.dumps(tx, separators=(",", ":"))
         return None
+
+    async def _rematch(self, duel: Duel, uid: int) -> str:
+        """Кнопка «Реванш» в виджете: новый вызов сопернику в ту же группу. Короткий ответ для виджета."""
+        if duel.status is not Status.FINISHED:
+            return "дуэль ещё не закончена"
+        me, opp = await self.db.get_player(uid), await self.db.get_player(duel.opponent(uid))
+        if me is None or opp is None:
+            return "игрок не найден"
+        spec = NO_STAKE if duel.stake_kind == "none" else StakeSpec(StakeKind(duel.stake_kind), duel.stake_amount)
+        text = unescape(await self.challenge(duel.chat_id, me, opp, spec))
+        return "вызов отправлен в группу 🤠" if text.startswith("Вызов отправлен") else trunc(text, 160)
 
     def _state_from_db(self, duel: Duel, uid: int) -> str | None:
         if duel.status in (Status.FINISHED, Status.CANCELLED) and duel.outcome:
@@ -412,9 +397,6 @@ class DuelService:
         if not await self.db.transition(duel_id, Status.LOBBY, deadline_at=time.time() + self.s.ready_ttl):
             return
         duel = await self.db.get_duel(duel_id)  # type: ignore[assignment]
-        if self.group:
-            await self._post_lobby(duel)
-            return
         for uid in duel.players:
             await self._push(duel, uid, "lobby")
         await self._maybe_start(duel_id)
@@ -443,18 +425,12 @@ class DuelService:
         assert duel is not None
         cfg = self.s.judge_config()
         try:
-            if self.group:
-                rt.rtt = {u: 0.0 for u in duel.players}   # в группе пинг не замерить: у обоих одинаковые условия
-            else:
-                await self._measure(duel, rt)
+            await self._measure(duel, rt)
             for u in duel.players:
                 rt.states[u] = replace(rt.states[u], rtt_s=rt.rtt[u])
             delay = random_delay(self.rng, self.s.delay_min, self.s.delay_max)
             rt.phase = "wait"
-            if self.group:
-                await self._edit_group(duel, wait_text(duel, await self._players(duel)), self._fire_kb(duel_id))
-            else:
-                await asyncio.gather(*(self._push(duel, u, "wait") for u in duel.players))
+            await asyncio.gather(*(self._push(duel, u, "wait") for u in duel.players))
             wait_until = time.monotonic() + delay
             result: RoundResult | None = None
             # --- «Приготовься…»: любое нажатие здесь — фальстарт ---
@@ -482,14 +458,7 @@ class DuelService:
                     rt.states[u] = replace(rt.states[u], t_signal=time.monotonic())
                     await self._push(duel, u, "go")
 
-                if self.group:
-                    # одно сообщение на двоих: сигнал у обоих в один и тот же момент
-                    t = time.monotonic()
-                    for u in duel.players:
-                        rt.states[u] = replace(rt.states[u], t_signal=t)
-                    await self._edit_group(duel, go_text(duel), self._fire_kb(duel_id))
-                else:
-                    await asyncio.gather(*(signal(u) for u in duel.players))
+                await asyncio.gather(*(signal(u) for u in duel.players))
                 while result is None:
                     a, b = (rt.states[u] for u in duel.players)
                     ev = evaluate(a, b, cfg, time.monotonic())
@@ -568,21 +537,11 @@ class DuelService:
             await self._push(duel, uid, final_phase(result, uid), ms=result.reaction_ms.get(uid),
                              opp_ms=result.reaction_ms.get(duel.opponent(uid)), reason=result.reason, **kw)
         if duel.accepted_at:
-            rows: list[list[InlineKeyboardButton]] = []
-            if claim and self.group:
-                rows.append([InlineKeyboardButton(
-                    text=f"💎 Победителю {format_ton(claim.amount_nano)} TON",
-                    url=transfer_link(claim.payee_address, claim.amount_nano, claim.comment))])
-                if claim.fee_nano > 0 and claim.fee_address:
-                    rows.append([InlineKeyboardButton(
-                        text=f"💎 Комиссия {format_ton(claim.fee_nano)} TON",
-                        url=transfer_link(claim.fee_address, claim.fee_nano, claim.comment))])
+            markup = None
             if result.outcome is not Outcome.CANCELLED:
-                rows.append([InlineKeyboardButton(text="🔁 Реванш", callback_data=f"d:r:{duel.id}")])
-            markup = InlineKeyboardMarkup(inline_keyboard=rows) if rows else None
-            text = result_text(duel, result, players, settlement)
-            if not (self.group and await self._edit_group(duel, text, markup)):
-                await self._group(duel, text, markup)
+                markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+                    text="🔁 Реванш", callback_data=f"d:r:{duel.id}")]])
+            await self._group(duel, result_text(duel, result, players, settlement), markup)
         if result.outcome is not Outcome.CANCELLED:
             self.leaderboard.request_refresh()
 

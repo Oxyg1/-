@@ -3,7 +3,9 @@ html,body{margin:0}
 body{position:relative;overflow:hidden;box-sizing:border-box;min-height:320px;color:#fbe9c8;font:15px/1.3 system-ui,sans-serif;text-align:center;padding:12px 12px max(14px,env(safe-area-inset-bottom));background:#2a1640 linear-gradient(#26143a,#6e2c3e 45%,#d0663a 80%,#f3a54a);--sun:#ffd27a;--hill:#3a1a1c;--near:#1c0c0c}
 #g{position:absolute;left:0;right:0;bottom:0;width:100%;height:110px;z-index:0}
 #sun{fill:var(--sun)}#h1{fill:var(--hill)}#h2{fill:var(--near)}.c{stroke:var(--near);fill:none;stroke-width:7;stroke-linecap:round;stroke-linejoin:round}
-#w{position:relative;z-index:1}
+#w{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center}
+#t,#s,#m{align-self:stretch}
+.p-win #b,.p-lose #b,.p-fs #b,.p-draw #b{order:9;width:auto;height:auto;border-radius:22px;padding:9px 20px;margin:12px 0 0;font-size:16px;letter-spacing:0;background:#6e4421 linear-gradient(#8a5a2b,#4a2a10)}
 #t{font:700 12px/1 serif;letter-spacing:5px;color:#f3c77a;margin:2px 0 6px}
 #o{display:inline-block;min-height:16px;font-size:13px;color:#ffe3b8;padding:3px 10px;border-radius:12px;background:rgba(20,8,12,.35)}
 #o:empty{visibility:hidden}
@@ -50,8 +52,8 @@ body{position:relative;overflow:hidden;box-sizing:border-box;min-height:320px;co
 </div>
 <script>
 (function(){
-var W=window.TelegramWidget,D=document,E=function(i){return D.getElementById(i)},seen=-1,st=null,pend=0,pr=0,lastN=null,note='',hp='';
-var R={f:'быстрее',fs:'нажал до сигнала',tf:'слишком рано',ot:'соперник не нажал',tie:'разница в пределах погрешности',bfs:'оба нажали до сигнала',nr:'никто не нажал',os:'соперник не нажал',to:'время вышло',dc:'отказ',ab:'сбой, ставки возвращены',wd:'вызов отменён'};
+var W=window.TelegramWidget,D=document,E=function(i){return D.getElementById(i)},seen=-1,st=null,pend=0,pr=0,lastN=null,note='',hp='',rm=0;
+var R={f:'быстрее',fs:'нажал до сигнала',tf:'слишком рано',ot:'соперник не нажал',tie:'разница в пределах погрешности',bfs:'оба нажали до сигнала',nr:'никто не нажал',os:'соперник не нажал',to:'время вышло',ab:'сбой, ставки возвращены',wd:'вызов отменён'};
 var X={low:'Недостаточно TON на кошельке',nw:'Нет TON-кошелька',bad:'Не удалось',late:'Поздно'};
 function J(s){try{return JSON.parse(s)}catch(e){return null}}
 function set(o){if(o&&o.p&&o.r>=seen){seen=o.r;st=o}if(o&&o.e)note=X[o.e]||o.e;draw()}
@@ -70,7 +72,7 @@ else{T={win:'🏆 Победа!',lose:'💀 Поражение',fs:'🚫 Фал�
 if(s.ms!=null||s.oms!=null){cell(v,'ты',s.ms,p=='win');cell(v,'соперник',s.oms,p=='lose')}
 if(R[s.w])M.push(p=='lose'&&s.w=='f'?'соперник быстрее':R[s.w]);
 if(s.rt!=null){r.textContent='Рейтинг '+s.rt+' ';if(s.dr!=null)r.appendChild(el('i',s.dr>0?'up':s.dr<0?'dn':'','('+(s.dr>0?'+':s.dr<0?'−':'±')+Math.abs(s.dr)+')'))}
-if(s.q=='o')B='Заплатить '+s.a+' TON';else if(s.q=='w')M.push('ждём оплату '+s.a+' TON');else if(s.q=='p')M.push('оплачено ✅');else if(s.q=='u')M.push('не оплачено ⚠')}
+if(s.q=='o')B='Заплатить '+s.a+' TON';else if(s.q=='w')M.push('ждём оплату '+s.a+' TON');else if(s.q=='p')M.push('оплачено ✅');else if(s.q=='u')M.push('не оплачено ⚠');if(!B&&p!='cancel'&&!rm)B='🔁 Реванш'}
 E('s').textContent=T;
 var b=E('b');b.hidden=!B;b.textContent=B;b.disabled=!!pend||(pr&&(p=='wait'||p=='go'));
 E('m').textContent=(note?note+' · ':'')+M.join(' · ');
@@ -91,7 +93,8 @@ E('b').onclick=function(){
 var p=st&&st.p;
 if(p=='wait'||p=='go'){if(!pend&&!pr){pend=1;pr=1;draw();W.request('p').then(done,function(e){pend=0;pr=0;note=e&&e.code||'ошибка';draw()})}}
 else if(p=='stake'&&st.k=='t')send('join',1);
-else if(st&&st.q=='o')pay()};
+else if(st&&st.q=='o')pay();
+else if(st&&!rm){rm=1;send('rematch')}};
 function onData(){var o=J(W.chatData);if(o&&o.p){if(o.r>=seen){seen=o.r;if(!st||st.p!=o.p)pr=0;st=o;note='';draw();if(o.p=='lobby'&&o.n&&o.n!=lastN){lastN=o.n;ack(o.n)}}}}
 W.onEvent('chatDataChanged',onData);
 st=J(W.chatData);if(st)seen=st.r||0;draw();

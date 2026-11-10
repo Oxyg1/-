@@ -34,9 +34,18 @@ class RouterRaw:
         self.ephemeral_edits: list[str] = []
         self.fail_ephemeral = False
         self.answers: list[tuple] = []
+        self.widgets: list[dict] = []
 
     def __getattr__(self, n):
         return getattr(self.base, n)
+
+    async def send_widget(self, chat_id, html, **kw):
+        self.widgets.append({"chat_id": chat_id, "html": html, **kw})
+        if chat_id in self.base.unreachable:
+            raise BotApiError("sendWidget", 403, "Forbidden: bot can't initiate conversation with a user")
+        if chat_id in self.base.h.players:
+            return await self.base.send_widget(chat_id, html, **kw)
+        return {"message_id": 900 + len(self.widgets)}
 
     async def send_ephemeral(self, text, **kw):
         if self.fail_ephemeral and kw.get("receiver_user_id") == 2:
@@ -57,6 +66,7 @@ async def env(db, monkeypatch):
     session = StubSession()
     bot = Bot("42:TEST", session=session)
     raw = RouterRaw(h.raw)
+    h.service.raw = raw          # вызовы шлёт сервис — через тот же фейк с эфемерными сообщениями
     ctx = Ctx(raw, db, h.settings, h.service, h.leaderboard, h.providers, "duelbot")
     dp = DuelDispatcher()
     for o in (dp.message, dp.callback_query, dp.pre_checkout_query):

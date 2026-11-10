@@ -12,11 +12,12 @@ from duelbot.widgets.render import (
     compressed_size,
     duel_html,
     leaderboard_html,
+    stats_html,
 )
 
 
 def test_widget_html_within_telegram_limits():
-    for html in (duel_html(), leaderboard_html()):
+    for html in (duel_html(), leaderboard_html(), stats_html()):
         assert len(html.encode()) <= 32768
         assert compressed_size(html) <= MAX_COMPRESSED_BYTES
         assert "<script src" not in html and "http://" not in html and "https://" not in html  # без внешних CDN

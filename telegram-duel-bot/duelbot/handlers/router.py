@@ -23,14 +23,13 @@ from aiogram.types import (
 from .. import commands as C
 from ..bot_api_raw import BotApiError, RawBotApi
 from ..config import Settings
-from ..engine.models import Reason
-from ..engine.rating import leaderboard_sort
 from ..services.duel_service import DuelService
 from ..services.leaderboard_service import LeaderboardService
 from ..stakes.base import NO_STAKE, StakeKind, StakeProvider, StakeSpec
-from ..stakes.ton_utils import friendly, parse_address
 from ..storage.db import Database, Player
-from ..texts import PAYSUPPORT, TERMS, challenge_text, help_text, stake_label, stats_text, top_text
+from ..texts import HELP, PAYSUPPORT, TERMS, stats_text
+from ..widgets.payloads import stats_card
+from ..widgets.render import stats_html
 from .parsing import StakeParseError, first_username, parse_stake
 
 log = logging.getLogger(__name__)
@@ -75,7 +74,6 @@ class DuelDispatcher(Dispatcher):
         if ("widget_query" in extra or "shared_widget_query" in extra) and self.widget_handler:
             await self.widget_handler(extra, t_recv)
             return None
-        kwargs["t_recv"] = t_recv   # хендлеры кнопки «ОГОНЬ» получают время прихода апдейта
         return await super()._listen_update(update, **kwargs)
 
 
@@ -103,12 +101,15 @@ def build_router(ctx: Ctx) -> Router:
         if arg == "lb":
             await send_leaderboard(message, message.chat.id)
             return
-        await message.answer(help_text(ctx.settings.group_mode), parse_mode="HTML")
+        if arg == "stats":
+            await cmd_stats(message, CommandObject(prefix="/", command=C.STATS, args=None))
+            return
+        await message.answer(HELP, parse_mode="HTML")
 
     @r.message(Command(C.HELP))
     @r.message(Command("help"), F.chat.type == "private")
     async def cmd_help(message: Message):
-        await message.answer(help_text(ctx.settings.group_mode), parse_mode="HTML")
+        await message.answer(HELP, parse_mode="HTML")
 
     @r.message(Command("terms"))
     async def cmd_terms(message: Message):
@@ -136,38 +137,7 @@ def build_router(ctx: Ctx) -> Router:
         return None
 
     async def send_challenge(chat_id: int, challenger: Player, target: Player, spec: StakeSpec) -> str:
-        """Создаёт дуэль и шлёт вызванному эфемерное приглашение. Возвращает текст для вызывающего."""
-        if target.user_id == challenger.user_id:
-            return "Дуэль с самим собой — это уже не дуэль 🙂"
-        if not spec.is_none:
-            provider = ctx.providers.get(spec.kind.value)
-            if provider is None:
-                return "Ставки такого типа выключены."
-            if err := provider.validate(spec, challenger, target):
-                return err
-        for p in (challenger, target):
-            if await db.active_duel_for(p.user_id):
-                return f"{escape(p.display)} уже участвует в дуэли."
-        if wait := await service.cooldown_left(challenger.user_id, target.user_id):
-            return f"{escape(target.display)} недавно отказался. Повторный вызов — через {wait} с."
-        duel = await service.create_duel(chat_id, challenger.user_id, target.user_id, spec.kind.value, spec.amount)
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="🤠 Принять", callback_data=f"d:a:{duel.id}"),
-            InlineKeyboardButton(text="Отказаться", callback_data=f"d:d:{duel.id}"),
-        ]])
-        try:
-            sent = await raw.send_ephemeral(
-                challenge_text(challenger, duel, ctx.settings.challenge_ttl // 60),
-                chat_id=chat_id, receiver_user_id=target.user_id,
-                reply_markup=kb.model_dump(exclude_none=True))
-        except BotApiError as e:
-            log.warning("ephemeral challenge failed: %s", e)
-            await service.cancel_duel(duel.id, Reason.ABORTED)
-            return ("Не получилось отправить вызов приватно. Сделайте бота администратором группы: "
-                    "только так он может писать эфемерные сообщения любому участнику.")
-        await db.update_duel(duel.id, ephemeral_id=sent.get("ephemeral_message_id"))
-        return (f"Вызов отправлен {escape(target.display)} (ставка: {stake_label(duel)}). "
-                f"Ждём {ctx.settings.challenge_ttl // 60} мин. Передумал — /{C.CANCEL}.")
+        return await service.challenge(chat_id, challenger, target, spec)
 
     @r.message(Command(C.DUEL), F.chat.type.in_(GROUPS))
     async def cmd_duel(message: Message, command: CommandObject):
@@ -202,51 +172,36 @@ def build_router(ctx: Ctx) -> Router:
     # ---------------- статистика ----------------
     @r.message(Command(C.STATS))
     async def cmd_stats(message: Message, command: CommandObject):
+        """Карточка игрока — виджет в личке (обновляет цифры сама при каждом открытии)."""
+        uid, in_group = message.from_user.id, message.chat.type in GROUPS
         asked = bool(command.args) or message.reply_to_message is not None
-        who = await resolve_target(message, command.args) if asked else await db.get_player(message.from_user.id)
-        text = stats_text(who, await db.rank_of(who.user_id)) if who else "Не знаю такого игрока."
-        if message.chat.type in GROUPS:
-            await tell(message, text)
-        else:
-            await message.answer(text, parse_mode="HTML")
-
-    # ---------------- кошелёк для TON-ставок ----------------
-    @r.message(Command(C.WALLET))
-    async def cmd_wallet(message: Message, command: CommandObject):
-        uid = message.from_user.id
-        arg = (command.args or "").strip()
-        if not arg:
-            p = await db.get_player(uid)
-            text = (f"Твой TON-кошелёк: <code>{escape(p.ton_wallet)}</code>" if p and p.ton_wallet else
-                    "Кошелёк не указан.") + f"\nУказать: <code>/{C.WALLET} адрес</code>"
-        else:
-            try:
-                addr = friendly(arg.split()[0])
-                parse_address(addr)
-            except ValueError:
-                addr = None
-            if addr is None:
-                text = "Это не похоже на адрес TON-кошелька."
-            else:
-                await db.set_ton_wallet(uid, addr)
-                text = f"✅ Кошелёк сохранён: <code>{escape(addr)}</code>. На него придёт выигрыш в TON."
-        if message.chat.type in GROUPS:
-            await tell(message, text)
-        else:
-            await message.answer(text, parse_mode="HTML")
+        who = await resolve_target(message, command.args) if asked else await db.get_player(uid)
+        if who is None:
+            unknown = "Не знаю такого игрока."
+            return await (tell(message, unknown) if in_group else message.answer(unknown))
+        rank = await db.rank_of(who.user_id)
+        try:
+            await raw.send_widget(uid, stats_html(), caption=f"🤠 {escape(who.display)}", parse_mode="HTML",
+                                  chat_data=stats_card(who, rank), allow_queries=True, height=320)
+        except BotApiError as e:
+            if e.is_unreachable_user:
+                await db.set_can_dm(uid, False)
+                kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+                    text="Открыть бота и нажать Start", url=f"https://t.me/{ctx.bot_username}?start=stats")]])
+                return await message.reply("Карточка приходит в личку — сначала нажми Start у бота.", reply_markup=kb)
+            log.warning("stats widget failed (%s), sending text", e)
+            text = stats_text(who, rank)   # запасной вариант — текстом
+            return await (tell(message, text) if in_group else message.answer(text, parse_mode="HTML"))
+        if in_group:
+            await tell(message, "Карточку отправил тебе в личку 🤠")
 
     @r.callback_query(F.data.startswith("d:"))
-    async def on_duel_button(cb: CallbackQuery, t_recv: float | None = None):
-        t = t_recv if t_recv is not None else time.monotonic()
+    async def on_duel_button(cb: CallbackQuery):
         try:
             _, action, sid = (cb.data or "").split(":")
             duel_id = int(sid)
         except ValueError:
             return await cb.answer()
-        if action == "p":       # «ОГОНЬ»: время уже зафиксировано, остальное не влияет на результат
-            return await cb.answer(service.on_group_press(duel_id, cb.from_user.id, t))
-        if action == "g":
-            return await cb.answer(await service.on_ready(duel_id, cb.from_user.id))
         duel = await db.get_duel(duel_id)
         if duel is not None and action == "r":
             return await on_rematch(cb, duel)
@@ -254,11 +209,9 @@ def build_router(ctx: Ctx) -> Router:
             return await cb.answer("Это не ваш вызов.", show_alert=True)
         if action == "a":
             err = await service.accept(duel_id, cb.from_user.id)
-            gm = ctx.settings.group_mode
-            ok_text = "Вызов принят! Дуэль — в этом чате." if gm else "Вызов принят! Дуэль — в личке с ботом."
-            await cb.answer(err or ok_text, show_alert=bool(err))
-            text = err or ("✅ " + ok_text)
-            kb = None if (err or gm) else InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+            await cb.answer(err or "Вызов принят! Дуэль — в личке с ботом.", show_alert=bool(err))
+            text = err or "✅ Вызов принят. Дуэль ждёт в личке с ботом."
+            kb = None if err else InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
                 text="Открыть бота", url=f"https://t.me/{ctx.bot_username}")]])
         else:
             ok = await service.decline(duel_id, cb.from_user.id)
@@ -303,11 +256,6 @@ def build_router(ctx: Ctx) -> Router:
     @r.message(Command(C.TOP))
     async def cmd_leaderboard(message: Message):
         in_group = message.chat.type in GROUPS
-        if in_group and ctx.settings.group_mode and not ctx.settings.widgets_in_groups:
-            # виджеты в группах в проде не работают — табло текстом прямо в чат
-            stats = leaderboard_sort(await db.all_stats(), limit=10)
-            names = await db.names_for([s.user_id for s in stats])
-            return await message.answer(top_text(stats, names), parse_mode="HTML")
         # В проде виджеты работают только в личных чатах (Bot API 10.4): из группы шлём в личку.
         to_group = in_group and ctx.settings.widgets_in_groups
         target_chat = message.chat.id if (to_group or not in_group) else message.from_user.id

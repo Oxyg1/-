@@ -71,7 +71,7 @@ async def test_cancel_own_challenge(env):
     duel = await h.db.get_duel(1)
     assert duel.status.value == "cancelled" and duel.reason == Reason.WITHDRAWN.value
     assert "отменена" in raw.ephemeral[-1]["text"]
-    assert h.raw.ephemeral_edits[-1] == "Вызов отозван."          # приглашение у Боба обновилось
+    assert raw.ephemeral_edits[-1] == "Вызов отозван."          # приглашение у Боба обновилось
     assert not any("не принял" in t for _, t in h.bot.messages)
     # отменять больше нечего
     await dp.feed_raw_update(bot, group_msg(1, "Alice", "/ccancel", [{"type": "bot_command", "offset": 0, "length": 7}], mid=4))
@@ -125,19 +125,48 @@ async def test_aborted_challenge_does_not_claim_timeout(env):
     assert not any("не принял" in t for _, t in h.bot.messages)
 
 
-async def test_stats_command_private_and_in_group(env):
+async def test_stats_card_is_a_widget(env):
+    import json
+
+    from duelbot.widgets.render import stats_html
     h, dp, bot, raw, session = env
     await h.add_players(Player(1, react_ms=150), Player(2, react_ms=300))
     await play(h)
     await dp.feed_raw_update(bot, private_msg(1, "P1", "/cstats"))
-    text = sent_texts(session)[-1]
-    assert "Рейтинг: <b>1016</b>" in text and "место #1" in text and "🏆 1" in text and "Серия побед: 1" in text
+    w = raw.widgets[-1]
+    card = json.loads(w["chat_data"])
+    assert w["chat_id"] == 1 and w["html"] == stats_html() and w["allow_queries"] is True
+    assert (card["u"], card["rt"], card["rk"], card["w"], card["s"]) == (1, 1016, 1, 1, 1)
+    # из группы: чужая карточка уходит спросившему в личку, в группе — только эфемерная пометка
     await h.db.upsert_player(2, "bobby", "Bob")
-    await dp.feed_raw_update(bot, group_msg(5, "Zed", "/cstats @bobby", [{"type": "bot_command", "offset": 0, "length": 6},
-                                                                          {"type": "mention", "offset": 7, "length": 6}], mid=30))
-    assert "984" in raw.ephemeral[-1]["text"] and raw.ephemeral[-1]["receiver_user_id"] == 5
-    await dp.feed_raw_update(bot, private_msg(5, "Zed", "/cstats", mid=31))
-    assert "ещё не провёл" in sent_texts(session)[-1]
+    await dp.feed_raw_update(bot, group_msg(5, "Zed", "/cstats @bobby", [{"type": "bot_command", "offset": 0, "length": 7},
+                                                                           {"type": "mention", "offset": 8, "length": 6}], mid=30))
+    w = raw.widgets[-1]
+    assert w["chat_id"] == 5 and json.loads(w["chat_data"])["rt"] == 984
+    assert "в личку" in raw.ephemeral[-1]["text"] and raw.ephemeral[-1]["receiver_user_id"] == 5
+    # не нажал Start — кнопка с deep-link
+    raw.base.unreachable.add(6)
+    await dp.feed_raw_update(bot, group_msg(6, "Max", "/cstats", [{"type": "bot_command", "offset": 0, "length": 7}], mid=31))
+    assert any("Start" in (t or "") for t in sent_texts(session))
+    # открытая карточка сама просит свежие цифры
+    fresh = await h.service.on_widget_query({"id": "q", "from": {"id": 5}, "chat": {"id": 5}, "message_id": 901,
+                                             "data": "st:2"}, 0.0)
+    assert json.loads(fresh)["rt"] == 984
+
+
+async def test_rematch_from_widget(env):
+    import json
+    h, dp, bot, raw, session = env
+    await h.add_players(Player(1, react_ms=150), Player(2, react_ms=300))
+    d = await play(h)
+    answer = await h.raw._query(h.players[2], "rematch")
+    assert json.loads(answer)["e"] == "вызов отправлен в группу 🤠"
+    new = await h.db.active_duel_for(2)
+    assert (new.challenger_id, new.target_id, new.chat_id) == (2, 1, d.chat_id)
+    assert raw.ephemeral[-1]["receiver_user_id"] == 1
+    # второй раз — уже есть активная дуэль, ответ объясняет почему
+    again = json.loads(await h.raw._query(h.players[1], "rematch"))["e"]
+    assert "уже участвует" in again
 
 
 async def test_duel_in_private_explains_where_to_play(env):

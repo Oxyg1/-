@@ -38,3 +38,7 @@ def duel_html() -> str:
 
 def leaderboard_html() -> str:
     return load("leaderboard")
+
+
+def stats_html() -> str:
+    return load("stats")

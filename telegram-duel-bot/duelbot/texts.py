@@ -34,35 +34,6 @@ def challenge_text(challenger: Player, duel: Duel, ttl_min: int) -> str:
             f"Вызов действует {ttl_min} мин. Этого сообщения больше никто не видит.")
 
 
-def _vs(duel: Duel, players: dict[int, Player]) -> str:
-    a, b = duel.players
-    return f"<b>{name(players.get(a), a)}</b> ⚔ <b>{name(players.get(b), b)}</b>"
-
-
-def lobby_text(duel: Duel, players: dict[int, Player], ready: set[int], ttl: int | None) -> str:
-    lines = [f"🤠 <b>Дуэль №{duel.id}</b>: {_vs(duel, players)}"]
-    if duel.stake_kind != "none":
-        lines.append(f"Ставка: <b>{stake_label(duel)}</b>")
-    lines.append("")
-    for uid in duel.players:
-        lines.append(f"{'✅' if uid in ready else '⏳'} {name(players.get(uid), uid)}")
-    lines.append("")
-    lines.append("Оба жмите «✋ Готов». Потом сообщение сменится на «Приготовься…», а через пару секунд — "
-                 "на 🔴 <b>ЖМИ!</b> Кто первый нажмёт «ОГОНЬ», тот победил. Раньше сигнала — фальстарт.")
-    if ttl:
-        lines.append(f"<i>Ждём {ttl} с.</i>")
-    return "\n".join(lines)
-
-
-def wait_text(duel: Duel, players: dict[int, Player]) -> str:
-    return (f"🌵 <b>Дуэль №{duel.id}</b>: {_vs(duel, players)}\n\n"
-            "😐 <b>Приготовься…</b>\n\nРуку на кобуру. <b>Не жми</b>, пока сообщение не станет красным!")
-
-
-def go_text(duel: Duel) -> str:
-    return f"🔴🔴🔴🔴🔴🔴🔴🔴\n\n🔥 <b>ЖМИ!  ЖМИ!  ЖМИ!</b> 🔥\n\n🔴🔴🔴🔴🔴🔴🔴🔴\n<i>Дуэль №{duel.id}</i>"
-
-
 CANCEL_REASONS = {
     Reason.TIMEOUT: "время вышло",
     Reason.DECLINED: "вызов отклонён",
@@ -130,17 +101,6 @@ def result_text(duel: Duel, result: RoundResult, players: dict[int, Player], set
     return head + (f"\n{settlement}" if settlement else "")
 
 
-def top_text(stats: list, names: dict[int, str]) -> str:
-    if not stats:
-        return f"🤠 <b>Табло дуэлянтов</b>\n\nПока пусто — вызови кого-нибудь: <code>/{C.DUEL} @username</code>"
-    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-    lines = ["🤠 <b>Табло дуэлянтов</b>", ""]
-    for i, s in enumerate(stats, 1):
-        lines.append(f"{medals.get(i, f'{i}.')} {escape(names.get(s.user_id, str(s.user_id)))} — "
-                     f"<b>{s.rating}</b> <i>({s.wins}–{s.losses})</i>")
-    return "\n".join(lines)
-
-
 def stats_text(p: Player, rank: int | None) -> str:
     st = p.stats
     if st.games == 0:
@@ -162,18 +122,6 @@ def stats_text(p: Player, rank: int | None) -> str:
     return "\n".join(lines)
 
 
-def help_text(group_mode: bool) -> str:
-    where = ("Дуэль идёт прямо в группе: бот публикует сообщение, оба жмут «Готов», потом «Приготовься…» и, "
-             "через случайные 2–6 секунд, 🔴 «ЖМИ!» — кто первый нажал «ОГОНЬ», тот победил. "
-             "Нажал раньше — фальстарт и поражение.\n")
-    if not group_mode:
-        where = ("Дуэль идёт в личке с ботом: на экране «Приготовься…», потом он становится красным — "
-                 "жми первым. Нажал раньше — фальстарт и поражение. Задержка сети вычитается, так что лаг не "
-                 "мешает.\n")
-    return HELP.replace("{where}", where).replace("{start}", "" if group_mode else
-                                                  "\nЧтобы получать дуэли, нажми Start у бота.")
-
-
 HELP = (
     "🤠 <b>Ковбойская дуэль</b>\n\n"
     f"В группе: <code>/{C.DUEL} @username</code> — вызвать игрока (или ответь командой <code>/{C.DUEL}</code> "
@@ -181,13 +129,13 @@ HELP = (
     f"Со ставкой: <code>/{C.DUEL} @username 50 stars</code> или <code>/{C.DUEL} @username 0.5 ton</code> "
     "(если включено).\n"
     f"<code>/{C.CANCEL}</code> — отменить свой вызов, пока раунд не начался.\n"
-    f"<code>/{C.STATS}</code> — твоя статистика и рейтинг (<code>/{C.STATS} @username</code> — чужая).\n"
+    f"<code>/{C.STATS}</code> — карточка игрока с рейтингом (<code>/{C.STATS} @username</code> — чужая).\n"
     f"<code>/{C.TOP}</code> — табло дуэлянтов.\n"
     f"<code>/{C.HELP}</code> — эта справка.\n\n"
-    "{where}"
-    "После дуэли под итогом есть кнопка «🔁 Реванш».\n"
-    f"Ставки в TON: сначала укажи свой кошелёк — <code>/{C.WALLET} адрес</code>."
-    "{start}"
+    "Дуэль идёт в личке с ботом: на экране «Приготовься…», потом он становится красным — "
+    "жми первым. Нажал раньше — фальстарт и поражение. Задержка сети вычитается, так что лаг не мешает.\n"
+    "После дуэли — кнопка «🔁 Реванш» прямо в виджете и под итогом в группе.\n\n"
+    "Чтобы получать дуэли, нажми Start у бота."
 )
 
 TERMS = (

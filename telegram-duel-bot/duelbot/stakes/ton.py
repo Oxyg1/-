@@ -9,10 +9,8 @@
      (`wallet.sendTransaction`), бот отвечает готовой транзакцией.
   3. Бот независимо проверяет оплату по входящим транзакциям адреса победителя (toncenter v3).
      Статус по msg_hash не используется: документация TON не рекомендует его для платежей.
-Комиссия (TON_FEE_PERCENT): из суммы проигрыша доля уходит на TON_FEE_WALLET — вторым сообщением той же
-транзакции в виджете или второй ссылкой в режиме группы. Долг закрыт, когда пришли обе части.
-Режим группы: виджета нет, поэтому кошельки игроки указывают заранее командой /cwallet, а проигравший
-платит по ссылкам на кошелёк из сообщения с итогом.
+Комиссия (TON_FEE_PERCENT): из суммы проигрыша доля уходит на TON_FEE_WALLET вторым сообщением той же
+транзакции — одно подтверждение в кошельке. Долг закрыт, когда в цепочке есть обе части.
 Ограничение: это не эскроу. Проигравший может не заплатить; тогда долг переходит в «unpaid»,
 игрок блокируется для новых TON-ставок, пока не оплатит.
 """
@@ -26,7 +24,7 @@ from ..config import Settings
 from ..engine.models import RoundResult
 from ..engine.settlement import ton_claim
 from ..storage.db import Database, Duel, Player, TonClaim
-from .base import StakeError, StakeKind, StakeSpec
+from .base import StakeKind, StakeSpec
 from .ton_client import ToncenterClient
 from .ton_utils import (
     NANO,
@@ -56,21 +54,10 @@ class TonStakeProvider:
         for p in (challenger, target):
             if p.ton_blocked:
                 return f"{p.display} не оплатил прошлый проигрыш в TON и не может играть на TON."
-            if self.s.group_mode and not p.ton_wallet:
-                return f"{p.display} не указал TON-кошелёк. Команда: /cwallet <адрес>"
         return None
 
     async def begin(self, duel: Duel, only: int | None = None) -> None:
-        """Режим dm: ставку подтверждают в виджете (on_join). Режим группы: кошельки уже известны из /cwallet."""
-        if not self.s.group_mode:
-            return None
-        for uid in duel.players:
-            if only is not None and uid != only:
-                continue
-            p = await self.db.get_player(uid)
-            if p is None or not p.ton_wallet:
-                raise StakeError(f"У игрока {uid} нет TON-кошелька")
-            await self.db.set_dp(duel.id, uid, wallet_address=p.ton_wallet, funded=True)
+        return None  # подтверждение ставки идёт из виджета (on_join)
 
     # ---- шаг 1: подтверждение ставки ----
     async def on_join(self, duel: Duel, user_id: int, wallet_card: dict | None) -> str | None:
@@ -129,10 +116,9 @@ class TonStakeProvider:
             duel.id, c.payer_id, c.payee_id, payee.wallet_address, payer.wallet_address if payer else None,
             to_winner, f"duel:{duel.id}", self.s.ton_claim_ttl,
             fee_address=self.s.ton_fee_wallet if fee else None, fee_nano=fee)
-        text = (f"💎 Ставка {spec}: проигравший платит {format_ton(to_winner)} TON победителю"
+        return (f"💎 Ставка {spec}: проигравший платит {format_ton(to_winner)} TON победителю"
                 + (f" и {format_ton(fee)} TON комиссии ({self.s.ton_fee_percent:g}%)" if fee else "")
                 + f" в течение {self.s.ton_claim_ttl // 60} мин.")
-        return text
 
     async def cancel(self, duel: Duel) -> str:
         return ""  # TON в эскроу не удерживается, возвращать нечего
@@ -143,8 +129,7 @@ class TonStakeProvider:
         events: list[tuple[TonClaim, str]] = []
         now = time.time()
         for claim in await self.db.claims_to_verify(now):
-            # в режиме группы плательщик платит по ссылке с любого своего кошелька
-            senders = None if self.s.group_mode else {a for a in (claim.reported_sender, claim.payer_address) if a}
+            senders = {a for a in (claim.reported_sender, claim.payer_address) if a}
             try:
                 if not claim.tx_hash:
                     m = await self._find(claim.payee_address, senders, claim.amount_nano, claim)
@@ -172,7 +157,7 @@ class TonStakeProvider:
                 events.append((claim, "unpaid"))
         return events
 
-    async def _find(self, address: str, senders: set[str] | None, amount: int, claim: TonClaim):
+    async def _find(self, address: str, senders: set[str], amount: int, claim: TonClaim):
         txs = await self.client.account_transactions(address, int(claim.created_at) - 120)
         return match_payment(payee_address=address, senders=senders, amount_nano=amount,
                              comment=claim.comment, transactions=txs)

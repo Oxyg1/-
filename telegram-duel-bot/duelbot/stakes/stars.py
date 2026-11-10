@@ -50,18 +50,15 @@ class StarsStakeProvider:
         return None
 
     async def begin(self, duel: Duel, only: int | None = None) -> None:
-        """Отправляет каждому игроку счёт: в личку или, в режиме группы, в группу (оплатить его может только
-        сам игрок — чужой платёж отклонит check_pre_checkout)."""
+        """Отправляет каждому игроку счёт в личку."""
         for uid in duel.players:
             if only is not None and uid != only:
                 continue
-            p = await self.db.get_player(uid)
-            who = p.display if p else str(uid)
             try:
                 await self.bot.send_invoice(
-                    chat_id=duel.chat_id if self.s.group_mode else uid,
-                    title=f"Ставка {who}"[:32],
-                    description=f"Ставка {duel.stake_amount} ⭐ игрока {who} в дуэли №{duel.id}. "
+                    chat_id=uid,
+                    title="Ставка в дуэли",
+                    description=f"Ставка {duel.stake_amount} ⭐ в дуэли №{duel.id}. "
                                 "Победитель получает ставку обратно, при ничьей и отмене возвращаем обоим.",
                     payload=make_payload(duel.id, uid),
                     currency="XTR",

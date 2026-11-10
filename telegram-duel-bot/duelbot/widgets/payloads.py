@@ -71,6 +71,20 @@ def duel_state(rev: int, phase: str, *, duel_id: int | None = None, opponent: st
     return dumps(d)
 
 
+def stats_card(p, rank: int | None) -> str:
+    """chat_data карточки игрока (виджет stats.html). p — storage.db.Player."""
+    st = p.stats
+    d: dict[str, Any] = {"u": p.user_id, "n": trunc(p.display, 64), "rt": p.rating, "w": st.wins,
+                         "l": st.losses, "d": st.draws, "s": st.streak, "bs": st.best_streak, "f": st.false_starts}
+    if rank:
+        d["rk"] = rank
+    if st.best_ms is not None:
+        d["b"] = round(st.best_ms)
+    if st.avg_ms is not None:
+        d["a"] = round(st.avg_ms)
+    return dumps(d)
+
+
 def final_phase(result: RoundResult, uid: int) -> str:
     if result.outcome is Outcome.CANCELLED:
         return "cancel"
