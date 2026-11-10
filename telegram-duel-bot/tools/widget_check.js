@@ -56,7 +56,7 @@ const shot = async (p, n) => shots && p.screenshot({ path: path.join(shots, n + 
     assert.deepStrictEqual(await page.evaluate(() => __reqs), [['hi', null]]);
     assert.strictEqual(await txt(page, '#s'), 'Ждём соперника…');
     assert.strictEqual(await vis(page, '#b'), false);
-    assert(/против @bob/.test(await txt(page, '#m')));
+    assert.strictEqual(await txt(page, '#o'), 'против @bob');
     await shot(page, '1-lobby');
 
     // 2. пинг: новый nonce в chat_data → ответ ack:<n>
@@ -97,7 +97,10 @@ const shot = async (p, n) => shots && p.screenshot({ path: path.join(shots, n + 
     // 7. итог
     await page.evaluate(() => __setChat({ r: 6, p: 'win', ms: 187, oms: 240, w: 'f', d: 7, rt: 1016, dr: 16 }));
     assert.strictEqual(await txt(page, '#s'), '🏆 Победа!');
-    assert(/ты 187 мс, он 240 мс/.test(await txt(page, '#m')));
+    assert.deepStrictEqual(await page.$$eval('#v .c2 b', e => e.map(x => x.textContent)), ['187', '240']);
+    assert.strictEqual(await page.$eval('#v .c2', e => e.classList.contains('h')), true);   // подсвечен победитель
+    assert(/быстрее/.test(await txt(page, '#m')));
+    assert.strictEqual(await txt(page, '#t'), '★ ДУЭЛЬ №7 ★');
     assert.strictEqual(await txt(page, '#r'), 'Рейтинг 1016 (+16)');
     await shot(page, '4-win');
     await page.evaluate(() => __setChat({ r: 7, p: 'fs', w: 'fs', rt: 990, dr: -10 }));
@@ -107,6 +110,7 @@ const shot = async (p, n) => shots && p.screenshot({ path: path.join(shots, n + 
     await page.evaluate(() => __setChat({ r: 8, p: 'cancel', w: 'nr' }));
     assert.strictEqual(await txt(page, '#s'), 'Дуэль отменена');
     assert.strictEqual(await txt(page, '#r'), '');                 // без рейтинга строка пустая
+    assert.strictEqual(await txt(page, '#v'), '');                 // и без табло времени
     assert.deepStrictEqual(errors, []);
     await page.close();
   }
@@ -166,7 +170,8 @@ const shot = async (p, n) => shots && p.screenshot({ path: path.join(shots, n + 
     assert.strictEqual(await page.$$eval('#t .r', e => e.length), 10);
     assert.strictEqual(await page.$eval('#t .r span', e => e.textContent), '<b>Хакер</b>');   // имя — текст, не разметка
     assert.strictEqual(await page.$$eval('#t b', e => e.length), 10);                         // только номера мест
-    assert.strictEqual(await page.$eval('#t .r i', e => e.textContent), '1200 · 20–0');
+    assert.strictEqual(await page.$eval('#t .r i', e => e.firstChild.textContent), '1200');   // рейтинг
+    assert.strictEqual(await page.$eval('#t .r i small', e => e.textContent), '20–0');        // победы–поражения
     assert.strictEqual(await page.$$eval('#l .r', e => e.length), 2);
     await shot(page, '8-leaderboard');
     await page.evaluate(() => __setPublic({ r: 4, t: [], l: [] }));                          // устаревшая ревизия

@@ -1,15 +1,24 @@
 <style>
 html,body{margin:0}
-body{background:#1c1109;color:#ecd9b0;font:14px/1.35 system-ui,sans-serif;padding:12px 12px max(16px,env(safe-area-inset-bottom))}
-h3{margin:0 0 8px;text-align:center;font:700 20px serif;letter-spacing:1px}
-h4{margin:12px 0 4px;color:#c9a96a;font-size:12px;letter-spacing:1px;text-transform:uppercase}
-.r{display:flex;gap:6px;padding:2px 0;border-bottom:1px solid #3a2a18}
-.r b{width:22px;color:#c9a96a}
+body{background:#1b0f08 linear-gradient(#2c170c,#160b05);color:#f6e3bf;font:14px/1.35 system-ui,sans-serif;padding:12px 12px max(16px,env(safe-area-inset-bottom))}
+.hd{text-align:center;padding:10px 8px 8px;border-radius:10px;background:#efd6a2 linear-gradient(#f4e0b4,#dcb878);color:#3a1f0c;border:3px double #6b4520}
+h3{margin:0;font:800 18px/1.1 serif;letter-spacing:2px;white-space:nowrap}
+.hd div{margin-top:3px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6b4520}
+h4{display:flex;align-items:center;gap:8px;margin:14px 0 6px;color:#d9a85a;font-size:11px;letter-spacing:2px;text-transform:uppercase}
+h4:after{content:'';flex:1;height:1px;background:#4a2e18}
+.r{display:flex;align-items:center;gap:9px;padding:6px 8px;margin:3px 0;border-radius:8px;background:rgba(255,214,150,.05)}
+.r b{flex:none;width:24px;height:24px;line-height:24px;border-radius:50%;text-align:center;font-size:12px;background:#3a2414;color:#e9c27a}
+#t .r:nth-child(1){background:rgba(243,199,122,.16)}
+#t .r:nth-child(1) b{background:#f0c040;color:#3a2405}
+#t .r:nth-child(2) b{background:#cfd3db;color:#2a2d33}
+#t .r:nth-child(3) b{background:#c98546;color:#2e1607}
 .r span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.r i{font-style:normal;color:#a98a55}
-.e{color:#a98a55;text-align:center;padding:10px}
+.r i{font-style:normal;text-align:right;font-weight:700;color:#f3c77a}
+.r i small{display:block;font-size:11px;font-weight:400;color:#a98a62}
+#l .r b{background:none;color:#c9a96a;font-size:15px}
+.e{color:#a98a62;text-align:center;padding:14px 8px;border:1px dashed #4a2e18;border-radius:8px}
 </style>
-<h3>🤠 ТАБЛО ДУЭЛЯНТОВ</h3>
+<div class=hd><h3>★ ТАБЛО ДУЭЛЯНТОВ ★</h3><div>самые быстрые руки Запада</div></div>
 <h4>Топ по рейтингу</h4>
 <div id=t></div>
 <h4>Последние дуэли</h4>
@@ -18,13 +27,14 @@ h4{margin:12px 0 4px;color:#c9a96a;font-size:12px;letter-spacing:1px;text-transf
 (function(){
 var W=window.TelegramWidget,D=document,seen=-1;
 function J(s){try{return JSON.parse(s)}catch(e){return null}}
-function row(c,a,b,d){var r=D.createElement('div');r.className='r';var x=D.createElement('b');x.textContent=a;var y=D.createElement('span');y.textContent=b;var z=D.createElement('i');z.textContent=d;r.appendChild(x);r.appendChild(y);r.appendChild(z);c.appendChild(r)}
-function fill(c,rows,f){c.textContent='';if(!rows||!rows.length){var e=D.createElement('div');e.className='e';e.textContent='Пока пусто';c.appendChild(e);return}rows.forEach(f)}
+function el(t,x){var e=D.createElement(t);e.textContent=x;return e}
+function row(c,a,b,d,f){var r=D.createElement('div');r.className='r';r.appendChild(el('b',a));r.appendChild(el('span',b));var z=el('i',d);if(f)z.appendChild(el('small',f));r.appendChild(z);c.appendChild(r)}
+function fill(c,rows,f,m){c.textContent='';if(!rows||!rows.length){var e=el('div',m);e.className='e';c.appendChild(e);return}rows.forEach(f)}
 function draw(){
 var o=J(W.publicData)||{};if(o.r<seen)return;seen=o.r||0;
 var t=D.getElementById('t'),l=D.getElementById('l');
-fill(t,o.t,function(x,i){row(t,i+1,x[0],(x[3]!=null?x[3]+' · ':'')+x[1]+'–'+x[2])});
-fill(l,o.l,function(x){row(l,'⚔',x[0]+' → '+x[1],x[2]!=null?Math.round(x[2])+' мс':'')})}
+fill(t,o.t,function(x,i){row(t,i+1,x[0],x[3]!=null?x[3]:'',x[1]+'–'+x[2])},'Пока пусто — вызови кого-нибудь: /duel @username');
+fill(l,o.l,function(x){row(l,'⚔',x[0]+' → '+x[1],x[2]!=null?Math.round(x[2])+' мс':'')},'Пока пусто')}
 W.onEvent('publicDataChanged',draw);
 try{W.watchPublicData()}catch(e){}
 draw();
