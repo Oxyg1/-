@@ -9,6 +9,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import PRODUCTION, TEST
 from aiogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats
 
+from . import commands as C
 from .bot_api_raw import RawBotApi
 from .config import get_settings
 from .handlers.router import Ctx, DuelDispatcher, RegisterMiddleware, build_router, install_widget_handler
@@ -52,17 +53,17 @@ async def run() -> None:
 
         eph = s.ephemeral_commands
         await bot.set_my_commands(
-            [BotCommand(command="duel", description="Вызвать игрока на дуэль", is_ephemeral=eph),
-             BotCommand(command="cancel", description="Отменить свой вызов", is_ephemeral=eph),
-             BotCommand(command="stats", description="Моя статистика и рейтинг", is_ephemeral=eph),
-             BotCommand(command="top", description="Табло дуэлянтов"),
-             BotCommand(command="help", description="Правила")],
+            [BotCommand(command=C.DUEL, description="Вызвать игрока на дуэль", is_ephemeral=eph),
+             BotCommand(command=C.CANCEL, description="Отменить свой вызов", is_ephemeral=eph),
+             BotCommand(command=C.STATS, description="Моя статистика и рейтинг", is_ephemeral=eph),
+             BotCommand(command=C.TOP, description="Табло дуэлянтов"),
+             BotCommand(command=C.HELP, description="Правила дуэли")],
             scope=BotCommandScopeAllGroupChats())
         await bot.set_my_commands(
             [BotCommand(command="start", description="Начать"), BotCommand(command="help", description="Правила"),
-             BotCommand(command="stats", description="Моя статистика и рейтинг"),
-             BotCommand(command="top", description="Табло дуэлянтов"),
-             BotCommand(command="cancel", description="Отменить свою дуэль"),
+             BotCommand(command=C.STATS, description="Моя статистика и рейтинг"),
+             BotCommand(command=C.TOP, description="Табло дуэлянтов"),
+             BotCommand(command=C.CANCEL, description="Отменить свою дуэль"),
              BotCommand(command="terms", description="Условия"),
              BotCommand(command="paysupport", description="Поддержка по платежам")],
             scope=BotCommandScopeAllPrivateChats())

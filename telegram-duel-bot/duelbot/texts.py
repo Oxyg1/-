@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from html import escape
 
+from . import commands as C
 from .engine.models import Outcome, Reason, RoundResult
 from .stakes.ton_utils import format_ton
 from .storage.db import Duel, Player
@@ -123,13 +124,14 @@ def stats_text(p: Player, rank: int | None) -> str:
 
 HELP = (
     "🤠 <b>Ковбойская дуэль</b>\n\n"
-    "В группе: <code>/duel @username</code> — вызвать игрока (или ответь командой <code>/duel</code> "
+    f"В группе: <code>/{C.DUEL} @username</code> — вызвать игрока (или ответь командой <code>/{C.DUEL}</code> "
     "на его сообщение). Он получит приватное приглашение.\n"
-    "Со ставкой: <code>/duel @username 50 stars</code> или <code>/duel @username 0.5 ton</code> "
+    f"Со ставкой: <code>/{C.DUEL} @username 50 stars</code> или <code>/{C.DUEL} @username 0.5 ton</code> "
     "(если включено).\n"
-    "<code>/cancel</code> — отменить свой вызов, пока раунд не начался.\n"
-    "<code>/stats</code> — твоя статистика и рейтинг (<code>/stats @username</code> — чужая).\n"
-    "<code>/top</code> — табло дуэлянтов.\n\n"
+    f"<code>/{C.CANCEL}</code> — отменить свой вызов, пока раунд не начался.\n"
+    f"<code>/{C.STATS}</code> — твоя статистика и рейтинг (<code>/{C.STATS} @username</code> — чужая).\n"
+    f"<code>/{C.TOP}</code> — табло дуэлянтов.\n"
+    f"<code>/{C.HELP}</code> — эта справка.\n\n"
     "Дуэль идёт в личке с ботом: на экране «Приготовься…», потом он становится красным — "
     "жми первым. Нажал раньше — фальстарт и поражение. Задержка сети вычитается, так что лаг не мешает.\n"
     "После дуэли под итогом в группе есть кнопка «🔁 Реванш».\n\n"

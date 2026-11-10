@@ -1,4 +1,4 @@
-"""Разбор аргументов /duel: ставка в Stars или TON. Чистые функции."""
+"""Разбор аргументов /cduel: ставка в Stars или TON. Чистые функции."""
 from __future__ import annotations
 
 import re

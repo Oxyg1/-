@@ -33,7 +33,7 @@ function fill(c,rows,f,m){c.textContent='';if(!rows||!rows.length){var e=el('div
 function draw(){
 var o=J(W.publicData)||{};if(o.r<seen)return;seen=o.r||0;
 var t=D.getElementById('t'),l=D.getElementById('l');
-fill(t,o.t,function(x,i){row(t,i+1,x[0],x[3]!=null?x[3]:'',x[1]+'–'+x[2])},'Пока пусто — вызови кого-нибудь: /duel @username');
+fill(t,o.t,function(x,i){row(t,i+1,x[0],x[3]!=null?x[3]:'',x[1]+'–'+x[2])},'Пока пусто — вызови кого-нибудь: /cduel @username');
 fill(l,o.l,function(x){row(l,'⚔',x[0]+' → '+x[1],x[2]!=null?Math.round(x[2])+' мс':'')},'Пока пусто')}
 W.onEvent('publicDataChanged',draw);
 try{W.watchPublicData()}catch(e){}

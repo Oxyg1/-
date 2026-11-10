@@ -20,6 +20,7 @@ from aiogram.types import (
     User,
 )
 
+from .. import commands as C
 from ..bot_api_raw import BotApiError, RawBotApi
 from ..config import Settings
 from ..engine.models import Reason
@@ -101,7 +102,8 @@ def build_router(ctx: Ctx) -> Router:
             return
         await message.answer(HELP, parse_mode="HTML")
 
-    @r.message(Command("help"))
+    @r.message(Command(C.HELP))
+    @r.message(Command("help"), F.chat.type == "private")
     async def cmd_help(message: Message):
         await message.answer(HELP, parse_mode="HTML")
 
@@ -113,7 +115,7 @@ def build_router(ctx: Ctx) -> Router:
     async def cmd_paysupport(message: Message):
         await message.answer(PAYSUPPORT, parse_mode="HTML")
 
-    # ---------------- /duel ----------------
+    # ---------------- вызов ----------------
     async def resolve_target(message: Message, args: str | None) -> Player | None:
         for ent in message.entities or []:
             if ent.type == "text_mention" and ent.user and not ent.user.is_bot:
@@ -162,9 +164,9 @@ def build_router(ctx: Ctx) -> Router:
                     "только так он может писать эфемерные сообщения любому участнику.")
         await db.update_duel(duel.id, ephemeral_id=sent.get("ephemeral_message_id"))
         return (f"Вызов отправлен {escape(target.display)} (ставка: {stake_label(duel)}). "
-                f"Ждём {ctx.settings.challenge_ttl // 60} мин. Передумал — /cancel.")
+                f"Ждём {ctx.settings.challenge_ttl // 60} мин. Передумал — /{C.CANCEL}.")
 
-    @r.message(Command("duel"), F.chat.type.in_(GROUPS))
+    @r.message(Command(C.DUEL), F.chat.type.in_(GROUPS))
     async def cmd_duel(message: Message, command: CommandObject):
         try:
             spec = parse_stake(command.args)
@@ -172,21 +174,21 @@ def build_router(ctx: Ctx) -> Router:
             return await tell(message, str(e))
         target = await resolve_target(message, command.args)
         if target is None:
-            return await tell(message, "Не знаю такого игрока. Напиши <code>/duel @username</code> — соперник "
+            return await tell(message, f"Не знаю такого игрока. Напиши <code>/{C.DUEL} @username</code> — соперник "
                                        "должен хоть раз написать боту или в этот чат — либо ответь командой "
                                        "на его сообщение.")
         challenger = await db.get_player(message.from_user.id)
         assert challenger is not None
         await tell(message, await send_challenge(message.chat.id, challenger, target, spec))
 
-    @r.message(Command("duel"), F.chat.type == "private")
+    @r.message(Command(C.DUEL), F.chat.type == "private")
     async def cmd_duel_private(message: Message):
         await message.answer("Дуэли начинаются в группе: добавь бота в чат (администратором) и напиши там "
-                             "<code>/duel @username</code>. Сама дуэль потом придёт сюда, в личку.",
+                             f"<code>/{C.DUEL} @username</code>. Сама дуэль потом придёт сюда, в личку.",
                              parse_mode="HTML")
 
-    # ---------------- /cancel ----------------
-    @r.message(Command("cancel"))
+    # ---------------- отмена ----------------
+    @r.message(Command(C.CANCEL))
     async def cmd_cancel(message: Message):
         text = await service.withdraw(message.from_user.id)
         if message.chat.type in GROUPS:
@@ -194,8 +196,8 @@ def build_router(ctx: Ctx) -> Router:
         else:
             await message.answer(text)
 
-    # ---------------- /stats ----------------
-    @r.message(Command("stats", "me"))
+    # ---------------- статистика ----------------
+    @r.message(Command(C.STATS))
     async def cmd_stats(message: Message, command: CommandObject):
         asked = bool(command.args) or message.reply_to_message is not None
         who = await resolve_target(message, command.args) if asked else await db.get_player(message.from_user.id)
@@ -246,7 +248,7 @@ def build_router(ctx: Ctx) -> Router:
         ok = text.startswith("Вызов отправлен")
         await cb.answer(("🔁 " + text) if ok else text, show_alert=not ok)
 
-    # ---------------- /leaderboard ----------------
+    # ---------------- табло ----------------
     async def send_leaderboard(message: Message, target_chat: int) -> bool:
         uid = message.from_user.id
         try:
@@ -263,7 +265,7 @@ def build_router(ctx: Ctx) -> Router:
             await message.reply("Не получилось отправить табло.")
             return False
 
-    @r.message(Command("leaderboard", "top"))
+    @r.message(Command(C.TOP))
     async def cmd_leaderboard(message: Message):
         in_group = message.chat.type in GROUPS
         # В проде виджеты работают только в личных чатах (Bot API 10.4): из группы шлём в личку.

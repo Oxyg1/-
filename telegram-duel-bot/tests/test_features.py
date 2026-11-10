@@ -64,17 +64,17 @@ async def test_rematch_creates_new_challenge_for_opponent(env):
 async def test_cancel_own_challenge(env):
     h, dp, bot, raw, _ = env
     await dp.feed_raw_update(bot, group_msg(2, "Bobby", "/help", [{"type": "bot_command", "offset": 0, "length": 5}], mid=1))
-    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/duel @bobby", DUEL_ENT + [
+    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/cduel @bobby", DUEL_ENT + [
         {"type": "mention", "offset": 6, "length": 6}], mid=2))
-    assert "/cancel" in raw.ephemeral[-1]["text"]
-    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/cancel", [{"type": "bot_command", "offset": 0, "length": 7}], mid=3))
+    assert "/ccancel" in raw.ephemeral[-1]["text"]
+    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/ccancel", [{"type": "bot_command", "offset": 0, "length": 7}], mid=3))
     duel = await h.db.get_duel(1)
     assert duel.status.value == "cancelled" and duel.reason == Reason.WITHDRAWN.value
     assert "отменена" in raw.ephemeral[-1]["text"]
     assert h.raw.ephemeral_edits[-1] == "Вызов отозван."          # приглашение у Боба обновилось
     assert not any("не принял" in t for _, t in h.bot.messages)
     # отменять больше нечего
-    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/cancel", [{"type": "bot_command", "offset": 0, "length": 7}], mid=4))
+    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/ccancel", [{"type": "bot_command", "offset": 0, "length": 7}], mid=4))
     assert "нет активных" in raw.ephemeral[-1]["text"]
 
 
@@ -102,7 +102,7 @@ async def test_cancel_refused_during_round(db, monkeypatch):
 async def test_rechallenge_cooldown_after_decline(env):
     h, dp, bot, raw, _ = env
     await dp.feed_raw_update(bot, group_msg(2, "Bobby", "/help", [{"type": "bot_command", "offset": 0, "length": 5}], mid=1))
-    duel_cmd = lambda mid: group_msg(1, "Alice", "/duel @bobby", DUEL_ENT + [  # noqa: E731
+    duel_cmd = lambda mid: group_msg(1, "Alice", "/cduel @bobby", DUEL_ENT + [  # noqa: E731
         {"type": "mention", "offset": 6, "length": 6}], mid=mid)
     await dp.feed_raw_update(bot, duel_cmd(2))
     await dp.feed_raw_update(bot, cb_update(2, "Bobby", "d:d:1"))
@@ -119,7 +119,7 @@ async def test_aborted_challenge_does_not_claim_timeout(env):
     raw.fail_ephemeral = True
     await dp.feed_raw_update(bot, group_msg(2, "Bobby", "/help", [{"type": "bot_command", "offset": 0, "length": 5}], mid=1))
     await h.db.set_can_dm(1, True)
-    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/duel @bobby", DUEL_ENT + [
+    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/cduel @bobby", DUEL_ENT + [
         {"type": "mention", "offset": 6, "length": 6}], mid=2))
     assert (await h.db.get_duel(1)).reason == "aborted"
     assert not any("не принял" in t for _, t in h.bot.messages)
@@ -129,20 +129,20 @@ async def test_stats_command_private_and_in_group(env):
     h, dp, bot, raw, session = env
     await h.add_players(Player(1, react_ms=150), Player(2, react_ms=300))
     await play(h)
-    await dp.feed_raw_update(bot, private_msg(1, "P1", "/stats"))
+    await dp.feed_raw_update(bot, private_msg(1, "P1", "/cstats"))
     text = sent_texts(session)[-1]
     assert "Рейтинг: <b>1016</b>" in text and "место #1" in text and "🏆 1" in text and "Серия побед: 1" in text
     await h.db.upsert_player(2, "bobby", "Bob")
-    await dp.feed_raw_update(bot, group_msg(5, "Zed", "/stats @bobby", [{"type": "bot_command", "offset": 0, "length": 6},
+    await dp.feed_raw_update(bot, group_msg(5, "Zed", "/cstats @bobby", [{"type": "bot_command", "offset": 0, "length": 6},
                                                                           {"type": "mention", "offset": 7, "length": 6}], mid=30))
     assert "984" in raw.ephemeral[-1]["text"] and raw.ephemeral[-1]["receiver_user_id"] == 5
-    await dp.feed_raw_update(bot, private_msg(5, "Zed", "/stats", mid=31))
+    await dp.feed_raw_update(bot, private_msg(5, "Zed", "/cstats", mid=31))
     assert "ещё не провёл" in sent_texts(session)[-1]
 
 
 async def test_duel_in_private_explains_where_to_play(env):
     h, dp, bot, raw, session = env
-    await dp.feed_raw_update(bot, private_msg(1, "Alice", "/duel @bob"))
+    await dp.feed_raw_update(bot, private_msg(1, "Alice", "/cduel @bob"))
     assert "в группе" in sent_texts(session)[-1]
 
 
@@ -158,3 +158,19 @@ def test_texts_helpers():
 def test_settings_reject_nonsense(bad):
     with pytest.raises(ValidationError):
         Settings(_env_file=None, bot_token="x", **bad)
+
+
+async def test_group_ignores_generic_command_names_of_other_bots(env):
+    h, dp, bot, raw, session = env
+    await dp.feed_raw_update(bot, group_msg(2, "Bobby", "/chelp", [{"type": "bot_command", "offset": 0, "length": 6}], mid=1))
+    assert "/cduel" in sent_texts(session)[-1]
+    before = (len(sent_texts(session)), len(raw.ephemeral))
+    for mid, text in enumerate(("/duel @bobby", "/help", "/stats", "/top", "/cancel"), start=2):
+        await dp.feed_raw_update(bot, group_msg(1, "Alice", text, [
+            {"type": "bot_command", "offset": 0, "length": len(text.split()[0])}], mid=mid))
+    assert (len(sent_texts(session)), len(raw.ephemeral)) == before     # чужие команды бот не трогает
+    assert await h.db.get_duel(1) is None
+    # /cduel@другой_бот — тоже не нам
+    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/cduel@other_bot @bobby", [
+        {"type": "bot_command", "offset": 0, "length": 16}], mid=9))
+    assert await h.db.get_duel(1) is None

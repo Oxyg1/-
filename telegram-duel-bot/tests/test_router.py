@@ -20,6 +20,9 @@ class StubSession(BaseSession):
 
     async def make_request(self, bot, method, timeout=None):
         self.calls.append(method)
+        if type(method).__name__ == "GetMe":
+            from aiogram.types import User
+            return User(id=42, is_bot=True, first_name="Duel", username="duelbot")
         return True
 
 
@@ -115,7 +118,7 @@ async def test_duel_command_sends_private_challenge_to_target_only(env):
     h, dp, bot, raw, _ = env
     # Боб заранее писал в чат — бот его запомнил и может найти по @username
     await dp.feed_raw_update(bot, group_msg(2, "Bobby", "/help", DUEL_ENT[:1] and [{"type": "bot_command", "offset": 0, "length": 5}], mid=1))
-    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/duel @bobby", DUEL_ENT + [
+    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/cduel @bobby", DUEL_ENT + [
         {"type": "mention", "offset": 6, "length": 6}], mid=2))
     challenge = next(e for e in raw.ephemeral if e["receiver_user_id"] == 2)
     assert "Alice".lower() in challenge["text"].lower() or "@alice" in challenge["text"]
@@ -126,17 +129,17 @@ async def test_duel_command_sends_private_challenge_to_target_only(env):
     duel = await h.db.get_duel(1)
     assert duel.status.value == "challenged" and duel.ephemeral_id == 77 and duel.challenger_id == 1
     # во второй раз — блок: у игроков уже есть активная дуэль
-    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/duel @bobby", DUEL_ENT + [
+    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/cduel @bobby", DUEL_ENT + [
         {"type": "mention", "offset": 6, "length": 6}], mid=3))
     assert "уже участвует" in raw.ephemeral[-1]["text"]
 
 
 async def test_duel_command_unknown_user_and_self(env):
     h, dp, bot, raw, _ = env
-    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/duel @ghost_user", DUEL_ENT + [
+    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/cduel @ghost_user", DUEL_ENT + [
         {"type": "mention", "offset": 6, "length": 11}], mid=2))
     assert "Не знаю такого игрока" in raw.ephemeral[-1]["text"]
-    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/duel @alice", DUEL_ENT + [
+    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/cduel @alice", DUEL_ENT + [
         {"type": "mention", "offset": 6, "length": 6}], mid=3))
     assert "с самим собой" in raw.ephemeral[-1]["text"]
 
@@ -145,7 +148,7 @@ async def test_duel_by_reply(env):
     h, dp, bot, raw, _ = env
     reply = {"message_id": 4, "date": 0, "chat": {"id": -100, "type": "supergroup", "title": "g"},
              "from": {"id": 2, "is_bot": False, "first_name": "Bobby", "username": "bob"}, "text": "hi"}
-    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/duel", DUEL_ENT, mid=5, reply=reply))
+    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/cduel", DUEL_ENT, mid=5, reply=reply))
     assert any(e["receiver_user_id"] == 2 for e in raw.ephemeral)
 
 
@@ -153,7 +156,7 @@ async def test_challenge_fails_when_bot_is_not_admin(env):
     h, dp, bot, raw, _ = env
     raw.fail_ephemeral = True
     await dp.feed_raw_update(bot, group_msg(2, "Bobby", "/help", [{"type": "bot_command", "offset": 0, "length": 5}], mid=1))
-    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/duel @bobby", DUEL_ENT + [
+    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/cduel @bobby", DUEL_ENT + [
         {"type": "mention", "offset": 6, "length": 6}], mid=2))
     assert "администратором" in raw.ephemeral[-1]["text"]
     assert (await h.db.get_duel(1)).status.value == "cancelled"      # висящий вызов не остаётся
@@ -162,7 +165,7 @@ async def test_challenge_fails_when_bot_is_not_admin(env):
 async def test_stake_commands_are_refused_when_disabled(env):
     h, dp, bot, raw, _ = env
     await dp.feed_raw_update(bot, group_msg(2, "Bobby", "/help", [{"type": "bot_command", "offset": 0, "length": 5}], mid=1))
-    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/duel @bobby 50 stars", DUEL_ENT + [
+    await dp.feed_raw_update(bot, group_msg(1, "Alice", "/cduel @bobby 50 stars", DUEL_ENT + [
         {"type": "mention", "offset": 6, "length": 6}], mid=2))
     assert "выключены" in raw.ephemeral[-1]["text"]
     assert await h.db.get_duel(1) is None

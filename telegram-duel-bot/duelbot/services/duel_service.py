@@ -145,7 +145,7 @@ class DuelService:
         return max(0, int(last.finished_at + self.s.challenge_cooldown - time.time() + 0.999))
 
     async def withdraw(self, user_id: int) -> str:
-        """/cancel: участник отменяет свою дуэль, пока раунд не начался."""
+        """/ccancel: участник отменяет свою дуэль, пока раунд не начался."""
         duel = await self.db.active_duel_for(user_id)
         if duel is None:
             return "У тебя нет активных вызовов."
