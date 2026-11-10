@@ -35,6 +35,16 @@ def challenge_text(challenger: Player, duel: Duel, ttl_min: int, private: bool =
             f"Вызов действует {ttl_min} мин. {tail}")
 
 
+def search_text(rating: int, ttl_s: int) -> str:
+    return (f"🔎 <b>Ищем соперника…</b>\nТвой рейтинг: <b>{rating}</b>. Подберу ближайшего по рейтингу из тех, "
+            f"кто сейчас ищет. Ждём до {ttl_s // 60} мин — как найду, пришлю дуэль сюда.")
+
+
+def found_text(opponent: Player | None, duel_id: int) -> str:
+    who = f"<b>{name(opponent)}</b> (рейтинг {opponent.rating})" if opponent else "соперник"
+    return f"🎯 Соперник найден: {who}!\nДуэль №{duel_id} — в виджете ниже 👇"
+
+
 CANCEL_REASONS = {
     Reason.TIMEOUT: "время вышло",
     Reason.DECLINED: "вызов отклонён",

@@ -97,7 +97,6 @@ CREATE TABLE IF NOT EXISTS kv (
 CREATE TABLE IF NOT EXISTS queue (
     user_id     INTEGER PRIMARY KEY,
     rating      INTEGER NOT NULL,
-    message_id  INTEGER NOT NULL,                  -- виджет поиска в личке; при совпадении он станет дуэлью
-    joined_at   REAL NOT NULL,
-    seen_at     REAL                                -- когда виджет последний раз был открыт (time.time)
+    message_id  INTEGER NOT NULL,                  -- сообщение «Ищем соперника…» в личке
+    joined_at   REAL NOT NULL
 );

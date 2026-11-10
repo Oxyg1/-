@@ -118,7 +118,6 @@ class QueueEntry:
     rating: int
     message_id: int
     joined_at: float
-    seen_at: float | None
 
 
 @dataclass
@@ -483,16 +482,8 @@ class Database:
         r = await self._one("SELECT * FROM queue WHERE user_id=?", user_id)
         return QueueEntry(**dict(r)) if r else None
 
-    async def queue_by_widget(self, user_id: int, message_id: int) -> QueueEntry | None:
-        r = await self._one("SELECT * FROM queue WHERE user_id=? AND message_id=?", user_id, message_id)
-        return QueueEntry(**dict(r)) if r else None
-
     async def queue_all(self) -> list[QueueEntry]:
         return [QueueEntry(**dict(r)) for r in await self._all("SELECT * FROM queue ORDER BY joined_at")]
-
-    async def queue_seen(self, user_id: int) -> None:
-        await self._c.execute("UPDATE queue SET seen_at=? WHERE user_id=?", (time.time(), user_id))
-        await self._c.commit()
 
     async def queue_remove(self, user_id: int) -> bool:
         cur = await self._c.execute("DELETE FROM queue WHERE user_id=?", (user_id,))

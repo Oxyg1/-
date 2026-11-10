@@ -58,27 +58,28 @@ async def test_private_decline_updates_invite(env):
 
 
 # ---------------- поиск соперника ----------------
-async def test_search_matches_and_duel_starts_in_the_search_widget(db, monkeypatch):
+def search_msgs(h, uid):
+    return [(i, t) for i, (c, t) in enumerate(h.bot.messages) if c == uid and "Ищем соперника" in t]
+
+
+async def test_search_is_a_message_and_match_sends_duel_widgets(db, monkeypatch):
     h = Harness(db, monkeypatch)
     await h.add_players(Player(1, react_ms=150), Player(2, react_ms=300))
     assert (await h.service.find(1)).startswith("🔎")
-    assert h.players[1].states[-1]["p"] == "find" and h.players[1].states[-1]["rt"] == 1000
-    await h.hi(1)                                    # виджет поиска открыт
-    assert (await db.queue_get(1)).seen_at is not None
+    [(i, text)] = search_msgs(h, 1)
+    assert "1000" in text and h.bot.markups[i].inline_keyboard[0][0].callback_data == "f:x"
+    assert h.players[1].states == []                         # поиск — не виджет
     assert "Уже ищу" in await h.service.find(1)
-    await h.service.find(2)                          # второй игрок — пара найдена
+    await h.service.find(2)                                  # пара найдена
     assert await db.queue_all() == []
+    found = [e for e in h.bot.edits if "Соперник найден" in e["text"]]
+    assert {e["chat_id"] for e in found} == {1, 2} and "@p2" in next(e for e in found if e["chat_id"] == 1)["text"]
     duel = await db.get_duel(1)
-    assert duel.chat_id == 0 and duel.status.value in ("lobby", "round")
-    assert any(c == 1 and "Соперник найден" in t for c, t in h.bot.messages)
-    await h.hi(2)
+    assert duel.chat_id == 0 and duel.status.value == "lobby"
+    assert h.phases(1) == ["lobby"] and h.phases(2) == ["lobby"]   # дуэль — отдельным виджетом
+    await asyncio.gather(h.hi(1), h.hi(2))
     d = await h.wait_done(1)
-    assert d.winner_id == 1
-    for uid, final in ((1, "win"), (2, "lose")):
-        ph = h.phases(uid)
-        assert ph[0] == "find" and ph.index("lobby") < ph.index("go") and ph[-1] == final
-    # виджет дуэли — тот же, что и виджет поиска
-    assert (await db.get_dp(1, 1)).widget_message_id == h.players[1].msg_id
+    assert d.winner_id == 1 and h.phases(1)[-1] == "win"
 
 
 async def test_search_prefers_closest_rating(db, monkeypatch):
@@ -89,11 +90,10 @@ async def test_search_prefers_closest_rating(db, monkeypatch):
         await db._c.execute("UPDATE players SET rating=? WHERE user_id=?", (r, uid))
     await db._c.commit()
     # двое уже ждут (кладём напрямую, чтобы они не сыграли друг с другом)
-    await db.queue_add(1, 1300, 1001)
-    await db.queue_add(3, 980, 1003)
+    await db.queue_add(1, 1300, 701)
+    await db.queue_add(3, 980, 703)
     await h.service.find(2)                       # 1010: ближе всего 980
-    duel = await db.active_duel_for(2)
-    assert set(duel.players) == {2, 3}
+    assert set((await db.active_duel_for(2)).players) == {2, 3}
     assert (await db.queue_get(1)) is not None    # 1300 ждёт дальше
 
 
@@ -102,26 +102,23 @@ async def test_cancel_search_and_timeout(db, monkeypatch):
     await h.add_players(Player(1), Player(2))
     await h.service.find(1)
     assert await h.service.withdraw(1) == "Поиск соперника остановлен."
-    await asyncio.sleep(0.05)                                # правка виджета доставляется асинхронно
-    assert (h.players[1].states[-1]["p"], h.players[1].states[-1]["w"]) == ("cancel", "q")
+    assert h.bot.edits[-1]["chat_id"] == 1 and "остановлен" in h.bot.edits[-1]["text"]
     await h.service.find(2)
     await db._c.execute("UPDATE queue SET joined_at=? WHERE user_id=2", (time.time() - 120,))
     await db._c.commit()
     await h.service.sweep_once()
-    assert await db.queue_all() == []
-    assert await db.active_duel_for(2) is None
-    await asyncio.sleep(0.05)
-    assert h.players[2].states[-1]["w"] == "nf"              # «никого не нашлось»
+    assert await db.queue_all() == [] and await db.active_duel_for(2) is None
+    assert "никого не нашлось" in h.bot.edits[-1]["text"]
 
 
-async def test_unfind_from_widget(db, monkeypatch):
-    import json
-    h = Harness(db, monkeypatch)
+async def test_stop_search_button(env):
+    h, dp, bot, raw, session = env
     await h.add_players(Player(1), Player(2))
     await h.service.find(1)
-    state = json.loads(await h.raw._query(h.players[1], "unfind"))
-    assert (state["p"], state["w"]) == ("cancel", "q")
-    assert await db.queue_get(1) is None
+    await dp.feed_raw_update(bot, cb_update(1, "Alice", "f:x"))
+    assert await h.db.queue_get(1) is None
+    answers = [m.text for m in session.calls if type(m).__name__ == "AnswerCallbackQuery"]
+    assert answers[-1] == "Поиск остановлен."
 
 
 async def test_accepting_a_challenge_leaves_the_queue(db, monkeypatch):
@@ -136,7 +133,7 @@ async def test_accepting_a_challenge_leaves_the_queue(db, monkeypatch):
 async def test_find_command_needs_start(env):
     h, dp, bot, raw, session = env
     await h.add_players(Player(1), Player(2))
-    raw.base.unreachable.add(1)
+    h.bot.dm_blocked.add(1)
     await dp.feed_raw_update(bot, private_msg(1, "Alice", "/cfind"))
     assert "Start" in sent_texts(session)[-1]
     assert await h.db.queue_get(1) is None

@@ -23,7 +23,7 @@ from ..engine.timing import estimate_rtt, random_delay
 from ..stakes.base import NO_STAKE, NoStakeProvider, StakeError, StakeKind, StakeProvider, StakeSpec
 from ..stakes.ton_utils import format_ton
 from ..storage.db import Database, Duel, Player
-from ..texts import challenge_text, result_text, stake_amount_label, stake_label
+from ..texts import challenge_text, found_text, result_text, search_text, stake_amount_label, stake_label
 from ..widgets.payloads import duel_state, final_phase, stats_card, trunc
 from ..widgets.render import duel_html
 from .leaderboard_service import LeaderboardService
@@ -35,6 +35,10 @@ PRE_ROUND = (Status.CHALLENGED, Status.STAKING, Status.LOBBY)  # до раунд
 ACK_TIMEOUT = 4.0
 BG_REQUEST_GAP = 5.3   # документация: фоновые запросы виджета — не чаще раза в 5 секунд
 ROUND_HARD_CAP = 90    # потолок жизни статуса ROUND на случай зависания
+
+
+class CannotDM(Exception):
+    """Боту нельзя писать игроку в личку: тот не нажимал Start или заблокировал бота."""
 
 
 @dataclass
@@ -206,37 +210,50 @@ class DuelService:
             log.info("invite update for duel %s failed: %s", duel.id, e)
 
     # ------------------------------------------------------------------ поиск соперника
+    @staticmethod
+    def _stop_kb() -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+            text="✖ Отменить поиск", callback_data="f:x")]])
+
     async def find(self, uid: int) -> str:
-        """/cfind: виджет «Ищем соперника…» в личку и постановка в очередь. BotApiError — если личка закрыта."""
+        """/cfind: сообщение «Ищем соперника…» в личку и постановка в очередь.
+        CannotDM — если личка с ботом закрыта (игрок не нажимал Start)."""
         if await self.db.active_duel_for(uid):
             return f"Ты уже в дуэли. Доиграй или отмени её: /{C.CANCEL}"
         if await self.db.queue_get(uid):
-            return "Уже ищу тебе соперника — виджет поиска в личке с ботом."
+            return "Уже ищу тебе соперника."
         p = await self.db.get_player(uid)
         rating = p.rating if p else 1000
-        data = duel_state(self._next_rev(0, uid), "find", rating=rating)
-        msg = await self.raw.send_widget(uid, duel_html(), caption="🔎 Поиск соперника", chat_data=data,
-                                         allow_queries=True, height=320)
-        self.last_state[(0, uid)] = data
-        await self.db.queue_add(uid, rating, msg["message_id"])
+        try:
+            msg = await self.bot.send_message(uid, search_text(rating, self.s.search_ttl), parse_mode="HTML",
+                                              reply_markup=self._stop_kb())
+        except Exception as e:  # noqa: BLE001
+            raise CannotDM(str(e)) from e
+        await self.db.queue_add(uid, rating, msg.message_id)
         await self._try_match(uid)
-        return "🔎 Ищу соперника. Как найду — дуэль начнётся прямо в виджете поиска."
+        return "🔎 Ищу соперника — как найду, пришлю дуэль в личку."
+
+    async def _set_search_message(self, uid: int, message_id: int, text: str) -> None:
+        try:
+            await self.bot.edit_message_text(text=text, chat_id=uid, message_id=message_id, parse_mode="HTML")
+        except Exception as e:  # noqa: BLE001
+            log.info("search message update failed: %s", e)
+
+    async def stop_search(self, uid: int) -> bool:
+        return await self._leave_queue(uid, "q")
 
     async def _leave_queue(self, uid: int, code: str) -> bool:
-        """Убрать из очереди; виджет поиска показывает почему. code: q — остановлен, nf — никого не нашлось."""
+        """Убрать из очереди и поправить сообщение поиска. code: q — остановлен, nf — никого не нашлось."""
         q = await self.db.queue_get(uid)
         if q is None or not await self.db.queue_remove(uid):
             return False
-        data = duel_state(self._next_rev(0, uid), "cancel", reason_code=code)
-        self.last_state[(0, uid)] = data
-        try:
-            await self.raw.edit_message_widget_data(chat_id=uid, message_id=q.message_id, chat_data=data)
-        except BotApiError as e:
-            log.info("search widget update failed: %s", e)
+        text = ("⏹ Поиск соперника остановлен." if code == "q" else
+                f"😔 За {self.s.search_ttl // 60} мин никого не нашлось. Попробуй ещё раз: /{C.FIND}")
+        await self._set_search_message(uid, q.message_id, text)
         return True
 
     async def _try_match(self, uid: int) -> None:
-        """Подбирает ближайшего по рейтингу из очереди. Дуэль начинается прямо в виджетах поиска."""
+        """Подбирает ближайшего по рейтингу из очереди и сразу начинает дуэль (вызов уже не нужен)."""
         async with self._match_lock:
             me = await self.db.queue_get(uid)
             if me is None:
@@ -253,20 +270,14 @@ class DuelService:
             now = time.time()
             await self.db.transition(duel.id, Status.LOBBY, accepted_at=now, deadline_at=now + self.s.ready_ttl)
             for q in (first, second):
-                # виджет поиска становится виджетом дуэли; если его открывали — игрок уже «на месте»
-                await self.db.set_dp(duel.id, q.user_id, funded=True, widget_message_id=q.message_id,
-                                     ready=q.seen_at is not None)
-                if q.seen_at is not None:   # время последнего фонового запроса, для паузы перед пингом
-                    self._bg_seen[(duel.id, q.user_id)] = time.monotonic() - (now - q.seen_at)
+                await self.db.set_dp(duel.id, q.user_id, funded=True)
             duel = await self.db.get_duel(duel.id)  # type: ignore[assignment]
             players = await self._players(duel)
             for q in (first, second):
-                await self._push(duel, q.user_id, "lobby")
                 o = players.get(duel.opponent(q.user_id))
-                if o:
-                    await self._dm(q.user_id, f"🎯 Соперник найден: <b>{escape(o.display)}</b> (рейтинг {o.rating}). "
-                                              "Открой виджет поиска — дуэль уже там.")
-        await self._maybe_start(duel.id)
+                await self._set_search_message(q.user_id, q.message_id, found_text(o, duel.id))
+            if await self._send_widgets(duel):     # кто-то успел закрыть личку — дуэль не состоится
+                await self.cancel_duel(duel.id, Reason.ABORTED)
 
     async def cooldown_left(self, challenger_id: int, target_id: int) -> int:
         """Сколько секунд ещё нельзя вызывать игрока, который недавно отказал этому же вызывающему."""
@@ -399,15 +410,6 @@ class DuelService:
         if data.startswith("st:") and data[3:].isdigit():   # карточка игрока просит свежую статистику
             p = await self.db.get_player(int(data[3:]))
             return stats_card(p, await self.db.rank_of(p.user_id)) if p else None
-        q = await self.db.queue_by_widget(uid, message_id)
-        if q is not None:                   # это виджет поиска, дуэли ещё нет
-            if data == "hi":
-                await self.db.queue_seen(uid)
-                return self.last_state.get((0, uid)) or duel_state(self._next_rev(0, uid), "find", rating=q.rating)
-            if data == "unfind":
-                await self._leave_queue(uid, "q")
-                return self.last_state.get((0, uid))
-            return None
         dp = await self.db.find_dp_by_widget(uid, message_id)
         if dp is None:
             return json.dumps({"e": "late"}, separators=(",", ":"))

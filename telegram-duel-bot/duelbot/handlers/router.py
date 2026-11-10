@@ -23,7 +23,7 @@ from aiogram.types import (
 from .. import commands as C
 from ..bot_api_raw import BotApiError, RawBotApi
 from ..config import Settings
-from ..services.duel_service import DuelService
+from ..services.duel_service import CannotDM, DuelService
 from ..services.leaderboard_service import LeaderboardService
 from ..stakes.base import NO_STAKE, StakeKind, StakeProvider, StakeSpec
 from ..storage.db import Database, Player
@@ -179,17 +179,14 @@ def build_router(ctx: Ctx) -> Router:
         in_group = message.chat.type in GROUPS
         try:
             text = await service.find(message.from_user.id)
-        except BotApiError as e:
-            if not e.is_unreachable_user:
-                log.exception("find failed")
-                return await message.reply("Не получилось начать поиск, попробуй ещё раз.")
+        except CannotDM:
             await db.set_can_dm(message.from_user.id, False)
             kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
                 text="Открыть бота и нажать Start", url=f"https://t.me/{ctx.bot_username}?start=find")]])
             return await message.reply("Поиск идёт в личке с ботом — сначала нажми Start.", reply_markup=kb)
         if in_group:
             await tell(message, text)
-        elif not text.startswith("🔎"):        # сам виджет поиска уже в чате; пишем только если что-то не так
+        elif not text.startswith("🔎"):        # сообщение поиска уже в чате; пишем только если что-то не так
             await message.answer(text)
 
     # ---------------- отмена ----------------
@@ -226,6 +223,11 @@ def build_router(ctx: Ctx) -> Router:
             return await (tell(message, text) if in_group else message.answer(text, parse_mode="HTML"))
         if in_group:
             await tell(message, "Карточку отправил тебе в личку 🤠")
+
+    @r.callback_query(F.data == "f:x")
+    async def on_stop_search(cb: CallbackQuery):
+        stopped = await service.stop_search(cb.from_user.id)
+        await cb.answer("Поиск остановлен." if stopped else "Поиск уже закончен.")
 
     @r.callback_query(F.data.startswith("d:"))
     async def on_duel_button(cb: CallbackQuery):

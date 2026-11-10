@@ -163,30 +163,6 @@ const shot = async (p, n) => shots && p.screenshot({ path: path.join(shots, n + 
     await page.close();
   }
 
-  // ---------- поиск соперника ----------
-  {
-    const page = await browser.newPage({ viewport: { width: 320, height: 320 } });
-    const errors = []; page.on('pageerror', e => errors.push(String(e)));
-    const html = fs.readFileSync(path.join(root, 'duel.html'), 'utf8');
-    await page.setContent(`<!doctype html><html><head>${THEME}<script>${STUB}TelegramWidget.chatData=JSON.stringify({r:1,p:'find',rt:1016});</script></head><body>${html}</body></html>`);
-    await page.waitForTimeout(50);
-    assert.strictEqual(await txt(page, '#s'), 'Ищем соперника…');
-    assert(/рейтинг 1016/.test(await txt(page, '#m')));
-    assert.strictEqual(await txt(page, '#b'), 'Отменить');
-    await page.click('#b'); await page.waitForTimeout(30);
-    assert.deepStrictEqual(await page.evaluate(() => __reqs.at(-1)), ['unfind', null]);
-    // соперник найден: тот же виджет переходит в лобби и отвечает на пинг
-    await page.evaluate(() => __setChat({ r: 2, p: 'lobby', o: '@bob', n: 42, d: 9 }));
-    await page.waitForTimeout(30);
-    assert.strictEqual(await txt(page, '#s'), 'Ждём соперника…');
-    assert((await page.evaluate(() => __reqs.map(r => r[0]))).includes('ack:42'));
-    await page.evaluate(() => __setChat({ r: 3, p: 'cancel', w: 'nf' }));
-    assert.strictEqual(await txt(page, '#s'), 'Поиск окончен');
-    assert(/никого не нашлось/.test(await txt(page, '#m')));
-    assert.deepStrictEqual(errors, []);
-    await page.close();
-  }
-
   // ---------- карточка игрока ----------
   {
     const page = await browser.newPage({ viewport: { width: 320, height: 320 }, deviceScaleFactor: 2 });

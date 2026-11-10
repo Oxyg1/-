@@ -5,12 +5,13 @@ body{position:relative;overflow:hidden;box-sizing:border-box;min-height:320px;co
 #sun{fill:var(--sun)}#h1{fill:var(--hill)}#h2{fill:var(--near)}.c{stroke:var(--near);fill:none;stroke-width:7;stroke-linecap:round;stroke-linejoin:round}
 #w{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center}
 #t,#s,#m{align-self:stretch}
-.p-win #b,.p-lose #b,.p-fs #b,.p-draw #b,.p-find #b{order:9;width:auto;height:auto;border-radius:22px;padding:9px 20px;margin:12px 0 0;font-size:16px;letter-spacing:0;background:#6e4421 linear-gradient(#8a5a2b,#4a2a10)}
+.p-win #b,.p-lose #b,.p-fs #b,.p-draw #b{order:9;width:auto;height:auto;border-radius:22px;padding:9px 20px;margin:12px 0 0;font-size:16px;letter-spacing:0;background:#6e4421 linear-gradient(#8a5a2b,#4a2a10)}
 #t{font:700 12px/1 serif;letter-spacing:5px;color:#f3c77a;margin:2px 0 6px}
 #o{display:inline-block;min-height:16px;font-size:13px;color:#ffe3b8;padding:3px 10px;border-radius:12px;background:rgba(20,8,12,.35)}
 #o:empty{visibility:hidden}
 #s{font:700 25px/1.15 serif;letter-spacing:1px;margin:10px 0 2px;min-height:29px}
 #b{display:block;margin:12px auto 10px;width:126px;height:126px;border-radius:50%;border:5px solid #2a1608;color:#fbe9c8;font:800 22px system-ui,sans-serif;letter-spacing:2px;touch-action:none;background:#6e4421 radial-gradient(circle,#8a5a2b 0 34%,#5a3415 36% 38%,#7a4b22 40%,#4a2a10);box-shadow:0 0 0 4px rgba(255,214,150,.22),inset 0 -8px 0 rgba(0,0,0,.25)}
+#b:active{transform:scale(.96)}
 #b[hidden]{display:none}
 #b:disabled{opacity:.7}
 #m{min-height:18px;font-size:13px;color:#ffe3b8}
@@ -24,7 +25,7 @@ body{position:relative;overflow:hidden;box-sizing:border-box;min-height:320px;co
 #r:empty{display:none}
 #r i{font-style:normal}
 .up{color:#9be27a}.dn{color:#ff8a70}
-.p-lobby #b+#v:before,.p-find #b+#v:before{content:'';display:block;margin:22px auto;width:54px;height:54px;border-radius:50%;border:5px solid rgba(255,214,150,.2);border-top-color:#f3c77a;animation:sp 1s linear infinite}
+.p-lobby #b+#v:before{content:'';display:block;margin:22px auto;width:54px;height:54px;border-radius:50%;border:5px solid rgba(255,214,150,.2);border-top-color:#f3c77a;animation:sp 1s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 .p-wait{background:#160c1c linear-gradient(#0e0814,#2c1020 50%,#6a2418 85%,#8a3420);--sun:#e0602a;--hill:#1e0c10;--near:#0c0506}
 .p-wait #b{background:#2e1c10 radial-gradient(circle,#3e2614 0 34%,#24140a 36% 38%,#34200f 40%,#1e1006);color:#d9b27a;animation:pl 1.4s infinite}
@@ -51,7 +52,7 @@ body{position:relative;overflow:hidden;box-sizing:border-box;min-height:320px;co
 <script>
 (function(){
 var W=window.TelegramWidget,D=document,E=function(i){return D.getElementById(i)},seen=-1,st=null,pend=0,pr=0,lastN=null,note='',hp='',rm=0;
-var R={f:'быстрее',fs:'нажал до сигнала',tf:'слишком рано',ot:'соперник не нажал',tie:'разница в пределах погрешности',bfs:'оба нажали до сигнала',nr:'никто не нажал',os:'соперник не нажал',to:'время вышло',ab:'сбой, ставки возвращены',wd:'вызов отменён',q:'поиск остановлен',nf:'никого не нашлось'};
+var R={f:'быстрее',fs:'нажал до сигнала',tf:'слишком рано',ot:'соперник не нажал',tie:'разница в пределах погрешности',bfs:'оба нажали до сигнала',nr:'никто не нажал',os:'соперник не нажал',to:'время вышло',ab:'сбой, ставки возвращены',wd:'вызов отменён'};
 var X={low:'Недостаточно TON на кошельке',nw:'Нет TON-кошелька',bad:'Не удалось',late:'Поздно'};
 function J(s){try{return JSON.parse(s)}catch(e){return null}}
 function set(o){if(o&&o.p&&o.r>=seen){seen=o.r;st=o}if(o&&o.e)note=X[o.e]||o.e;draw()}
@@ -63,11 +64,10 @@ D.body.className='p-'+p;v.textContent='';r.textContent='';
 E('t').textContent='★ ДУЭЛЬ'+(s.d?' №'+s.d:'')+' ★';
 E('o').textContent=s.o?'против '+s.o:'';
 if(p=='stake'){T='Ставка: '+s.a+(s.k=='s'?' ⭐':' TON');if(s.k=='t')B='Принять';else M.push('Оплатите счёт в чате выше')}
-else if(p=='find'){T='Ищем соперника…';B='Отменить';M.push('твой рейтинг '+s.rt)}
-else if(p=='lobby'){T='Ждём соперника…'}
+else if(p=='lobby'){T='Ждём соперника…';M.push('замеряем пинг, чтобы лаг не мешал')}
 else if(p=='wait'){T='Приготовься…';B='ЖДИ';M.push('не жми раньше сигнала')}
 else if(p=='go'){T='СТРЕЛЯЙ!';B='ЖМИ!'}
-else{T={win:'🏆 Победа!',lose:'💀 Поражение',fs:'🚫 Фальстарт',draw:'🤝 Ничья',cancel:s.w=='q'||s.w=='nf'?'Поиск окончен':'Дуэль отменена'}[p]||p;
+else{T={win:'🏆 Победа!',lose:'💀 Поражение',fs:'🚫 Фальстарт',draw:'🤝 Ничья',cancel:'Дуэль отменена'}[p]||p;
 if(s.ms!=null||s.oms!=null){cell(v,'ты',s.ms,p=='win');cell(v,'соперник',s.oms,p=='lose')}
 if(R[s.w])M.push(p=='lose'&&s.w=='f'?'соперник быстрее':R[s.w]);
 if(s.rt!=null){r.textContent='Рейтинг '+s.rt+' ';if(s.dr!=null)r.appendChild(el('i',s.dr>0?'up':s.dr<0?'dn':'','('+(s.dr>0?'+':s.dr<0?'−':'±')+Math.abs(s.dr)+')'))}
@@ -91,7 +91,6 @@ pend=1;W.request('ack:'+n).then(done,function(e){pend=0;if(e&&e.code=='RATE_LIMI
 E('b').onclick=function(){
 var p=st&&st.p;
 if(p=='wait'||p=='go'){if(!pend&&!pr){pend=1;pr=1;draw();W.request('p').then(done,function(e){pend=0;pr=0;note=e&&e.code||'ошибка';draw()})}}
-else if(p=='find')send('unfind');
 else if(p=='stake'&&st.k=='t')send('join',1);
 else if(st&&st.q=='o')pay();
 else if(st&&!rm){rm=1;send('rematch')}};
