@@ -1,0 +1,33 @@
+<style>
+html,body{margin:0}
+body{background:#1c1109;color:#ecd9b0;font:14px/1.35 system-ui,sans-serif;padding:12px 12px max(16px,env(safe-area-inset-bottom))}
+h3{margin:0 0 8px;text-align:center;font:700 20px serif;letter-spacing:1px}
+h4{margin:12px 0 4px;color:#c9a96a;font-size:12px;letter-spacing:1px;text-transform:uppercase}
+.r{display:flex;gap:6px;padding:2px 0;border-bottom:1px solid #3a2a18}
+.r b{width:22px;color:#c9a96a}
+.r span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r i{font-style:normal;color:#a98a55}
+.e{color:#a98a55;text-align:center;padding:10px}
+</style>
+<h3>🤠 ТАБЛО ДУЭЛЯНТОВ</h3>
+<h4>Топ по победам</h4>
+<div id=t></div>
+<h4>Последние дуэли</h4>
+<div id=l></div>
+<script>
+(function(){
+var W=window.TelegramWidget,D=document,seen=-1;
+function J(s){try{return JSON.parse(s)}catch(e){return null}}
+function row(c,a,b,d){var r=D.createElement('div');r.className='r';var x=D.createElement('b');x.textContent=a;var y=D.createElement('span');y.textContent=b;var z=D.createElement('i');z.textContent=d;r.appendChild(x);r.appendChild(y);r.appendChild(z);c.appendChild(r)}
+function fill(c,rows,f){c.textContent='';if(!rows||!rows.length){var e=D.createElement('div');e.className='e';e.textContent='Пока пусто';c.appendChild(e);return}rows.forEach(f)}
+function draw(){
+var o=J(W.publicData)||{};if(o.r<seen)return;seen=o.r||0;
+var t=D.getElementById('t'),l=D.getElementById('l');
+fill(t,o.t,function(x,i){row(t,i+1,x[0],x[1]+' поб. / '+x[2]+' пор.')});
+fill(l,o.l,function(x){row(l,'⚔',x[0]+' → '+x[1],x[2]!=null?Math.round(x[2])+' мс':'')})}
+W.onEvent('publicDataChanged',draw);
+try{W.watchPublicData()}catch(e){}
+draw();
+try{W.ready()}catch(e){}
+})();
+</script>
