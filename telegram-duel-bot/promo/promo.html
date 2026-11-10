@@ -1,0 +1,222 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:540px;height:675px;overflow:hidden;background:#000}
+body{font-family:system-ui,"Segoe UI",Roboto,sans-serif;color:#fbe9c8}
+#stage{position:absolute;inset:0;overflow:hidden}
+.bg{position:absolute;inset:0}
+#bgDusk{background:linear-gradient(#1a0c2c,#5e2440 40%,#d0663a 75%,#f3a54a)}
+#bgNight{background:linear-gradient(#0a0610,#2c1020 50%,#6a2418 85%,#8a3420)}
+#bgRed{background:linear-gradient(#5a0604,#c4160f 55%,#ff5a1f)}
+#bgGold{background:linear-gradient(#2a1c06,#8a6220 50%,#e8b450 85%,#f6d27a)}
+#flash{position:absolute;inset:0;background:#fff;opacity:0}
+#sun{position:absolute;left:50%;width:230px;height:230px;margin-left:-115px;border-radius:50%;background:radial-gradient(circle,#fff3c8,#ffd27a 55%,#ffb050);box-shadow:0 0 120px 40px rgba(255,190,90,.45)}
+#land{position:absolute;left:0;bottom:0;width:540px;height:200px}
+.dust{position:absolute;border-radius:50%;background:rgba(255,220,170,.5)}
+.scene{position:absolute;inset:0;opacity:0}
+.big{position:absolute;left:0;right:0;text-align:center;font-family:Georgia,"Times New Roman",serif;font-weight:900;letter-spacing:4px;color:#fff3dc;text-shadow:0 6px 0 #4a1a0c,0 12px 30px rgba(0,0,0,.5)}
+.cap{position:absolute;left:30px;right:30px;text-align:center;font:800 34px/1.12 system-ui,sans-serif;color:#fff3dc;text-shadow:0 4px 18px rgba(0,0,0,.55)}
+.cap em{font-style:normal;color:#ffd27a}
+.sub{position:absolute;left:0;right:0;text-align:center;font:600 22px system-ui,sans-serif;letter-spacing:3px;text-transform:uppercase;color:#ffe3b8}
+.phone{position:absolute;left:50%;top:150px;width:360px;height:470px;margin-left:-180px;border-radius:38px;background:#0d0a12;border:6px solid #2a2230;box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden}
+.ph-top{height:64px;display:flex;align-items:center;gap:12px;padding:0 18px;background:#1b1622;border-bottom:1px solid #2c2434}
+.ph-top i{width:40px;height:40px;border-radius:50%;background:url(../assets/avatar.png) center/cover,#6e4421}
+.ph-top b{font-size:18px;color:#fff}.ph-top small{display:block;font-size:13px;color:#8ea0b8;font-weight:400}
+.chat{position:absolute;left:0;right:0;top:64px;bottom:0;padding:18px 14px;background:#0f1a24 radial-gradient(circle at 30% 20%,#183040,#0c141c)}
+.msg{position:absolute;max-width:300px;padding:12px 16px;border-radius:18px;font-size:19px;line-height:1.3}
+.me{right:14px;background:#3a6ea5;color:#fff;border-bottom-right-radius:6px}
+.bot{left:14px;background:#24303c;color:#eef;border-bottom-left-radius:6px}
+.btns{position:absolute;left:14px;right:14px;display:flex;gap:8px}
+.btns div{flex:1;text-align:center;padding:12px 0;border-radius:12px;background:rgba(80,110,140,.55);color:#fff;font-weight:700;font-size:17px}
+.tap{position:absolute;width:70px;height:70px;margin:-35px 0 0 -35px;border-radius:50%;border:4px solid #fff;opacity:0}
+#p3{background:linear-gradient(#0e0814,#2c1020 60%,#6a2418)}#p3.on{background:linear-gradient(#6a0805,#c4160f 60%,#ff5a1f)}
+.wid{position:absolute;inset:0;text-align:center;padding-top:30px}
+.wid .t{font:700 15px serif;letter-spacing:5px;color:#f3c77a}
+.wid .s{font:800 34px/1.1 Georgia,serif;margin-top:18px;color:#fff3dc}
+.btn{position:absolute;left:50%;top:155px;width:170px;height:170px;margin-left:-85px;border-radius:50%;border:7px solid #2a1608;display:flex;align-items:center;justify-content:center;font:900 34px system-ui;letter-spacing:2px}
+.wait{background:radial-gradient(circle,#3e2614 0 34%,#24140a 36% 38%,#34200f 40%,#1e1006);color:#d9b27a}
+.go{background:#fff1d6;border-color:#7a0b07;color:#b00e08;font-size:44px}
+.ms{position:absolute;left:0;right:0;top:350px;font:900 50px system-ui;color:#fff}
+.cells{position:absolute;left:0;right:0;top:130px;display:flex;justify-content:center;gap:16px}
+.cell{width:140px;padding:12px 8px;border-radius:16px;background:rgba(20,8,12,.45);border:3px solid rgba(255,214,150,.2)}
+.cell.h{border-color:#fff3c4;background:rgba(255,240,190,.2)}
+.cell small{display:block;font-size:14px;letter-spacing:2px;text-transform:uppercase;opacity:.8}
+.cell b{font:900 46px/1.1 system-ui}
+.rt{position:absolute;left:50%;top:300px;transform:translateX(-50%);white-space:nowrap;padding:10px 22px;border-radius:24px;background:rgba(20,8,12,.5);font:800 28px system-ui}
+.rt i{font-style:normal;color:#9be27a}
+.feat{position:absolute;left:40px;right:40px;height:112px;border-radius:26px;display:flex;align-items:center;gap:20px;padding:0 26px;background:linear-gradient(#f6e4bc,#d9b474);color:#3a1f0c;border:4px double #6b4520;box-shadow:0 18px 40px rgba(0,0,0,.45)}
+.feat span{font-size:50px}
+.feat b{display:block;font:900 30px/1.1 Georgia,serif}
+.feat small{font-size:19px;color:#6b4520;font-weight:600}
+#ava{position:absolute;left:50%;top:80px;width:210px;height:210px;margin-left:-105px;border-radius:50%;background:url(../assets/avatar.png) center/cover;box-shadow:0 0 0 8px #f3c77a,0 20px 60px rgba(0,0,0,.6)}
+.cmd{position:absolute;left:50%;top:500px;transform:translateX(-50%);padding:18px 34px;border-radius:40px;background:#fff1d6;color:#b00e08;font:900 38px system-ui;white-space:nowrap;box-shadow:0 0 0 6px rgba(255,240,200,.3)}
+.spark{position:absolute;width:12px;height:22px;border-radius:3px}
+</style></head>
+<body><div id="stage">
+<div class="bg" id="bgDusk"></div><div class="bg" id="bgNight"></div><div class="bg" id="bgRed"></div><div class="bg" id="bgGold"></div>
+<div id="sun"></div>
+<svg id="land" viewBox="0 0 320 178" preserveAspectRatio="xMidYMax slice">
+<path id="h1" fill="#3a1a1c" d="M0 120h34l9-26h52l7 26h58l10 14h24l7-40h48l9 40h62v44H0z"/>
+<path id="h2" fill="#1c0c0c" d="M0 146q90-20 180-4t140-6v42H0z"/>
+<path stroke="#1c0c0c" fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" d="M38 156V104m0 26h-11v-13m11 6h11v-17M284 154V116m0 20h8v-11"/>
+</svg>
+<div id="dustL"></div>
+
+<!-- 1. title -->
+<div class="scene" id="s1">
+<div class="sub" id="s1pre" style="top:140px">★ telegram ★</div>
+<div class="big" id="t1" style="top:190px;font-size:100px">COWBOY</div>
+<div class="big" id="t2" style="top:295px;font-size:146px;color:#ffd27a">DUEL</div>
+<div class="sub" id="s1sub" style="top:475px">a reaction-speed duel</div>
+</div>
+
+<!-- 2. challenge -->
+<div class="scene" id="s2">
+<div class="cap" id="c2" style="top:36px">Challenge <em>anyone</em><br>with one command</div>
+<div class="phone" id="p2"><div class="ph-top"><i></i><div><b>Cowboy Duel</b><small>bot</small></div></div>
+<div class="chat">
+<div class="msg me" id="m1" style="top:20px"><span id="typed"></span><span id="caret">|</span></div>
+<div class="msg bot" id="m2" style="top:100px">🤠 <b>@bob</b>, you've been challenged to a duel!<br>Stake: 50 ⭐</div>
+<div class="btns" id="bt" style="top:224px"><div id="acc">✅ Accept</div><div>✖ Decline</div></div>
+<div class="tap" id="tap2" style="left:86px;top:246px"></div>
+</div></div>
+</div>
+
+<!-- 3. shoot -->
+<div class="scene" id="s3">
+<div class="cap" id="c3" style="top:60px">Wait for the signal…</div>
+<div class="phone" id="p3">
+<div class="wid"><div class="t">★ DUEL #12 ★</div><div class="s" id="w3s">Get ready…</div>
+<div class="btn wait" id="w3b">WAIT</div>
+<div class="ms" id="w3ms"></div>
+<div class="tap" id="tap3" style="left:174px;top:240px"></div>
+</div></div>
+</div>
+
+<!-- 4. win -->
+<div class="scene" id="s4">
+<div class="cap" id="c4" style="top:36px">Elo rating<br>and <em>win streaks</em></div>
+<div class="phone" id="p4" style="background:linear-gradient(#3a2a08,#8a6220 60%,#e8b450)">
+<div class="wid"><div class="t">★ DUEL #12 ★</div><div class="s" style="color:#fff3c4">🏆 Victory!</div>
+<div class="cells"><div class="cell h" id="ce1"><small>you</small><b>187</b><small>ms</small></div><div class="cell" id="ce2"><small>rival</small><b>243</b><small>ms</small></div></div>
+<div class="rt" id="rt">Rating <span id="rtv">1000</span> <i id="rtd">(+16)</i></div>
+</div></div>
+<div id="sparks"></div>
+</div>
+
+<!-- 5. features -->
+<div class="scene" id="s5">
+<div class="cap" id="c5" style="top:40px">And that's<br><em>not all</em></div>
+<div class="feat" id="f1" style="top:170px"><span>🔎</span><div><b>Matchmaking</b><small>/cfind — paired by rating</small></div></div>
+<div class="feat" id="f2" style="top:302px"><span>💰</span><div><b>Real stakes</b><small>Telegram Stars and TON</small></div></div>
+<div class="feat" id="f3" style="top:434px"><span>📜</span><div><b>Your stats</b><small>best time, streaks, leaderboard</small></div></div>
+</div>
+
+<!-- 6. outro -->
+<div class="scene" id="s6">
+<div id="ava"></div>
+<div class="big" id="o1" style="top:322px;font-size:54px;white-space:nowrap">COWBOY DUEL</div>
+<div class="sub" id="o2" style="top:420px">fastest hand wins</div>
+<div class="cmd" id="o3">/cduel @friend</div>
+</div>
+
+<div id="flash"></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const P=(t,a,b)=>cl((t-a)/(b-a));
+const oc=x=>1-Math.pow(1-x,3);
+const ob=x=>{const c=1.9;return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2)};
+const io=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const lerp=(a,b,k)=>a+(b-a)*k;
+// scene window: fade in over .35s, fade out over .35s
+function win(el,t,a,b){const o=P(t,a,a+.35)*(1-P(t,b-.35,b));el.style.opacity=o;return o}
+function S(el,o){Object.assign(el.style,o)}
+// deterministic dust
+const dust=[];let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+for(let i=0;i<40;i++){const d=document.createElement('div');d.className='dust';const s=2+rnd()*6;S(d,{width:s+'px',height:s+'px'});$('dustL').appendChild(d);dust.push({d,x:rnd()*540,y:600+rnd()*360,v:20+rnd()*60,ph:rnd()*6})}
+const sparks=[];const cols=['#ffd27a','#fff3c4','#ff8a50','#9be27a','#f3c77a'];
+for(let i=0;i<46;i++){const d=document.createElement('div');d.className='spark';d.style.background=cols[i%5];$('sparks').appendChild(d);sparks.push({d,a:rnd()*Math.PI*2,v:300+rnd()*500,r:rnd()*720,sp:rnd()})}
+
+window.render=function(t){
+  // backgrounds
+  $('bgNight').style.opacity=P(t,6.4,7)*(1-P(t,8.55,8.6));
+  $('bgRed').style.opacity=P(t,8.55,8.6)*(1-P(t,10.8,11.3));
+  $('bgGold').style.opacity=P(t,10.8,11.3)*(1-P(t,13.8,14.4));
+  // sun: rises at start, sets at the end
+  const sy=lerp(420,200,oc(P(t,0,2.5)))+lerp(0,300,io(P(t,17.4,21)));
+  S($('sun'),{top:sy+'px',transform:'scale('+(1+.04*Math.sin(t*2))+')'});
+  // camera shake on the shot
+  const sh=t>8.55&&t<9.1?(1-P(t,8.55,9.1))*14:0;
+  const sh1=t>.75&&t<1.15?(1-P(t,.75,1.15))*10:0, sh2=t>1.15&&t<1.6?(1-P(t,1.15,1.6))*16:0;
+  const k=sh+sh1+sh2;
+  $('stage').style.transform=k?`scale(1.06) translate(${Math.sin(t*97)*k}px,${Math.cos(t*83)*k}px)`:'';
+  // dust drift
+  for(const p of dust){const x=(p.x+t*p.v)%600-30;S(p.d,{left:x+'px',top:(p.y+Math.sin(t+p.ph)*12)+'px',opacity:.5+.4*Math.sin(t*1.3+p.ph)})}
+  // flash on shot
+  $('flash').style.opacity=t>8.55?.9*(1-P(t,8.55,8.9)):0;
+
+  // 1 title
+  win($('s1'),t,0,3.2);
+  const a1=P(t,.35,.8),a2=P(t,.8,1.2);
+  S($('t1'),{opacity:a1>0?1:0,transform:`scale(${lerp(3.2,1,oc(a1))}) translateY(${-80*P(t,2.7,3.2)}px)`});
+  S($('t2'),{opacity:a2>0?1:0,transform:`scale(${lerp(3.8,1,ob(a2))}) rotate(${lerp(-12,0,ob(a2))}deg)`});
+  S($('s1pre'),{opacity:P(t,.1,.5),letterSpacing:lerp(20,6,oc(P(t,.1,.9)))+'px'});
+  S($('s1sub'),{opacity:P(t,1.5,1.9),transform:`translateY(${lerp(30,0,oc(P(t,1.5,2)))}px)`});
+
+  // 2 challenge
+  win($('s2'),t,3,6.8);
+  S($('c2'),{transform:`translateY(${lerp(-40,0,oc(P(t,3,3.5)))}px)`});
+  S($('p2'),{transform:`translateY(${lerp(500,0,oc(P(t,3.05,3.65)))}px) rotate(${lerp(8,0,oc(P(t,3.05,3.65)))}deg)`});
+  const txt='/cduel @bob 50';const n=Math.floor(txt.length*P(t,3.7,4.6));
+  $('typed').textContent=txt.slice(0,n);$('caret').style.opacity=t<4.9&&Math.floor(t*3)%2==0?1:0;
+  $('m1').style.opacity=t>3.6?1:0;
+  const m2=P(t,4.9,5.25);S($('m2'),{opacity:m2,transform:`scale(${lerp(.6,1,ob(m2))})`,transformOrigin:'0 100%'});
+  const bt=P(t,5.25,5.6);S($('bt'),{opacity:bt,transform:`translateY(${lerp(20,0,oc(bt))}px)`});
+  const tp=P(t,5.9,6.4);S($('tap2'),{opacity:tp>0?1-tp:0,transform:`scale(${lerp(.3,1.6,oc(tp))})`});
+  S($('acc'),{background:t>5.95?'#3fa35a':'',transform:t>5.9&&t<6.1?'scale(.94)':''});
+
+  // 3 shoot
+  win($('s3'),t,6.6,11.2);
+  S($('p3'),{transform:`scale(${lerp(.8,1,oc(P(t,6.6,7.1)))})`});
+  const go=t>=8.6;$('p3').className='phone'+(go?' on':'');
+  $('c3').innerHTML=go?'<em>FIRE!</em>':'Wait for the signal…';
+  S($('c3'),{transform:go?`scale(${lerp(1.6,1,ob(P(t,8.6,8.9)))})`:''});
+  $('w3s').textContent=go?'FIRE!':'Get ready…';
+  const b=$('w3b');b.className='btn '+(go?'go':'wait');b.textContent=go?'TAP!':'WAIT';
+  const pulse=go?lerp(1.25,1,ob(P(t,8.6,8.85))):1+.04*Math.sin(t*7);
+  const press=t>9.05&&t<9.2?.9:1;
+  S(b,{transform:`scale(${pulse*press})`,boxShadow:go?`0 0 0 ${10+8*Math.sin(t*20)}px rgba(255,240,200,.35)`:`0 0 0 ${8+8*(.5+.5*Math.sin(t*4.5))}px rgba(255,120,50,.18)`});
+  const tp3=P(t,9.05,9.5);S($('tap3'),{opacity:tp3>0?1-tp3:0,transform:`scale(${lerp(.3,2.4,oc(tp3))})`});
+  const msk=P(t,9.1,9.7);$('w3ms').textContent=t>9.1?Math.round(lerp(0,187,oc(msk)))+' ms':'';
+  S($('w3ms'),{transform:`scale(${t>9.7?lerp(1.3,1,oc(P(t,9.7,9.95))):1})`});
+
+  // 4 win
+  win($('s4'),t,11,14.3);
+  S($('p4'),{transform:`translateY(${lerp(-60,0,oc(P(t,11,11.5)))}px)`});
+  const c1=P(t,11.4,11.75),c2=P(t,11.55,11.9);
+  S($('ce1'),{transform:`scale(${lerp(.3,1,ob(c1))})`,opacity:c1});S($('ce2'),{transform:`scale(${lerp(.3,1,ob(c2))})`,opacity:c2});
+  const r=P(t,12,12.8);$('rtv').textContent=Math.round(lerp(1000,1016,oc(r)));
+  S($('rt'),{opacity:P(t,11.9,12.1)});S($('rtd'),{opacity:P(t,12.7,12.9),display:'inline-block',transform:`scale(${lerp(2,1,ob(P(t,12.7,13)))})`});
+  const sp=P(t,11.3,13.6);
+  for(const s of sparks){const d=sp*s.v*(.6+.4*s.sp);S(s.d,{left:(270+Math.cos(s.a)*d)+'px',top:(360+Math.sin(s.a)*d+sp*sp*420)+'px',opacity:sp>0?1-sp:0,transform:`rotate(${s.r+sp*900}deg)`})}
+
+  // 5 features
+  win($('s5'),t,14,17.6);
+  S($('c5'),{transform:`translateY(${lerp(-40,0,oc(P(t,14,14.5)))}px)`});
+  ['f1','f2','f3'].forEach((id,i)=>{const q=P(t,14.4+i*.45,14.95+i*.45);S($(id),{opacity:q,transform:`translateX(${lerp(i%2?-560:560,0,ob(q))}px) rotate(${lerp(i%2?-6:6,0,oc(q))}deg)`})});
+
+  // 6 outro
+  win($('s6'),t,17.4,22);
+  const av=P(t,17.5,18.1);S($('ava'),{transform:`scale(${lerp(0,1,ob(av))}) rotate(${lerp(-90,0,oc(av))}deg)`});
+  S($('o1'),{opacity:P(t,18,18.4),transform:`scale(${lerp(1.6,1,oc(P(t,18,18.5)))})`});
+  S($('o2'),{opacity:P(t,18.5,18.9)});
+  const cm=P(t,19,19.4);S($('o3'),{opacity:cm,transform:`translateX(-50%) scale(${lerp(.4,1,ob(cm))*(1+.03*Math.sin(t*6))})`});
+  // fade to black
+  document.body.style.opacity=1-P(t,20.5,21);
+};
+render(0);
+</script>
+</body></html>

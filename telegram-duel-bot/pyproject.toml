@@ -1,0 +1,45 @@
+[project]
+name = "duelbot"
+version = "0.2.0"
+description = "Telegram bot «Ковбойская дуэль» на HTML-виджетах Bot API 10.4"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram>=3.31,<4",
+    "aiohttp>=3.9",
+    "aiosqlite>=0.20",
+    "pydantic-settings>=2.2",
+    "pytoniq-core>=0.1.40",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6"]
+
+[project.scripts]
+duelbot = "duelbot.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["duelbot*"]
+
+[tool.setuptools.package-data]
+duelbot = ["widgets/*.html", "storage/*.sql"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I", "UP", "ASYNC"]
+ignore = ["B008", "UP040", "ASYNC109", "E741"]
+
+[tool.ruff.lint.per-file-ignores]
+# тесты: фикстура env импортируется из test_router (F811), короткие шаги через «;»
+"tests/*" = ["E501", "B011", "E702", "F811"]
