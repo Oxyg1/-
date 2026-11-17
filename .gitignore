@@ -12,3 +12,4 @@ swing/*.jpe
 
 # dragon sticker: render previews and intermediate builds
 dragon/build/
+__pycache__/
