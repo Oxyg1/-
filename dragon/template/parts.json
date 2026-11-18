@@ -1,0 +1,428 @@
+[
+ {
+  "group": "g_wing_back",
+  "id": "wing_lobe",
+  "closed": true,
+  "n": 17
+ },
+ {
+  "group": "g_spikes",
+  "id": "spike_head_3",
+  "closed": true,
+  "n": 7
+ },
+ {
+  "group": "g_spikes",
+  "id": "spike_back_1",
+  "closed": true,
+  "n": 7
+ },
+ {
+  "group": "g_spikes",
+  "id": "horn_left",
+  "closed": true,
+  "n": 17
+ },
+ {
+  "group": "g_spikes",
+  "id": "horn_right",
+  "closed": true,
+  "n": 19
+ },
+ {
+  "group": "g_spikes",
+  "id": "spike_head_1",
+  "closed": true,
+  "n": 10
+ },
+ {
+  "group": "g_spikes",
+  "id": "spike_head_2",
+  "closed": true,
+  "n": 9
+ },
+ {
+  "group": "g_tail",
+  "id": "tail",
+  "closed": true,
+  "n": 22
+ },
+ {
+  "group": "g_tail",
+  "id": "tail_spike_1",
+  "closed": true,
+  "n": 5
+ },
+ {
+  "group": "g_tail",
+  "id": "tail_spike_2",
+  "closed": true,
+  "n": 5
+ },
+ {
+  "group": "g_tail",
+  "id": "tail_spike_3",
+  "closed": true,
+  "n": 5
+ },
+ {
+  "group": "g_body",
+  "id": "body",
+  "closed": true,
+  "n": 31
+ },
+ {
+  "group": "g_body",
+  "id": "belly",
+  "closed": true,
+  "n": 13
+ },
+ {
+  "group": "g_body",
+  "id": "belly_under",
+  "closed": true,
+  "n": 8
+ },
+ {
+  "group": "g_body",
+  "id": "belly_stripe_1",
+  "closed": false,
+  "n": 4
+ },
+ {
+  "group": "g_body",
+  "id": "belly_stripe_2",
+  "closed": false,
+  "n": 4
+ },
+ {
+  "group": "g_body",
+  "id": "belly_stripe_3",
+  "closed": false,
+  "n": 4
+ },
+ {
+  "group": "g_body",
+  "id": "belly_stripe_4",
+  "closed": false,
+  "n": 4
+ },
+ {
+  "group": "g_body",
+  "id": "heart",
+  "closed": true,
+  "n": 8
+ },
+ {
+  "group": "g_spots",
+  "id": "spot_1",
+  "closed": true,
+  "n": 6
+ },
+ {
+  "group": "g_spots",
+  "id": "spot_2",
+  "closed": true,
+  "n": 6
+ },
+ {
+  "group": "g_spots",
+  "id": "spot_3",
+  "closed": true,
+  "n": 6
+ },
+ {
+  "group": "g_spots",
+  "id": "spot_4",
+  "closed": true,
+  "n": 6
+ },
+ {
+  "group": "g_spots",
+  "id": "spot_5",
+  "closed": true,
+  "n": 6
+ },
+ {
+  "group": "g_legs",
+  "id": "foot_front_far",
+  "closed": true,
+  "n": 11
+ },
+ {
+  "group": "g_legs",
+  "id": "toe_far_1",
+  "closed": true,
+  "n": 4
+ },
+ {
+  "group": "g_legs",
+  "id": "toe_far_2",
+  "closed": true,
+  "n": 4
+ },
+ {
+  "group": "g_legs",
+  "id": "leg_front_near",
+  "closed": true,
+  "n": 11
+ },
+ {
+  "group": "g_legs",
+  "id": "paw_front_near",
+  "closed": true,
+  "n": 12
+ },
+ {
+  "group": "g_legs",
+  "id": "toe_near_1",
+  "closed": true,
+  "n": 4
+ },
+ {
+  "group": "g_legs",
+  "id": "toe_near_2",
+  "closed": true,
+  "n": 4
+ },
+ {
+  "group": "g_legs",
+  "id": "toe_near_3",
+  "closed": true,
+  "n": 4
+ },
+ {
+  "group": "g_legs",
+  "id": "hind_leg",
+  "closed": true,
+  "n": 26
+ },
+ {
+  "group": "g_legs",
+  "id": "hind_toes",
+  "closed": true,
+  "n": 12
+ },
+ {
+  "group": "g_wing",
+  "id": "wing_main",
+  "closed": true,
+  "n": 32
+ },
+ {
+  "group": "g_wing",
+  "id": "wing_membrane_1",
+  "closed": true,
+  "n": 6
+ },
+ {
+  "group": "g_wing",
+  "id": "wing_membrane_2",
+  "closed": true,
+  "n": 7
+ },
+ {
+  "group": "g_wing",
+  "id": "wing_membrane_3",
+  "closed": true,
+  "n": 8
+ },
+ {
+  "group": "g_wing",
+  "id": "wing_bone_1",
+  "closed": false,
+  "n": 4
+ },
+ {
+  "group": "g_wing",
+  "id": "wing_bone_2",
+  "closed": false,
+  "n": 4
+ },
+ {
+  "group": "g_wing",
+  "id": "wing_bone_3",
+  "closed": false,
+  "n": 4
+ },
+ {
+  "group": "g_head",
+  "id": "head",
+  "closed": true,
+  "n": 37
+ },
+ {
+  "group": "g_jaw",
+  "id": "jaw",
+  "closed": true,
+  "n": 23
+ },
+ {
+  "group": "g_cheek",
+  "id": "cheek_puff",
+  "closed": true,
+  "n": 8
+ },
+ {
+  "group": "g_cheek",
+  "id": "cheek_puff_far",
+  "closed": true,
+  "n": 8
+ },
+ {
+  "group": "g_marks",
+  "id": "kiss_upper",
+  "closed": true,
+  "n": 23
+ },
+ {
+  "group": "g_marks",
+  "id": "kiss_lower",
+  "closed": true,
+  "n": 15
+ },
+ {
+  "group": "g_marks",
+  "id": "blush",
+  "closed": true,
+  "n": 6
+ },
+ {
+  "group": "g_mouth",
+  "id": "mouth_line",
+  "closed": false,
+  "n": 12
+ },
+ {
+  "group": "g_mouth",
+  "id": "mouth_cavity",
+  "closed": true,
+  "n": 22
+ },
+ {
+  "group": "g_mouth",
+  "id": "tongue",
+  "closed": true,
+  "n": 10
+ },
+ {
+  "group": "g_mouth",
+  "id": "teeth_upper_1",
+  "closed": true,
+  "n": 5
+ },
+ {
+  "group": "g_mouth",
+  "id": "teeth_upper_2",
+  "closed": true,
+  "n": 5
+ },
+ {
+  "group": "g_mouth",
+  "id": "teeth_upper_3",
+  "closed": true,
+  "n": 5
+ },
+ {
+  "group": "g_mouth",
+  "id": "teeth_lower_1",
+  "closed": true,
+  "n": 5
+ },
+ {
+  "group": "g_mouth",
+  "id": "teeth_lower_2",
+  "closed": true,
+  "n": 5
+ },
+ {
+  "group": "g_mouth",
+  "id": "teeth_lower_3",
+  "closed": true,
+  "n": 5
+ },
+ {
+  "group": "g_nostrils",
+  "id": "nostril_1",
+  "closed": true,
+  "n": 6
+ },
+ {
+  "group": "g_nostrils",
+  "id": "nostril_2",
+  "closed": true,
+  "n": 6
+ },
+ {
+  "group": "g_eye_far",
+  "id": "eye_far_outer",
+  "closed": true,
+  "n": 8
+ },
+ {
+  "group": "g_eye_far",
+  "id": "eye_far_ring",
+  "closed": true,
+  "n": 8
+ },
+ {
+  "group": "g_eye_far",
+  "id": "eye_far_iris",
+  "closed": true,
+  "n": 6
+ },
+ {
+  "group": "g_eye_far",
+  "id": "eye_far_shine",
+  "closed": true,
+  "n": 4
+ },
+ {
+  "group": "g_eye_far",
+  "id": "eye_far_lid",
+  "closed": true,
+  "n": 10
+ },
+ {
+  "group": "g_eye_far",
+  "id": "eye_far_brow",
+  "closed": false,
+  "n": 5
+ },
+ {
+  "group": "g_eye_near",
+  "id": "eye_near_outer",
+  "closed": true,
+  "n": 8
+ },
+ {
+  "group": "g_eye_near",
+  "id": "eye_near_ring",
+  "closed": true,
+  "n": 8
+ },
+ {
+  "group": "g_eye_near",
+  "id": "eye_near_iris",
+  "closed": true,
+  "n": 6
+ },
+ {
+  "group": "g_eye_near",
+  "id": "eye_near_shine",
+  "closed": true,
+  "n": 4
+ },
+ {
+  "group": "g_eye_near",
+  "id": "eye_near_lid",
+  "closed": true,
+  "n": 10
+ },
+ {
+  "group": "g_eye_near",
+  "id": "eye_near_brow",
+  "closed": false,
+  "n": 5
+ }
+]
