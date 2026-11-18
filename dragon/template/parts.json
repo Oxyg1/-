@@ -369,7 +369,7 @@
   "group": "g_eye_far",
   "id": "eye_far_iris",
   "closed": true,
-  "n": 6
+  "n": 8
  },
  {
   "group": "g_eye_far",
@@ -405,7 +405,7 @@
   "group": "g_eye_near",
   "id": "eye_near_iris",
   "closed": true,
-  "n": 6
+  "n": 8
  },
  {
   "group": "g_eye_near",

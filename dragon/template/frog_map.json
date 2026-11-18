@@ -1,0 +1,795 @@
+[
+ {
+  "frog_layer": "body",
+  "frog_shape": [
+   7,
+   0
+  ],
+  "note": "frog body silhouette (head+torso, 9 vtx, closed); (1,0) is identical, (3,0) is its outline copy",
+  "closed": true,
+  "vertices": [
+   {
+    "vertex": 1,
+    "frog_k0_xy": [
+     491.7,
+     827.9
+    ],
+    "template_id": "body",
+    "anchor": 27,
+    "dist_px": 45.6
+   },
+   {
+    "vertex": 2,
+    "frog_k0_xy": [
+     568.5,
+     510.8
+    ],
+    "template_id": "body",
+    "anchor": 29,
+    "dist_px": 350.0
+   },
+   {
+    "vertex": 3,
+    "frog_k0_xy": [
+     706.9,
+     350.8
+    ],
+    "template_id": "body",
+    "anchor": 28,
+    "dist_px": 522.3
+   },
+   {
+    "vertex": 4,
+    "frog_k0_xy": [
+     840.0,
+     409.6
+    ],
+    "template_id": "body",
+    "anchor": 30,
+    "dist_px": 247.7
+   },
+   {
+    "vertex": 5,
+    "frog_k0_xy": [
+     973.0,
+     412.3
+    ],
+    "template_id": "body",
+    "anchor": 31,
+    "dist_px": 117.5
+   },
+   {
+    "vertex": 6,
+    "frog_k0_xy": [
+     1138.0,
+     345.8
+    ],
+    "template_id": "body",
+    "anchor": 1,
+    "dist_px": 109.9
+   },
+   {
+    "vertex": 7,
+    "frog_k0_xy": [
+     1356.5,
+     570.0
+    ],
+    "template_id": "body",
+    "anchor": 3,
+    "dist_px": 56.6
+   },
+   {
+    "vertex": 8,
+    "frog_k0_xy": [
+     1710.5,
+     1103.5
+    ],
+    "template_id": "body",
+    "anchor": 11,
+    "dist_px": 47.6
+   },
+   {
+    "vertex": 9,
+    "frog_k0_xy": [
+     606.5,
+     1332.8
+    ],
+    "template_id": "body",
+    "anchor": 21,
+    "dist_px": 26.5
+   }
+  ]
+ },
+ {
+  "frog_layer": "body",
+  "frog_shape": [
+   5,
+   0
+  ],
+  "note": "belly/underside shape (4 vtx)",
+  "closed": true,
+  "vertices": [
+   {
+    "vertex": 1,
+    "frog_k0_xy": [
+     1694.5,
+     1158.5
+    ],
+    "template_id": "body",
+    "anchor": 11,
+    "dist_px": 23.5
+   },
+   {
+    "vertex": 2,
+    "frog_k0_xy": [
+     606.5,
+     1332.8
+    ],
+    "template_id": "body",
+    "anchor": 21,
+    "dist_px": 26.6
+   },
+   {
+    "vertex": 3,
+    "frog_k0_xy": [
+     467.4,
+     899.3
+    ],
+    "template_id": "body",
+    "anchor": 27,
+    "dist_px": 31.5
+   },
+   {
+    "vertex": 4,
+    "frog_k0_xy": [
+     1387.0,
+     1096.8
+    ],
+    "template_id": "body",
+    "anchor": 14,
+    "dist_px": 256.1
+   }
+  ]
+ },
+ {
+  "frog_layer": "body",
+  "frog_shape": [
+   2,
+   0,
+   1,
+   0
+  ],
+  "note": "chin shadow (3 vtx)",
+  "closed": true,
+  "vertices": [
+   {
+    "vertex": 1,
+    "frog_k0_xy": [
+     800.4,
+     884.8
+    ],
+    "template_id": "jaw",
+    "anchor": 17,
+    "dist_px": 4.8
+   },
+   {
+    "vertex": 2,
+    "frog_k0_xy": [
+     638.5,
+     851.2
+    ],
+    "template_id": "jaw",
+    "anchor": 19,
+    "dist_px": 42.0
+   },
+   {
+    "vertex": 3,
+    "frog_k0_xy": [
+     673.6,
+     944.3
+    ],
+    "template_id": "jaw",
+    "anchor": 18,
+    "dist_px": 69.5
+   }
+  ]
+ },
+ {
+  "frog_layer": "rarm",
+  "frog_shape": [
+   0,
+   0
+  ],
+  "note": "near front leg+paw outline (open, 9 vtx: down the left edge, toes, up the right edge)",
+  "closed": false,
+  "vertices": [
+   {
+    "vertex": 1,
+    "frog_k0_xy": [
+     716.9,
+     1069.0
+    ],
+    "template_id": "leg_front_near",
+    "anchor": 1,
+    "dist_px": 31.8
+   },
+   {
+    "vertex": 2,
+    "frog_k0_xy": [
+     650.2,
+     1304.2
+    ],
+    "template_id": "paw_front_near",
+    "anchor": 2,
+    "dist_px": 15.6
+   },
+   {
+    "vertex": 3,
+    "frog_k0_xy": [
+     582.2,
+     1337.4
+    ],
+    "template_id": "paw_front_near",
+    "anchor": 1,
+    "dist_px": 10.8
+   },
+   {
+    "vertex": 4,
+    "frog_k0_xy": [
+     628.4,
+     1360.6
+    ],
+    "template_id": "leg_front_near",
+    "anchor": 8,
+    "dist_px": 75.7
+   },
+   {
+    "vertex": 5,
+    "frog_k0_xy": [
+     615.4,
+     1407.1
+    ],
+    "template_id": "paw_front_near",
+    "anchor": 12,
+    "dist_px": 7.7
+   },
+   {
+    "vertex": 6,
+    "frog_k0_xy": [
+     691.3,
+     1409.7
+    ],
+    "template_id": "paw_front_near",
+    "anchor": 11,
+    "dist_px": 52.2
+   },
+   {
+    "vertex": 7,
+    "frog_k0_xy": [
+     715.4,
+     1436.3
+    ],
+    "template_id": "paw_front_near",
+    "anchor": 10,
+    "dist_px": 28.4
+   },
+   {
+    "vertex": 8,
+    "frog_k0_xy": [
+     846.6,
+     1389.0
+    ],
+    "template_id": "paw_front_near",
+    "anchor": 8,
+    "dist_px": 21.7
+   },
+   {
+    "vertex": 9,
+    "frog_k0_xy": [
+     931.6,
+     1156.4
+    ],
+    "template_id": "leg_front_near",
+    "anchor": 4,
+    "dist_px": 40.7
+   }
+  ]
+ },
+ {
+  "frog_layer": "larm",
+  "frog_shape": [
+   0,
+   0
+  ],
+  "note": "far front leg+foot outline (open, 9 vtx)",
+  "closed": false,
+  "vertices": [
+   {
+    "vertex": 1,
+    "frog_k0_xy": [
+     450.3,
+     977.8
+    ],
+    "template_id": "foot_front_far",
+    "anchor": 4,
+    "dist_px": 215.1
+   },
+   {
+    "vertex": 2,
+    "frog_k0_xy": [
+     360.2,
+     1205.7
+    ],
+    "template_id": "foot_front_far",
+    "anchor": 2,
+    "dist_px": 30.2
+   },
+   {
+    "vertex": 3,
+    "frog_k0_xy": [
+     292.2,
+     1238.9
+    ],
+    "template_id": "foot_front_far",
+    "anchor": 1,
+    "dist_px": 3.2
+   },
+   {
+    "vertex": 4,
+    "frog_k0_xy": [
+     338.4,
+     1262.1
+    ],
+    "template_id": "toe_far_2",
+    "anchor": 2,
+    "dist_px": 56.8
+   },
+   {
+    "vertex": 5,
+    "frog_k0_xy": [
+     325.4,
+     1308.6
+    ],
+    "template_id": "toe_far_1",
+    "anchor": 2,
+    "dist_px": 5.7
+   },
+   {
+    "vertex": 6,
+    "frog_k0_xy": [
+     401.3,
+     1311.3
+    ],
+    "template_id": "toe_far_2",
+    "anchor": 3,
+    "dist_px": 16.7
+   },
+   {
+    "vertex": 7,
+    "frog_k0_xy": [
+     425.5,
+     1337.8
+    ],
+    "template_id": "foot_front_far",
+    "anchor": 8,
+    "dist_px": 29.4
+   },
+   {
+    "vertex": 8,
+    "frog_k0_xy": [
+     556.6,
+     1290.5
+    ],
+    "template_id": "foot_front_far",
+    "anchor": 6,
+    "dist_px": 56.6
+   },
+   {
+    "vertex": 9,
+    "frog_k0_xy": [
+     641.6,
+     1058.0
+    ],
+    "template_id": "foot_front_far",
+    "anchor": 5,
+    "dist_px": 250.2
+   }
+  ]
+ },
+ {
+  "frog_layer": "rfeet",
+  "frog_shape": [
+   1,
+   0
+  ],
+  "note": "hind leg/foot outline (open, 7 vtx) - this is the layer the frog waves with (anchor 464.06,338.89)",
+  "closed": false,
+  "vertices": [
+   {
+    "vertex": 1,
+    "frog_k0_xy": [
+     1457.0,
+     1081.9
+    ],
+    "template_id": "hind_leg",
+    "anchor": 26,
+    "dist_px": 32.3
+   },
+   {
+    "vertex": 2,
+    "frog_k0_xy": [
+     1276.6,
+     1253.3
+    ],
+    "template_id": "hind_toes",
+    "anchor": 8,
+    "dist_px": 10.9
+   },
+   {
+    "vertex": 3,
+    "frog_k0_xy": [
+     1219.5,
+     1217.0
+    ],
+    "template_id": "hind_toes",
+    "anchor": 6,
+    "dist_px": 25.2
+   },
+   {
+    "vertex": 4,
+    "frog_k0_xy": [
+     1197.3,
+     1274.1
+    ],
+    "template_id": "hind_leg",
+    "anchor": 15,
+    "dist_px": 16.2
+   },
+   {
+    "vertex": 5,
+    "frog_k0_xy": [
+     1131.6,
+     1279.3
+    ],
+    "template_id": "hind_toes",
+    "anchor": 1,
+    "dist_px": 25.2
+   },
+   {
+    "vertex": 6,
+    "frog_k0_xy": [
+     1235.2,
+     1428.1
+    ],
+    "template_id": "hind_toes",
+    "anchor": 10,
+    "dist_px": 130.4
+   },
+   {
+    "vertex": 7,
+    "frog_k0_xy": [
+     1705.0,
+     1130.1
+    ],
+    "template_id": "hind_leg",
+    "anchor": 4,
+    "dist_px": 55.1
+   }
+  ]
+ },
+ {
+  "frog_layer": "rfeet",
+  "frog_shape": [
+   2,
+   0
+  ],
+  "note": "hind foot toe line (open, 5 vtx)",
+  "closed": false,
+  "vertices": [
+   {
+    "vertex": 1,
+    "frog_k0_xy": [
+     1131.6,
+     1279.3
+    ],
+    "template_id": "hind_toes",
+    "anchor": 1,
+    "dist_px": 25.2
+   },
+   {
+    "vertex": 2,
+    "frog_k0_xy": [
+     1210.4,
+     1310.8
+    ],
+    "template_id": "hind_toes",
+    "anchor": 10,
+    "dist_px": 20.2
+   },
+   {
+    "vertex": 3,
+    "frog_k0_xy": [
+     1235.6,
+     1268.7
+    ],
+    "template_id": "hind_leg",
+    "anchor": 14,
+    "dist_px": 13.7
+   },
+   {
+    "vertex": 4,
+    "frog_k0_xy": [
+     1284.1,
+     1296.7
+    ],
+    "template_id": "hind_leg",
+    "anchor": 12,
+    "dist_px": 13.3
+   },
+   {
+    "vertex": 5,
+    "frog_k0_xy": [
+     1442.9,
+     1089.3
+    ],
+    "template_id": "hind_leg",
+    "anchor": 25,
+    "dist_px": 32.6
+   }
+  ]
+ },
+ {
+  "frog_layer": "eyer",
+  "frog_shape": [
+   1,
+   0
+  ],
+  "note": "near eye big disc (4 vtx circle, r=124 frog-px*2.92/2.92)",
+  "closed": true,
+  "vertices": [
+   {
+    "vertex": 1,
+    "frog_k0_xy": [
+     1133.8,
+     447.3
+    ],
+    "template_id": "eye_near_outer",
+    "anchor": 3,
+    "dist_px": 58.0
+   },
+   {
+    "vertex": 2,
+    "frog_k0_xy": [
+     1257.7,
+     571.1
+    ],
+    "template_id": "eye_near_outer",
+    "anchor": 5,
+    "dist_px": 57.0
+   },
+   {
+    "vertex": 3,
+    "frog_k0_xy": [
+     1133.8,
+     695.0
+    ],
+    "template_id": "eye_near_ring",
+    "anchor": 6,
+    "dist_px": 28.7
+   },
+   {
+    "vertex": 4,
+    "frog_k0_xy": [
+     1010.0,
+     571.1
+    ],
+    "template_id": "eye_near_ring",
+    "anchor": 2,
+    "dist_px": 29.2
+   }
+  ]
+ },
+ {
+  "frog_layer": "eyer",
+  "frog_shape": [
+   0,
+   0
+  ],
+  "note": "near eye small disc (4 vtx circle) = pupil",
+  "closed": true,
+  "vertices": [
+   {
+    "vertex": 1,
+    "frog_k0_xy": [
+     1133.8,
+     499.9
+    ],
+    "template_id": "eye_near_ring",
+    "anchor": 4,
+    "dist_px": 49.3
+   },
+   {
+    "vertex": 2,
+    "frog_k0_xy": [
+     1205.1,
+     571.1
+    ],
+    "template_id": "eye_near_ring",
+    "anchor": 5,
+    "dist_px": 47.2
+   },
+   {
+    "vertex": 3,
+    "frog_k0_xy": [
+     1133.8,
+     642.4
+    ],
+    "template_id": "eye_near_iris",
+    "anchor": 6,
+    "dist_px": 11.4
+   },
+   {
+    "vertex": 4,
+    "frog_k0_xy": [
+     1062.6,
+     571.1
+    ],
+    "template_id": "eye_near_iris",
+    "anchor": 2,
+    "dist_px": 25.7
+   }
+  ]
+ },
+ {
+  "frog_layer": "kiss",
+  "frog_shape": [
+   1,
+   0
+  ],
+  "note": "upper kiss print (7 vtx closed)",
+  "closed": true,
+  "vertices": [
+   {
+    "vertex": 1,
+    "frog_k0_xy": [
+     1161.2,
+     762.3
+    ],
+    "template_id": "kiss_upper",
+    "anchor": 18,
+    "dist_px": 12.7
+   },
+   {
+    "vertex": 2,
+    "frog_k0_xy": [
+     1102.0,
+     764.2
+    ],
+    "template_id": "kiss_upper",
+    "anchor": 20,
+    "dist_px": 32.8
+   },
+   {
+    "vertex": 3,
+    "frog_k0_xy": [
+     1019.0,
+     916.4
+    ],
+    "template_id": "kiss_upper",
+    "anchor": 2,
+    "dist_px": 18.8
+   },
+   {
+    "vertex": 4,
+    "frog_k0_xy": [
+     1159.8,
+     866.5
+    ],
+    "template_id": "kiss_upper",
+    "anchor": 8,
+    "dist_px": 13.7
+   },
+   {
+    "vertex": 5,
+    "frog_k0_xy": [
+     1294.9,
+     833.7
+    ],
+    "template_id": "kiss_upper",
+    "anchor": 15,
+    "dist_px": 24.0
+   },
+   {
+    "vertex": 6,
+    "frog_k0_xy": [
+     1365.2,
+     807.0
+    ],
+    "template_id": "kiss_upper",
+    "anchor": 14,
+    "dist_px": 50.7
+   },
+   {
+    "vertex": 7,
+    "frog_k0_xy": [
+     1209.8,
+     732.0
+    ],
+    "template_id": "kiss_upper",
+    "anchor": 17,
+    "dist_px": 31.2
+   }
+  ]
+ },
+ {
+  "frog_layer": "kiss",
+  "frog_shape": [
+   0,
+   0
+  ],
+  "note": "lower kiss print (6 vtx closed)",
+  "closed": true,
+  "vertices": [
+   {
+    "vertex": 1,
+    "frog_k0_xy": [
+     1225.4,
+     928.6
+    ],
+    "template_id": "kiss_lower",
+    "anchor": 5,
+    "dist_px": 25.4
+   },
+   {
+    "vertex": 2,
+    "frog_k0_xy": [
+     1107.5,
+     931.3
+    ],
+    "template_id": "kiss_lower",
+    "anchor": 3,
+    "dist_px": 5.6
+   },
+   {
+    "vertex": 3,
+    "frog_k0_xy": [
+     1057.0,
+     979.7
+    ],
+    "template_id": "kiss_lower",
+    "anchor": 15,
+    "dist_px": 8.3
+   },
+   {
+    "vertex": 4,
+    "frog_k0_xy": [
+     1201.1,
+     1019.4
+    ],
+    "template_id": "kiss_lower",
+    "anchor": 12,
+    "dist_px": 17.1
+   },
+   {
+    "vertex": 5,
+    "frog_k0_xy": [
+     1325.3,
+     974.1
+    ],
+    "template_id": "kiss_lower",
+    "anchor": 10,
+    "dist_px": 42.1
+   },
+   {
+    "vertex": 6,
+    "frog_k0_xy": [
+     1379.0,
+     878.1
+    ],
+    "template_id": "kiss_lower",
+    "anchor": 8,
+    "dist_px": 56.2
+   }
+  ]
+ }
+]

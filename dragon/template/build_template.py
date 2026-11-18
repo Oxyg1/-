@@ -243,7 +243,7 @@ def eye(prefix, group, c, r_out, r_ring, r_iris, shine_off, shine_r):
     cx, cy = c
     add_ell(group, f"{prefix}_outer", cx, cy, r_out, r_out, 0, n=8)
     add_ell(group, f"{prefix}_ring", cx + 2, cy - 2, r_ring, r_ring, 0, n=8)
-    add_ell(group, f"{prefix}_iris", cx, cy - 4, r_iris, r_iris, 0, n=6)
+    add_ell(group, f"{prefix}_iris", cx, cy - 4, r_iris, r_iris, 0, n=8)
     add_ell(group, f"{prefix}_shine", cx + shine_off[0], cy + shine_off[1], shine_r[0], shine_r[1], -20, n=4)
     # lid: outer arc over the top (6 anchors) + inner arc return (4 anchors) -> thin crescent
     o = arc(cx, cy, r_out, [186, 150, 115, 65, 30, -6])

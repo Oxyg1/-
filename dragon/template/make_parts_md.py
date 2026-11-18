@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Writes PARTS.md from parts.json (written by build_template.py) + the descriptions below."""
+import json, os
+HERE = os.path.dirname(os.path.abspath(__file__))
+parts = json.load(open(os.path.join(HERE, 'parts.json')))
+import build_template as T
+colors = dict(T.GROUP_ORDER)
+
+# id -> (what it is / anchor order, parked state in K0)
+D = {
+ 'wing_lobe': ("Rear, translucent wing lobe (the pink pointed sail behind the wing arm). A1 = tip, clockwise: down the lower/inner edge, around the base, back along the top edge.", "visible in K0"),
+ 'spike_head_3': ("Third head/neck spike (purple, behind horn_right/wing). A1 = tip, clockwise.", "visible (partly hidden by horn/wing)"),
+ 'spike_back_1': ("Purple back spike at the rear of the torso, left of the tail root. A1 = tip.", "visible"),
+ 'horn_left': ("Far (left) horn incl. its dark amber outline. A1 = tip, clockwise: outer edge, hidden base (A8-A9), inner notch (A15), back up the blade.", "visible"),
+ 'horn_right': ("Near (right) horn incl. outline. A1 = tip, clockwise; base A8-A11 sits on the skull, notch A16.", "visible"),
+ 'spike_head_1': ("Big purple head spike, left. A1 = tip, clockwise; base A5-A7 hidden under the skull.", "visible"),
+ 'spike_head_2': ("Purple head spike, middle. A1 = tip, clockwise.", "visible"),
+ 'tail': ("Whole tail from the pointed fin tip (A1, left) along the upper/inner edge (clockwise) to the root (A10, hidden behind the torso), back along the outer/lower edge.", "visible"),
+ 'tail_spike_1': ("Tail spike nearest the tip. Base-left, left flank, apex, right flank, base-right (A1/A5 corners).", "visible"),
+ 'tail_spike_2': ("Tail spike, middle. same order.", "visible"),
+ 'tail_spike_3': ("Tail spike, nearest the root. same order.", "visible"),
+ 'body': ("Torso silhouette WITHOUT head: back/neck (A1 under the head), wing root, rump (A9-A12 hidden by tail/hind leg), belly bottom (A14-A20), chest (A23-A27), neck under jaw (A28-A31). Outer edge of the dark outline. A1 = neck top, clockwise.", "visible; parts hidden under head/tail/legs in K0 but must still be traced where the body would be"),
+ 'belly': ("Cream chest plate. A1 = top-left (hidden under jaw), clockwise.", "visible"),
+ 'belly_under': ("Cream strip under the belly between the front leg and the haunch. A1 = top-left, clockwise.", "visible"),
+ 'belly_stripe_1': ("Belly band 1 (topmost), left->right centre-line of the dark band.", "visible"),
+ 'belly_stripe_2': ("Belly band 2, left->right.", "visible"),
+ 'belly_stripe_3': ("Belly band 3, left->right.", "visible"),
+ 'belly_stripe_4': ("Belly band 4 (lowest), left->right.", "visible"),
+ 'heart': ("Small dark heart mark on the flank. A1 = bottom point, clockwise.", "visible"),
+ 'spot_1': ("Dark body spot 1 (upper, near the wing root). Ellipse-like: A1 = left-most, clockwise.", "visible"),
+ 'spot_2': ("Dark body spot 2.", "visible"),
+ 'spot_3': ("Dark body spot 3.", "visible"),
+ 'spot_4': ("Dark body spot 4.", "visible"),
+ 'spot_5': ("Dark body spot 5 (above the haunch).", "visible"),
+ 'foot_front_far': ("Far (left) front foot, whole shape. A1 = left-most, clockwise.", "visible"),
+ 'toe_far_1': ("Toe bump on the far foot (4-anchor ellipse, A1 = left-most).", "visible"),
+ 'toe_far_2': ("Toe bump on the far foot.", "visible"),
+ 'leg_front_near': ("Near front leg from the body overlap (A1-A4, hidden top) down to the wrist (A6-A8). A1 = top-left, clockwise.", "visible"),
+ 'paw_front_near': ("Near front paw incl. toes silhouette. A1 = left-most (heel/lump), clockwise over the top (wrist), around the toe edge.", "visible"),
+ 'toe_near_1': ("Toe on the near paw (ellipse, A1 = left-most).", "visible"),
+ 'toe_near_2': ("Toe on the near paw.", "visible"),
+ 'toe_near_3': ("Toe on the near paw.", "visible"),
+ 'hind_leg': ("Hind leg = thigh + shin + foot as ONE closed shape. In K0: haunch lobe A1-A10 (top A1 = thigh top, clockwise round the rump to the bottom), foot/heel/toe tip at A11-A18 (lower-left, tucked), shin/thigh front edge A19-A26 running back up-right. For K8 (raised to the cheek): A1-A10 = thigh (low right), A11-A16 shin bottom & left edge going up, A17-A21 foot/toes top, A22-A24 shin right edge, A25-A26 thigh top-left.", "K0: haunch with the foot tucked (anchors A11-A19 clustered at lower-left)"),
+ 'hind_toes': ("Toe cluster of the hind foot, one closed shape with 4 bumps (tips = A2, A4, A6, A8; valleys between). A1 = lower-left, clockwise.", "K0: tucked, small blob at the haunch's lower-left (the dark squiggle)"),
+ 'wing_main': ("Wing arm + finger bones + scalloped trailing edge, one outline. A1 = top-left corner of the arm bar, clockwise along the top edge to the tip (A9), back along the scalloped lower edge (finger tips at A18, A25), up the leading edge to the shoulder (A27-A29).", "visible"),
+ 'wing_membrane_1': ("Orange membrane panel 1 (left, small). Corners A1 (top), A3, A5; A2/A4/A6 are edge curve points.", "visible"),
+ 'wing_membrane_2': ("Orange membrane panel 2 (middle).", "visible"),
+ 'wing_membrane_3': ("Orange membrane panel 3 (big, right).", "visible"),
+ 'wing_bone_1': ("Finger bone 1 centre-line, from the wrist to the finger tip (open).", "visible"),
+ 'wing_bone_2': ("Finger bone 2 centre-line (open).", "visible"),
+ 'wing_bone_3': ("Finger bone 3 / top bar centre-line to the wing tip (open).", "visible"),
+ 'head': ("Skull + snout + upper jaw. A1 = snout tip (left-most), clockwise: nostril ridge, forehead, dome, between spikes, behind horn, back of head (A20-A23), cheek (A22-A25). A26-A37 = the UPPER LIP running corner -> snout tip: they are the same anchors as mouth_line A12..A1 (head A26 = mouth_line A12 ... head A37 = mouth_line A1). Back edge is arbitrary (no painted edge) - put it where the cheek meets the body.", "visible"),
+ 'jaw': ("Lower jaw / chin / throat. A1-A12 = top edge left->right = the mouth line (jaw A_i = mouth_line A_i); A13-A15 jaw corner/back; A16-A23 underside right->left round the chin. Closed pose: tucks under head, top edge on the mouth line.", "K0: lower-lip region under the mouth line (visible)"),
+ 'cheek_puff': ("Cheek balloon, 8-anchor ellipse (A1 = left-most, clockwise). K4: huge sphere over cheek/chest; K5-K7: round cheek under the eye.", "K0: flat ellipse 260x92 lying inside the cheek under the eye (1075,776), invisible"),
+ 'cheek_puff_far': ("Far-side cheek balloon (visible behind the snout in K4). Added extra path.", "K0: 24x12 ellipse hidden behind the snout (478,560)"),
+ 'kiss_upper': ("Upper lipstick print. A1 = lower-left tip, clockwise over the top, along the notched bottom edge back.", "visible"),
+ 'kiss_lower': ("Lower lipstick print. A1 = left tip, clockwise.", "visible"),
+ 'blush': ("Blush patch, ellipse (A1 = left-most).", "K0: 48x12 sliver under the eye (1090,756)"),
+ 'mouth_line': ("Closed-mouth line incl. its wave (open path). A1 = snout end, A12 = corner by the fang. Centre-line of the dark band. In open-mouth poses it runs along the upper lip edge (= head A37..A26).", "visible"),
+ 'mouth_cavity': ("Mouth interior. A1 (corner) and A12 (corner) = both ends; A1-A12 = top edge on the mouth line, A13-A22 = bottom edge going back right->left (lower lip). Open poses: top = upper lip, bottom = lower lip, closed left side = straight line A22->A1.", "K0: 3 px thin sliver along mouth_line"),
+ 'tongue': ("Tongue. A1-A6 top edge left->right (sits on mouth_line A4..A9 in K0), A7-A10 bottom edge back.", "K0: 3 px sliver on the mouth line"),
+ 'teeth_upper_1': ("Upper corner fang. Order: base-left, left flank, tip, right flank, base-right (corners A1, A3, A5).", "visible fang in K0 (hangs from the mouth corner)"),
+ 'teeth_upper_2': ("Upper front tooth (K5 near the snout).", "K0: 6x5 px triangle parked on mouth_line A3"),
+ 'teeth_upper_3': ("Upper tooth 3.", "K0: 6x5 px triangle parked on mouth_line A4"),
+ 'teeth_lower_1': ("Lower tooth 1 (tip pointing up).", "K0: parked 6x5 px on the lower lip line"),
+ 'teeth_lower_2': ("Lower tooth 2.", "K0: parked 6x5 px"),
+ 'teeth_lower_3': ("Lower tooth 3.", "K0: parked 6x5 px"),
+ 'nostril_1': ("Front nostril (small oval at the snout tip). A1 = left-most, clockwise.", "visible"),
+ 'nostril_2': ("Back nostril (larger oval). A1 = left-most, clockwise.", "visible"),
+ 'eye_far_outer': ("Far eye dark outline disc. 8-anchor circle, A1 = left-most, clockwise.", "K0: radius 9 at (478,514) on the snout-bridge silhouette (hidden behind the head)"),
+ 'eye_far_ring': ("Far eye white/grey ring (sclera) outer edge.", "K0: radius 7 concentric, hidden"),
+ 'eye_far_iris': ("Far eye iris/pupil, 8 anchors.", "K0: radius 4.6, hidden"),
+ 'eye_far_shine': ("Far eye highlight, 4 anchors.", "K0: ~3 px, hidden"),
+ 'eye_far_lid': ("Far upper eyelid. A1-A6 outer arc left->right over the top (A1, A6 = corners), A7-A10 inner edge right->left.", "K0: thin crescent on top of the parked eye"),
+ 'eye_far_brow': ("Far brow (open, left->right, 5 anchors).", "K0: tiny arc above the parked eye"),
+ 'eye_near_outer': ("Near eye dark outline disc (r 131 at (1086,611)). 8 anchors, A1 = left-most, clockwise.", "visible"),
+ 'eye_near_ring': ("Near eye white/grey ring outer edge (r 89).", "visible"),
+ 'eye_near_iris': ("Near eye iris/pupil (r 66), 8 anchors.", "visible"),
+ 'eye_near_shine': ("Near eye big highlight, 4 anchors (ellipse 60x40).", "visible"),
+ 'eye_near_lid': ("Near upper eyelid. A1-A6 = outer arc left->right over the top (A1/A6 corners), A7-A10 inner edge right->left; lowering the inner edge closes the eye.", "K0: thin (8 px) crescent hugging the top of the outer disc"),
+ 'eye_near_brow': ("Near brow (open, left->right, 5 anchors).", "K0: arc just above the eye disc (no brow painted in K0)"),
+}
+
+# which K-poses use which part (informational)
+rows = []
+for p in parts:
+    what, park = D[p['id']]
+    rows.append(f"| `{p['id']}` | {p['group']} | {'closed' if p['closed'] else 'open'} | {p['n']} | {what} | {park} |")
+tot_paths = len(parts); tot_pts = sum(p['n'] for p in parts)
+grp = {}
+for p in parts: grp.setdefault(p['group'], []).append(p)
+
+md = f"""# Dragon tracing template - parts
+
+`dragon_template.svg`: {tot_paths} paths, {tot_pts} anchor points. 2000x1609, absolute coordinates, no transforms, only `M C Z`.
+Generated by `build_template.py` (anchors are listed there) - do **not** re-order, add or delete anchors; every pose must keep these counts.
+Check exported files with `python3 count_points.py exported1.svg exported2.svg ...`.
+
+## Conventions
+* Point count = number of anchors. A closed path with n anchors is written `M p1 C ... pn C ... p1 Z` (last curve returns to p1; the duplicate end point is not an anchor).
+* **A1 = first anchor** of the path (start point); **closed paths run clockwise on screen** (screen y down) unless noted; open paths run in the stated direction. Keep start point and direction in every frame - morphing pairs anchors by index.
+* Handles are G1 smooth at every anchor except those marked as corners (tooth bases/tips, lid corners, mouth-cavity ends, membrane corners, spike/lid corners): there both handles point along the adjacent chords.
+* Silhouette parts follow the outer edge of the dark outline in K0. Parts that are hidden in K0 (e.g. body under the head, thigh under the tail) are still closed shapes - trace where they would be.
+* Parked = collapsed so it is invisible in the pose but keeps its anchors. Parked parts of the same family sit at the same spot: select them in the layers panel (group names below) instead of clicking on the canvas. In poses where a part is invisible, park it again (collapse onto the mouth line / the eye / the silhouette) - do not delete anchors.
+* Shared lip anchors (so open/closed mouths stay consistent): `head` A26-A37 (reversed), `jaw` A1-A12, `mouth_line` A1-A12, `mouth_cavity` A1-A12 (top edge), `tongue` A1-A6 (mouth_line A4-A9) all coincide in K0. In an open-mouth pose move head's A26-A37 to the upper lip and jaw's A1-A12 to the lower lip; `mouth_line` follows the upper lip (or hide it); `mouth_cavity` top = upper lip, bottom (A13-A22) = lower lip.
+* Added beyond the brief: `cheek_puff_far` (K4 shows both cheeks), `belly_under` (cream strip under the belly), `toe_far_1/2`, `spike_head_3` (the neck spike behind horn_right). `teeth_upper`/`teeth_lower` of the brief are split into `teeth_upper_1..3` / `teeth_lower_1..3` (one closed path per tooth - the corner fang is `teeth_upper_1`).
+* Paint order (back to front) = group order below.
+
+## Groups (stroke colours)
+| group | colour | paths |
+|---|---|---|
+""" + "\n".join(f"| `{g}` | `{colors[g]}` | {len(v)} paths / {sum(x['n'] for x in v)} pts |" for g, v in
+                 sorted(grp.items(), key=lambda kv: [g for g, _ in T.GROUP_ORDER].index(kv[0]))) + """
+
+## Paths
+| id | group | closed/open | points | what it is / anchor order | parked state in K0 |
+|---|---|---|---|---|---|
+""" + "\n".join(rows) + """
+
+## Feasibility (point budget check)
+`feasibility/feas_K4.svg`, `feas_K5.svg`, `feas_K8.svg` are the template with only anchors moved (same counts, asserted by `make_feasibility.py`); overlays `feasibility/overlay_K4.png`, `overlay_K5.png`, `overlay_K8.png` show them over the real frames:
+K4 = cheeks inflated (cheek_puff, cheek_puff_far), head/jaw/mouth lowered, eyes squeezed shut, belly puffed, wing raised;
+K5 = jaw dropped wide (head A26-A37, jaw A1-A12, cavity, tongue, 2+2 teeth, angry lid/brow);
+K8 = hind leg raised to the cheek (hind_leg 26 anchors + hind_toes 12), blush.
+"""
+fm = json.load(open(os.path.join(HERE, 'frog_map.json')))
+import frog_map
+piv = frog_map.rfeet_pivot()
+md += f'''
+## Frog correspondence (ref/kissed-frog-original.json)
+Transform used for all frog data: layer chain at frame 0 (layer + parents + shape-group transforms composed), then
+`x_K0 = 2.92*x + 256`, `y_K0 = 2.92*y + 96` (lead's fit; an ICP re-fit on legs/feet gave 3.02 / (228, 46) with only ~2 px lower residual, so 2.92/(256,96) was kept).
+All frog shapes in K0 pixel space: `frog_in_k0.svg` (ids `frog_<layer>_<shape path>`), reproducible with `python3 frog_map.py` (also writes `frog_map.json`).
+
+**Important:** the frog shapes have only 2-9 vertices with long handles, and the repainted dragon deviates from them by 10-120 px (head, eye, kiss, legs); the dragon needs 6-37 anchors per shape, so the template paths were
+traced directly on K0 and are NOT literally the frog beziers. Frog vertices were mapped to the nearest template anchor instead (greedy, one anchor per vertex, `dist` = px between the frog vertex and that anchor; a distance above ~40 px means
+"no real counterpart"). The mapping is index-pairs only; it does not make the anchor counts equal.
+The one reusable motion is the hind-foot wave: layer `rfeet` rotates about layer-space anchor (464.06, 338.89) = **K0 pixel ({piv[0][0]:.1f}, {piv[0][1]:.1f})**
+(0 -> 55 deg, then 55 <-> 25 every 3 frames); rotating `hind_leg` + `hind_toes` about that pivot reproduces it (frog rotation sign is clockwise-positive like SVG).
+
+| frog layer / shape path | what | vertex -> template anchor (A# 1-based, dist px) |
+|---|---|---|
+'''
+for e in fm:
+    md += f"| `{e['frog_layer']}` {tuple(e['frog_shape'])} ({'closed' if e['closed'] else 'open'}, {len(e['vertices'])} vtx) | {e['note']} | " + "; ".join(f"v{v['vertex']}->`{v['template_id']}` A{v['anchor']} ({v['dist_px']:.0f})" for v in e['vertices']) + " |\n"
+md += '''
+Frog layers without a template counterpart: `eyel` (far eye, frog-px near (594,435) K0: tiny shapes), `складк` (fold line over the mouth), `щеки`/`щеки 2` (cheek ellipse + 2-vertex lines), `larm`/`rarm` second stroke copies, `body` stroke sub-shapes (2,0,x) = frog head/mouth line strokes, `body` (4,0,0) 3-vertex shading shape, `body` (0,0) 2-vertex tiny shape, `orb*` particle layers.
+'''
+open(os.path.join(HERE, 'PARTS.md'), 'w').write(md)
+print('PARTS.md written')
