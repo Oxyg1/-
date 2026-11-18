@@ -218,7 +218,11 @@ def build():
 
 
 if __name__ == '__main__':
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument('-o', '--out', default=os.path.join(ROOT, 'build', 'kissed-dragon.json'))
+    out = ap.parse_args().out
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     d = build()
-    out = os.path.join(ROOT, 'build', 'kissed-dragon.json')
     open(out, 'w').write(dumps(d))
     print('wrote', out, os.path.getsize(out), 'bytes')
