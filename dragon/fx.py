@@ -112,7 +112,7 @@ def fire_layers(origin, angle_deg=-14, t_on=50, t_full=57, t_off=92, t_end=102):
         k = len(spec) - 1 - idx                      # 0 = rim (outermost)
         rng = random.Random(40 + k * 11)
         states = [_state(rng) for _ in range(4)]
-        t_done = int(round(t_end - 1 - 1.6 * k))
+        t_done = int(round(t_end - 1 - 0.7 * k))
         ts = [t_on, t_on + 1, t_on + 2, t_on + 3, t_on + 5, t_full]
         t = t_full + 4 - k % 2
         while t < t_off - 2:
@@ -124,7 +124,7 @@ def fire_layers(origin, angle_deg=-14, t_on=50, t_full=57, t_off=92, t_end=102):
         keys = []
         for j, t in enumerate(sorted(set(ts))):
             g = _out((t - t_on - 0.6 * k) / (t_full - t_on), 4)
-            q = _inout((t - t_off + 1.6 * k) / (t_end - 1 - t_off)) if t >= t_off - 2 else 0.0
+            q = _inout((t - t_off + 0.7 * k) / (t_end - 1 - t_off)) if t >= t_off - 2 else 0.0
             if t >= t_done:
                 q = 1.0
             sf = (1 - q) ** 1.3
@@ -146,8 +146,8 @@ def fire_layers(origin, angle_deg=-14, t_on=50, t_full=57, t_off=92, t_end=102):
     for bi, (ts, scl, life, tip, ly) in enumerate(plan):
         a = _local_to_head(origin, rot, tip, ly)
         ang = math.radians(rot)
-        end = (a[0] + math.cos(ang) * 40, a[1] + math.sin(ang) * 40 - (62 if bi == 4 else 52))
-        mid = (a[0] + math.cos(ang) * 30, a[1] + math.sin(ang) * 30 - 20)
+        end = (a[0] + math.cos(ang) * 22, a[1] + math.sin(ang) * 22 - (62 if bi == 4 else 52))
+        mid = (a[0] + math.cos(ang) * 14, a[1] + math.sin(ang) * 14 - 20)
         pk = track((ts, [_r(a[0]), _r(a[1])], "out"), (ts + 6, [_r(mid[0]), _r(mid[1])], "swing"), (ts + life, [_r(end[0]), _r(end[1])]))
         sc = track((ts, [scl * 45] * 2, "out"), (ts + 5, [scl * 100, scl * 95], "in"), (ts + life, [0, 0]))
         rk = track((ts, rot, "out"), (ts + life, rot + 55))
