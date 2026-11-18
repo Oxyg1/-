@@ -40,11 +40,11 @@ FRAMES = {
     'K1': dict(tps=None, shapes={'eye_near_lid': lid(1092, 605, 118, 118, 0.42)}),
     'K2': dict(tps=dict(nose=(452, 640), lip=(420, 790), n1=(470, 672), n2=(625, 690), mmid=(700, 820),
                         mback=(985, 790), fang=(958, 862), chin=(570, 945), throat=(800, 960), feye=(530, 540)),
-               shapes={**eye_set('eye_far', 532, 540, 30, 55, 10), 'eye_far_lid': lid(532, 540, 30, 55, 0.42),
+               shapes={'nostril_1': E(467, 672, 15, 23, 0, k=6), **eye_set('eye_far', 532, 540, 30, 55, 10), 'eye_far_lid': lid(532, 540, 30, 55, 0.42),
                        'eye_near_lid': lid(1092, 605, 118, 118, 0.42)}),
     'K3': dict(tps=dict(nose=(440, 650), lip=(430, 770), n1=(468, 672), n2=(622, 688), mmid=(700, 805),
                         mback=(935, 748), fang=(790, 862), chin=(570, 935), throat=(800, 950), feye=(545, 525)),
-               shapes={**eye_set('eye_far', 545, 525, 48, 70, 8), **eye_set('eye_near', 1088, 612, 125, 125)}),
+               shapes={'nostril_1': E(467, 673, 16, 21, -8, k=6), **eye_set('eye_far', 545, 525, 48, 70, 8), **eye_set('eye_near', 1088, 612, 125, 125)}),
 }
 
 
@@ -72,6 +72,7 @@ OPEN_MOUTH = {
     'teeth_lower_2': [(724, 955), (752, 955), (738, 912)],
     'teeth_lower_3': [(818, 905), (836, 896), (828, 875)],
     'cheek_puff': E(1100, 805, 200, 185),
+    'nostril_1': E(515, 572, 11, 24, -12, k=6),
 }
 OPEN_TPS = dict(nose=(480, 560), lip=(500, 670), n1=(505, 570), n2=(655, 575), mmid=(720, 652), mback=(892, 795),
                 fang=(650, 698), chin=(690, 1000), throat=(900, 965), feye=(590, 462), eye=(1012, 548))
@@ -86,9 +87,9 @@ FRAMES['K4'] = dict(
     register=[CROWN],
     tps=dict(nose=(460, 665), lip=(450, 775), n1=(465, 680), n2=(620, 670), mmid=(650, 780), mback=(800, 810),
              fang=(805, 815), chin=(600, 890), throat=(800, 905), feye=(560, 522), eye=(1025, 540)),
-    shapes={'mouth_line': [(440, 772), (500, 788), (560, 790), (650, 776), (720, 785), (770, 800), (805, 815)],
-            'cheek_puff': E(1055, 835, 245, 205), 'cheek_puff_far': E(390, 725, 70, 165),
-            **eye_closed('eye_near', 1025, 540, 105, 8), **eye_closed('eye_far', 560, 520, 45, 15),
+    shapes={'nostril_1': E(468, 680, 12, 26, -15, k=6), 'mouth_line': [(440, 772), (500, 788), (560, 790), (650, 776), (720, 785), (770, 800), (805, 815)],
+            'cheek_puff': E(1055, 835, 245, 205), 'cheek_puff_far': E(368, 725, 56, 160),
+            **eye_closed('eye_near', 1025, 540, 105, 8), **eye_closed('eye_far', 548, 528, 42, 28),
             'eye_near_brow': [(840, 560), (900, 540), (1000, 530), (1080, 545), (1140, 570)],
             'teeth_upper_1': [(796, 812), (812, 812), (805, 820)]},
     snap_radii=(40, 24, 12))
@@ -107,8 +108,12 @@ FRAMES['K6'] = dict(register=[CROWN], tps=OPEN_TPS, snap_radii=(30, 18, 10), sha
 FRAMES['K7'] = dict(register=[CROWN], tps=dict(OPEN_TPS, feye=(592, 457), eye=(990, 550)),
                     snap_radii=(30, 18, 10), shapes={
     **OPEN_MOUTH, **eye_set('eye_near', 990, 550, 84, 84), **eye_set('eye_far', 592, 457, 42, 44),
+    'eye_near_lid': lid(990, 550, 84, 84, 0.06), 'eye_far_lid': lid(592, 457, 42, 44, 0.06),
     'eye_near_brow': [(880, 450), (940, 430), (1000, 424), (1060, 432), (1100, 452)],
     'eye_far_brow': [(552, 402), (572, 392), (592, 388), (612, 390), (630, 398)]})
+
+CLOSED_MOUTH = ['K1', 'K2', 'K3', 'K4', 'K8']
+OPEN_MOUTH_FRAMES = ['K5', 'K6', 'K7']
 
 HIND = ['hind_leg', 'hind_leg_line', 'hind_knee']
 HIND_PIVOT = (1611.0, 1085.5)     # the frog's rfeet anchor in K0 pixels
@@ -118,13 +123,48 @@ FRAMES['K8'] = dict(
     tps=dict(nose=(515, 665), lip=(500, 780), n1=(525, 670), n2=(690, 700), mmid=(700, 845), mback=(840, 790),
              fang=(688, 858), chin=(630, 930), throat=(850, 960), feye=(595, 512), eye=(995, 580)),
     snap=[s for s in SNAP_IDS if s not in HIND],
-    shapes={'mouth_line': [(500, 780), (560, 812), (600, 830), (650, 842), (700, 845), (750, 836), (780, 825), (840, 790)],
+    shapes={'nostril_1': E(530, 675, 15, 25, -12, k=6), 'mouth_line': [(500, 780), (560, 812), (600, 830), (650, 842), (700, 845), (750, 836), (780, 825), (840, 790)],
             'teeth_upper_1': [(670, 828), (705, 828), (688, 858)], 'teeth_upper_2': [(512, 800), (530, 805), (522, 838)],
             **eye_set('eye_near', 995, 580, 105, 60), 'eye_near_lid': lid(995, 580, 105, 60, 0.45),
             **eye_set('eye_far', 595, 512, 45, 35), 'eye_far_lid': lid(595, 512, 45, 35, 0.4),
             'eye_near_brow': [(880, 535), (930, 512), (990, 506), (1050, 518), (1095, 545)],
             'eye_far_brow': [(548, 470), (575, 468), (600, 474), (625, 482), (645, 492)],
             'blush': E(1010, 680, 70, 28, k=6)})
+
+import mouth as _m
+
+
+def _k8_post(P, P0):
+    _m.place(P['jaw'], {13: (847, 809), 14: (845, 825), 15: (837, 844), 16: (819, 869), 17: (787, 895), 18: (750, 917), 19: (700, 929),
+                         20: (650, 929), 21: (590, 920), 22: (535, 890), 23: (500, 845)})
+
+
+FRAMES['K8']['post'] = [_k8_post]
+
+# --- belly / front leg of the leaning poses (K4 inhale, K8 embarrassed): measured on the storyboard frames
+LEG = ['leg_front_near', 'leg_front_near_line']
+TOES = ['toe_near_1', 'toe_near_2', 'toe_near_3']
+BELLY_K4 = [(480, 885), (600, 865), (720, 865), (810, 900), (880, 1020), (930, 1150), (935, 1270), (870, 1340), (750, 1368),
+            (620, 1355), (505, 1300), (445, 1180), (440, 1020)]
+STRIPES_K4 = {'belly_stripe_1': [(510, 888), (600, 878), (700, 878), (790, 896)],
+              'belly_stripe_2': [(478, 962), (580, 998), (700, 1006), (815, 983)],
+              'belly_stripe_3': [(450, 1075), (550, 1120), (690, 1145), (875, 1095)],
+              'belly_stripe_4': [(500, 1245), (590, 1270), (690, 1282), (900, 1205)]}
+
+
+def _rect8(x0, y0, x1, y1):
+    xm, ym = (x0 + x1) / 2, (y0 + y1) / 2
+    return [(x0, y0), (xm, y0 - 3), (x1, y0), (x1 + 3, ym), (x1, y1), (xm, y1 + 3), (x0, y1), (x0 - 3, ym)]
+
+
+FRAMES['K4']['translate'] = [(LEG, 258, 18), (TOES, 280, 15)]
+FRAMES['K4']['place'] = {'belly': BELLY_K4, 'belly_under': _rect8(1165, 1222, 1237, 1322)}
+FRAMES['K4']['shapes'].update(STRIPES_K4)
+FRAMES['K4']['place']['cheek_puff_far'] = [(318, 730), (335, 640), (395, 578), (462, 625), (438, 725), (428, 810), (385, 880), (335, 820)]
+FRAMES['K8']['translate'] = [(LEG, 258, 18), (TOES, 280, 15)]
+FRAMES['K8']['place'] = {'belly': [(x, y if i in (0, 1, 2, 12) else y + 15) for i, (x, y) in enumerate(BELLY_K4)],
+                         'belly_under': _rect8(1170, 1232, 1255, 1312)}
+FRAMES['K8']['shapes'].update({k: [(x, y + (0 if k == 'belly_stripe_1' else 12)) for x, y in v] for k, v in STRIPES_K4.items()})
 
 # the wing and the hind leg are driven by the rig (rotation), so frames keep their K0 geometry
 for _k, _f in FRAMES.items():

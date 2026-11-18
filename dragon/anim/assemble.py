@@ -31,7 +31,9 @@ FR = {}
 for k in range(9):
     FR['K%d' % k] = svgio.load(os.path.join(ROOT, 'frames_svg', 'K%d.svg' % k))[1]
 RIGGED_STATIC = {'wing_lobe', 'wing_main', 'wing_membrane_1', 'wing_membrane_2', 'wing_membrane_3',
-                 'wing_bone_1', 'wing_bone_2', 'wing_bone_3', 'hind_leg', 'hind_leg_line', 'hind_knee'}
+                 'wing_bone_1', 'wing_bone_2', 'wing_bone_3', 'haunch_leg', 'haunch_leg_line'}
+HIND_KEYS = [(0, 'K0', 'soft'), (103, 'K0', 'key'), (113, 'K8', 'snap'), (148, 'K8', 'key'), (158, 'K0', 'key'), (180, 'K0', 'key')]
+HIND_PARTS = {'hind_leg', 'hind_leg_line', 'hind_knee'}
 
 
 def lottie_shape(p):
@@ -56,7 +58,8 @@ def size_of(shape):
 
 
 def shape_track(pid):
-    vals = [(t, lottie_shape(FR['K0' if pid in RIGGED_STATIC else k][pid]), e) for t, k, e in KEYS]
+    keys = HIND_KEYS if pid in HIND_PARTS else KEYS
+    vals = [(t, lottie_shape(FR['K0' if pid in RIGGED_STATIC else k][pid.replace('haunch_', 'hind_')]), e) for t, k, e in keys]
     base = vals[0][1]
     moving = any(max(abs(a - b) for va, vb in zip(s['v'], base['v']) for a, b in zip(va, vb)) > 1.2 for _, s, _ in vals)
     if not moving:
@@ -86,7 +89,7 @@ STYLE = {
     'eye_near_ring': ('#ECE7E2', None, 0), 'eye_far_ring': ('#ECE7E2', None, 0),
     'eye_near_outer': ('#2B0D14', OUT, W2), 'eye_far_outer': ('#2B0D14', OUT, W2),
     'eye_near_crease': (None, OUT, W2 * 0.8),
-    'hind_knee': ('#F0857A', None, 0), 'hind_leg_line': (None, OUT, W2), 'hind_leg': (BODY, OUT, W1),
+    'hind_knee': ('#F0857A', None, 0), 'haunch_leg_line': (None, OUT, W2), 'haunch_leg': (BODY, None, 0), 'hind_leg_line': (None, OUT, W2), 'hind_leg': (BODY, OUT, W1),
     'nostril_1': (OUT, None, 0), 'nostril_2': (OUT, None, 0),
     'mouth_line': (None, OUT, W2 + 0.5),
     'teeth_upper_1': ('#FFF6EC', OUT, 2.2), 'teeth_upper_2': ('#FFF6EC', OUT, 2.2), 'teeth_upper_3': ('#FFF6EC', OUT, 2.2),
@@ -114,9 +117,12 @@ STYLE = {
     'wing_membrane_1': ('#F6C27E', None, 0), 'wing_membrane_2': ('#F6C27E', None, 0), 'wing_membrane_3': ('#F6C27E', None, 0),
     'wing_main': ('#C2464A', OUT, W1), 'wing_lobe': ('#A93E47', OUT, W1),
 }
-ORDER = list(STYLE)   # top first
+ORDER = [p for p in STYLE if not p.startswith('haunch_')]
+_i = ORDER.index('hind_leg') + 1
+ORDER[_i:_i] = ['haunch_leg_line', 'haunch_leg']
 WING = [p for p in ORDER if p.startswith('wing_')]
 HIND = ['hind_knee', 'hind_leg_line', 'hind_leg']
+HAUNCH = ['haunch_leg_line', 'haunch_leg']
 
 
 # ---------------------------------------------------------------- rig
@@ -126,7 +132,7 @@ def kc(x, y):
 
 GROUND = kc(1000, 1440)
 WING_PIVOT = kc(1440, 560)
-HIND_PIVOT = kc(1611.0, 1085.5)
+HIND_PIVOT = kc(1560, 1100)
 
 master_s = track((0, [100, 100], 'swing'), (24, [101, 99], 'swing'), (40, [100, 100], 'key'), (50, [97, 105], 'snap'),
                  (56, [106, 94], 'out'), (64, [101, 99], 'swing'), (88, [100, 100], 'key'), (96, [98, 103], 'out'),
@@ -144,12 +150,34 @@ wing_r = track((0, 0, 'swing'), (14, -2, 'swing'), (30, 3, 'swing'), (40, 0, 'ke
                (164, -3, 'swing'), (180, 0))
 wing = null('wing', p=WING_PIVOT, a=WING_PIVOT, r=wing_r, parent='master')
 
-hind_keys = [(0, 0, 'key'), (104, 0, 'key'), (114, 55, 'out')]
-t, up = 117, False
-while t <= 145:
-    hind_keys.append((t, 55 if up else 25, 'swing')); up = not up; t += 3
-hind_keys += [(148, 55, 'key'), (158, 0, 'out'), (180, 0)]
+hind_keys = [(0, 0, 'key'), (112, 0, 'key'), (117, -9, 'out')]
+t, up = 120, True
+while t <= 144:
+    hind_keys.append((t, 7 if up else -9, 'swing')); up = not up; t += 4
+hind_keys += [(148, 0, 'key'), (180, 0)]
 hind = null('hind', p=HIND_PIVOT, a=HIND_PIVOT, r=track(*hind_keys), parent='master')
+
+
+PAW = kc(1208, 790)
+toe_s = track((0, [0, 0], 'key'), (110, [0, 0], 'key'), (114, [115, 115], 'out'), (118, [100, 100], 'swing'),
+              (148, [100, 100], 'key'), (152, [0, 0], 'key'), (180, [0, 0]))
+TOE_COL = '#F49BA2'
+toes = layer('p_paw_toes', *[group('toe%d' % i, ellipse([w, h], p=(PAW[0] + x, PAW[1] + y)), stroke(OUT, W2), fill(BODY))
+                             for i, (x, y, w, h) in enumerate([(-13, 3, 11, 13), (0, -3, 12, 15), (13, 3, 11, 13)])],
+             p=PAW, a=PAW, s=toe_s, parent='hind')
+
+
+TAIL = ['tail', 'tail_spike_1', 'tail_spike_2', 'tail_spike_3']
+TAIL_PIVOT = kc(1130, 1250)
+tail_r = track((0, 0, 'swing'), (20, 1.6, 'swing'), (44, -1.2, 'swing'), (58, 2.4, 'out'), (76, -1.5, 'swing'),
+               (96, 2.2, 'out'), (118, -1.6, 'swing'), (140, 1.4, 'swing'), (162, -1, 'swing'), (180, 0))
+tail_n = null('tail_rig', p=TAIL_PIVOT, a=TAIL_PIVOT, r=tail_r, parent='master')
+HORNS = ['horn_left', 'horn_right', 'spike_head_1', 'spike_head_2', 'spike_head_3']
+HORN_PIVOT = kc(900, 480)
+horn_r = track((0, 0, 'swing'), (24, 0, 'swing'), (29, -2.5, 'swing'), (36, 1.2, 'swing'), (42, 0, 'swing'), (50, 2, 'snap'),
+               (57, -3, 'out'), (66, 0.8, 'swing'), (92, 0, 'swing'), (97, 2.5, 'out'), (104, -1.2, 'swing'), (112, 0.5, 'swing'),
+               (125, 0, 'swing'), (160, 0, 'swing'), (166, -1.5, 'swing'), (172, 0.5, 'swing'), (180, 0))
+horn_n = null('horn_rig', p=HORN_PIVOT, a=HORN_PIVOT, r=horn_r, parent='master')
 
 
 def part_layer(pid):
@@ -160,7 +188,7 @@ def part_layer(pid):
         items.append(stroke(stroke_c, w))
     if fill_c:
         items.append(fill(fill_c))
-    parent = 'wing' if pid in WING else 'hind' if pid in HIND else 'master'
+    parent = 'wing' if pid in WING else 'hind' if pid in HIND else 'tail_rig' if pid in TAIL else 'horn_rig' if pid in HORNS else 'master'
     lay = layer('p_' + pid, group(pid, *items), parent=parent, **({'o': o} if o is not None else {}))
     return lay
 
@@ -181,8 +209,11 @@ def paw_concept(f):
     for (a, va, _), (b, vb, *_r) in zip(ks, ks[1:]):
         if a <= f <= b:
             u = (f - a) / max(1, b - a); u = u * u * (3 - 2 * u); ang = va + (vb - va) * u; break
-    px, py = 1611.0, 1085.5
-    tip = (1180.0, 1350.0)
+    px, py = 1560.0, 1100.0
+    m = min(1.0, max(0.0, (f - 103) / 10.0)); m = m * m * (3 - 2 * m)
+    if f >= 148:
+        m = max(0.0, 1 - (f - 148) / 10.0)
+    tip = (1180.0, 1350.0 - 550.0 * m)
     c, s = math.cos(math.radians(ang)), math.sin(math.radians(ang))
     dx, dy = tip[0] - px, tip[1] - py
     return to_concept(px + c * dx - s * dy, py + s * dx + c * dy)
@@ -194,12 +225,13 @@ def fx_layers():
     mx, my = MOUTH
     back = to_concept(860, 800)
     nose = to_concept(520, 660)
-    em = [{'t0': 96, 'pos': (mx, my), 'vel': (-2.6, -0.8), 'size': 46, 'life': 70},
-          {'t0': 100, 'pos': (mx + 4, my + 4), 'vel': (-2.0, -1.2), 'size': 40, 'life': 66},
-          {'t0': 106, 'pos': (mx + 6, my), 'vel': (-1.6, -1.4), 'size': 34, 'life': 60},
-          {'t0': 116, 'pos': back, 'vel': (0.6, -0.9), 'size': 26, 'life': 46},
-          {'t0': 122, 'pos': (mx + 10, my + 6), 'vel': (-1.2, -1.0), 'size': 26, 'life': 46},
-          {'t0': 132, 'pos': nose, 'vel': (-0.8, -1.4), 'size': 18, 'life': 34}]
+    cc = lambda x, y: ((x - 30) / 0.7, (y - 63) / 0.7)      # canvas px -> concept
+    em = [{'t0': 96, 'pos': (mx, my), 'vel': (-2.4, -0.6), 'size': 46, 'life': 58},
+          {'t0': 101, 'pos': (mx + 2, my - 16), 'vel': (-1.9, -0.9), 'size': 36, 'life': 56},
+          {'t0': 108, 'pos': cc(262, 292), 'vel': (0.2, -0.5), 'size': 40, 'life': 56},
+          {'t0': 114, 'pos': cc(276, 262), 'vel': (0.1, -0.5), 'size': 36, 'life': 52},
+          {'t0': 122, 'pos': cc(250, 280), 'vel': (0.2, -0.6), 'size': 32, 'life': 48},
+          {'t0': 130, 'pos': cc(284, 280), 'vel': (0.0, -0.3), 'size': 28, 'life': 42}]
     smoke = fx.smoke_layers(em, paw_concept)
     return smoke, sparks + fire
 
@@ -211,9 +243,9 @@ def build():
     parts = [part_layer(pid) for pid in ORDER]
     eyes = [l for l in parts if l['nm'][2:].startswith(('eye_', 'brow'))]
     rest = [l for l in parts if l not in eyes]
-    hind_l = [l for l in rest if l['nm'][2:] in HIND]
-    rest = [l for l in rest if l['nm'][2:] not in HIND]
-    layers = smoke + fire + eyes + hind_l + rest + [hind, wing, master, head_space, world_space]
+    hind_l = [l for l in rest if l['nm'][2:] in HIND + HAUNCH]
+    rest = [l for l in rest if l['nm'][2:] not in HIND + HAUNCH]
+    layers = smoke + fire + eyes + [toes] + hind_l + rest + [hind, wing, tail_n, horn_n, master, head_space, world_space]
     return comp('Kissed Dragon', 512, 512, layers, OP, fr=60, bg='#17212B')
 
 

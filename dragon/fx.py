@@ -11,8 +11,8 @@ from motion import *
 
 FIRE = ["#FFF6D0", "#FFE27A", "#FFB52E", "#FF7A1A", "#E5392A"]      # top -> bottom
 SMOKE_OUT, SMOKE_SHADE, SMOKE_FILL, SMOKE_HI = "#4A3F55", "#8D8598", "#A79FB0", "#D6D0DC"
-FIRE_LEN, FIRE_HW, FIRE_MOUTH = 210.0, 80.0, 20.0   # tunable: jet length, half width at far end, half width at mouth
-SHOVE_SPEED = 10.0   # paw speed (concept px / frame) above which puffs get shoved
+FIRE_LEN, FIRE_HW, FIRE_MOUTH = 165.0, 84.0, 22.0   # tunable: jet length, half width at far end, half width at mouth
+SHOVE_SPEED = 5.0   # paw speed (concept px / frame) above which puffs get shoved
 LAST_FRAME = 171          # everything must be at opacity 0 by here
 
 
@@ -34,60 +34,9 @@ def _inout(x):
 
 
 # ----------------------------------------------------------------------------- fire
-TOP = [(0.20, 1.00, "p"), (0.35, 0.86, "v"), (0.49, 1.04, "p"), (0.58, 0.88, "v"), (0.67, 1.22, "t"),
-       (0.77, 0.90, "v"), (90, 1.00, "c"), (66, 0.99, "c"), (42, 0.86, "c"), (20, 0.97, "c")]
-KS = {"p": 1.0, "v": 0.8, "t": 0.75, "c": 1.0}
-CAP_X, CAP_RX = 0.80, 0.26
-
-
-def _smooth(nodes, ks):
-    """closed smooth bezier through nodes (handles scaled by neighbour distance)."""
-    n = len(nodes)
-    ins, outs = [], []
-    for i in range(n):
-        P, A, B = nodes[i], nodes[i - 1], nodes[(i + 1) % n]
-        dx, dy = B[0] - A[0], B[1] - A[1]
-        ln = math.hypot(dx, dy) or 1.0
-        ux, uy = dx / ln, dy / ln
-        lo = math.hypot(B[0] - P[0], B[1] - P[1]) * 0.33 * ks[i]
-        li = math.hypot(P[0] - A[0], P[1] - A[1]) * 0.33 * ks[i]
-        outs.append([_r(ux * lo), _r(uy * lo)])
-        ins.append([_r(-ux * li), _r(-uy * li)])
-    return {"c": True, "v": [[_r(x), _r(y)] for x, y in nodes], "i": ins, "o": outs}
-
-
-def _state(rng):
-    def side():
-        return [(rng.uniform(-.015, .015), rng.uniform(-.18, .18) if k == "t" else rng.uniform(-.07, .07))
-                for _, _, k in TOP]
-    return {"top": side(), "bot": side(), "nose": rng.uniform(-.03, .03)}
-
-
-def _flame(x0, x1, H, hb, st, bend, wave, ph, yoff):
-    L = max(x1 - x0, 1.0)
-    hp = lambda s: hb + (H - hb) * min(1.0, s / 0.78) ** 0.9
-
-    def pt(s, y):
-        yy = y + yoff + bend * s * s + wave * s * math.sin(2.2 * s - ph)
-        return (x0 + s * L, yy)
-
-    def side(jit, sg):
-        out, kk = [], []
-        for (s, f, kind), (js, jf) in zip(TOP, jit):
-            if kind == "c":
-                ph_ = math.radians(s)
-                s2 = CAP_X + CAP_RX * math.cos(ph_) + js * 2
-                y = hp(CAP_X) * math.sin(ph_) * (f + jf)
-            else:
-                s2 = min(s + js, 1.0)
-                y = hp(s2) * (f + jf)
-            out.append(pt(s2, sg * y)); kk.append(KS[kind])
-        return out, kk
-    tp, tk = side(st["top"], 1)
-    bp, bk = side(st["bot"], -1)
-    nodes = [pt(0, hb)] + tp + [pt(CAP_X + CAP_RX + st["nose"], 0)] + bp[::-1] + [pt(0, -hb)]
-    ks = [1.0] + tk + [1.0] + bk[::-1] + [1.0]
-    return _smooth(nodes, ks)
+BANDS = [  # (colour, radius factor, shift toward mouth, circles dropped at the far end)   rim -> core
+    (FIRE[4], 1.00, 0, 0), (FIRE[3], 0.80, 7, 0), (FIRE[2], 0.62, 13, 1), (FIRE[1], 0.45, 19, 2), (FIRE[0], 0.29, 24, 3)]
+NCH = 8      # circles in the main billow chain
 
 
 def _local_to_head(origin, rot, lx, ly):
@@ -103,97 +52,110 @@ def _teardrop(k=1.9):
     return {"c": True, "v": sc(v), "i": sc(i), "o": sc(o)}
 
 
+def _chain(rng):
+    """base circles (x, y, r) of the rim billow chain, local jet coords (x along the jet, y up)."""
+    out = []
+    for i in range(NCH):
+        s = i / (NCH - 1)
+        x = FIRE_LEN * (0.04 + 0.96 * s ** 0.95)
+        r = FIRE_MOUTH * 0.95 + (FIRE_HW - FIRE_MOUTH * 0.95) * s ** 0.62
+        r *= 1.0 + (0.14 if i % 2 else -0.08) + rng.uniform(-0.04, 0.04)
+        y = 20 * s * s + (7 if i % 2 else -5) * s
+        out.append((x, y, r))
+    return out
+
+
 def fire_layers(origin, angle_deg=-14, t_on=50, t_full=57, t_off=92, t_end=102):
     rot = 180 + angle_deg
-    spec = [  # lenf, widf, xoff, yoff (top = hot core ... last = rim)
-        (0.34, 0.24, 20, 7), (0.52, 0.42, 14, 5), (0.70, 0.60, 9, 3.5), (0.86, 0.80, 4, 2), (1.00, 1.00, 0, 0)]
+    base = _chain(random.Random(5))
     layers = []
-    for idx, (lenf, widf, xoff, yoff) in enumerate(spec):
-        k = len(spec) - 1 - idx                      # 0 = rim (outermost)
-        rng = random.Random(40 + k * 11)
-        states = [_state(rng) for _ in range(4)]
-        t_done = int(round(t_end - 1 - 0.7 * k))
-        ts = [t_on, t_on + 1, t_on + 2, t_on + 3, t_on + 5, t_full]
-        t = t_full + 4 - k % 2
-        while t < t_off - 2:
-            ts.append(t); t += 4
-        t = t_off - (t_off % 2)
-        while t < t_done:
-            ts.append(t); t += 2
-        ts.append(t_done)
-        keys = []
-        for j, t in enumerate(sorted(set(ts))):
-            g = _out((t - t_on - 0.6 * k) / (t_full - t_on), 4)
-            q = _inout((t - t_off + 0.7 * k) / (t_end - 1 - t_off)) if t >= t_off - 2 else 0.0
-            if t >= t_done:
-                q = 1.0
-            sf = (1 - q) ** 1.3
-            gl = max(g, 0.05)
-            L = FIRE_LEN * lenf
-            x0 = xoff * gl * (1 - q) + 0.3 * L * q
-            x1 = xoff * gl * (1 - q) + L * gl * sf + 0.3 * L * q
-            H = max(FIRE_HW * widf * (0.3 + 0.7 * g ** 0.8) * sf ** 0.7, 2.5)
-            hb = max(min(FIRE_MOUTH * widf * min(1.0, g * 2.2) * (1 - 0.6 * q) + 1.5, H * .6), 0.8)
-            bend = 30 * gl * sf
-            wave = 6 * gl * math.sin(0.23 * t + k * 0.9) * sf
-            keys.append((t, _flame(x0, max(x1, x0 + 10), H, hb, states[(j + k) % 4], bend, wave, 0.3 * t + k, yoff * gl), "linear"))
-        layers.append(layer("fx_fire_%d" % k, group("flame", path(track(*keys)), fill(FIRE[idx])),
-                            p=origin, r=rot, parent="head", ip=t_on - 1, op=t_done))
-    # flame chunks: break off the far end, rise, curl and shrink away
+    for k, (col, rf, shift, drop) in enumerate(BANDS):
+        rng = random.Random(90 + k)
+        circ = [(x - shift, y * (0.9 - 0.1 * k) + 0, r * rf) for x, y, r in base[:NCH - drop]]
+        hold0 = t_full + 3
+        grp = []
+        for i, (cx, cy, cr) in enumerate(circ):
+            d = 0.5 * i + 0.3 * k                                   # grow delay along the jet
+            ds = t_off - 1 + 1.4 * i / (NCH - 1) - 0.4 * k   # pinch-off starts at the mouth end
+            de = ds + 7
+            ph = rng.uniform(0, 6.3)
+
+            def pos(t):
+                g = _out((t - t_on - d) / (t_full - t_on), 4)
+                q = _inout((t - ds) / (de - ds))
+                xe = cx * max(g, 0.02)
+                return (xe + (0.8 * FIRE_LEN - xe) * q + 70 * q * q, cy * g * (1 - q) + 28 * q)
+
+            def rad(t):
+                g = _out((t - t_on - d) / (t_full - t_on), 3)
+                q = _clamp((t - ds) / (de - ds))
+                fl = 1 + 0.085 * math.sin(0.5 * t + ph) + 0.04 * math.sin(1.7 * t + 2 * ph) if t > t_full else 1
+                return max(cr * g * fl * (1 - q ** 1.6) * (1 - 0.3 * q), 0.0)
+
+            tg = [t_on, t_on + 2, t_on + 4, int(math.ceil(t_full + d))]
+            pk = sorted(set(tg + [int(ds), int(de)]))
+            pk = [t for t in pk if t <= de]
+            ts_r = sorted(set(tg + list(range(hold0 + (i + k) % 3, int(ds), 3)) + [int(ds)] + list(range(int(ds) + 2, int(de), 2)) + [int(de)]))
+            pt_ = track(*[(t, [_r(v) for v in pos(t)], "linear") for t in pk])
+            sz = track(*[(t, [_r(2 * rad(t))] * 2, "linear") for t in ts_r])
+            grp.append(ellipse((10, 10), p=pt_))
+            grp[-1]["s"] = sz
+        layers.append(layer("fx_fire_%d" % k, group("flame", *grp, fill(col)),
+                            p=origin, r=rot, parent="head", ip=t_on - 1, op=t_end))
+    # licks / detached chunks: rise, curl and shrink away
+    plan = [(60, 0.55, 22, 70, 52), (63, 0.6, 22, 100, -58), (68, 0.62, 24, 150, 18), (74, 0.58, 22, 110, 62),
+            (78, 0.6, 24, 140, -50), (84, 0.66, 24, 160, 10), (t_off - 2, 0.8, t_end - t_off + 2, 150, 0)]
     blobs = []
-    plan = [(61, 0.62, 24, 185, 12), (70, 0.72, 26, 190, -16), (79, 0.66, 26, 185, 14), (87, 0.7, 24, 190, -8),
-            (t_off - 1, 0.95, t_end - t_off + 1, 190, 0)]
     for bi, (ts, scl, life, tip, ly) in enumerate(plan):
+        ts = int(ts)
         a = _local_to_head(origin, rot, tip, ly)
         ang = math.radians(rot)
-        end = (a[0] + math.cos(ang) * 22, a[1] + math.sin(ang) * 22 - (62 if bi == 4 else 52))
-        mid = (a[0] + math.cos(ang) * 14, a[1] + math.sin(ang) * 14 - 20)
+        up = -58 if ly <= 0 else -42
+        end = (a[0] + math.cos(ang) * 22, a[1] + math.sin(ang) * 22 + up)
+        mid = (a[0] + math.cos(ang) * 14, a[1] + math.sin(ang) * 14 + up * 0.35)
         pk = track((ts, [_r(a[0]), _r(a[1])], "out"), (ts + 6, [_r(mid[0]), _r(mid[1])], "swing"), (ts + life, [_r(end[0]), _r(end[1])]))
         sc = track((ts, [scl * 45] * 2, "out"), (ts + 5, [scl * 100, scl * 95], "in"), (ts + life, [0, 0]))
-        rk = track((ts, rot, "out"), (ts + life, rot + 55))
+        rk = track((ts, rot, "out"), (ts + life, rot + (55 if bi % 2 else -40)))
         op = track((ts, 100, "linear"), (ts + life - 3, 100, "linear"), (ts + life, 0))
         grp = [group("hot", path(_teardrop()), fill(FIRE[1]), s=(42, 42), p=(-2, 0)),
                group("mid", path(_teardrop()), fill(FIRE[2]), s=(62, 62), p=(-1, 0)),
                group("blob", path(_teardrop()), fill(FIRE[3]), s=(82, 82)),
                group("rim", path(_teardrop()), fill(FIRE[4]))]
         blobs.append(layer("fx_fire_blob_%d" % bi, *grp, p=pk, s=sc, r=rk, o=op, parent="head", ip=ts, op=ts + life))
-    return blobs + layers
+    return blobs + layers[::-1]
 
 
 # ----------------------------------------------------------------------------- sparks
 def spark_layers(origin, angle_deg=-14, t_from=52, t_to=90):
-    rng = random.Random(7)
-    n = 8
+    rng = random.Random(11)
+    n = 7
     out = []
     base = math.radians(180 - angle_deg)      # screen direction of the jet (y down)
     for i in range(n):
         t0 = int(round(t_from + (t_to - t_from) * i / (n - 1)))
-        life = rng.randint(15, 22)
-        ang = base + math.radians(rng.uniform(-16, 16)) * (1 if i % 2 else -1)
-        sp = rng.uniform(5.5, 8.5)
+        life = rng.randint(14, 20)
+        up = -1 if i % 3 else 1               # mostly up, a few fall
+        ang = base + math.radians(rng.uniform(25, 55)) * up
+        sp = rng.uniform(4.5, 7.0)
         vx, vy = math.cos(ang) * sp, math.sin(ang) * sp
-        px = origin[0] + math.cos(base) * rng.uniform(50, 80)
-        py = origin[1] + math.sin(base) * rng.uniform(50, 80) - rng.uniform(0, 14)
+        d = rng.uniform(70, 125)
+        px = origin[0] + math.cos(base) * d
+        py = origin[1] + math.sin(base) * d + up * rng.uniform(18, 34)
         pk, sk, ok = [], [], []
-        step = 3
-        ts = list(range(0, life, step)) + [life]
         x, y = px, py
-        prev = 0
-        for a in range(life + 1):
-            if a in ts:
-                pk.append((t0 + a, [_r(x), _r(y)], "linear"))
-                u = a / life
-                sk.append((t0 + a, [_r(100 * (1.0 - 0.8 * u ** 1.2))] * 2, "linear"))
-                ok.append((t0 + a, int(100 * (1 - _clamp((u - 0.55) / 0.45))), "linear"))
+        ts = list(range(0, life, 3)) + [life]
+        for a_ in range(life + 1):
+            if a_ in ts:
+                pk.append((t0 + a_, [_r(x), _r(y)], "linear"))
+                u = a_ / life
+                sk.append((t0 + a_, [_r(100 * (1.0 - 0.75 * u ** 1.3))] * 2, "linear"))
+                ok.append((t0 + a_, int(100 * (1 - _clamp((u - 0.6) / 0.4))), "linear"))
             x += vx; y += vy
-            vx *= 0.955; vy = vy * 0.955 + 0.16
-        rotd = math.degrees(math.atan2(vy, vx))
-        sz = rng.uniform(.8, 1.15)
-        g = [group("hot", ellipse((9, 6)), fill(FIRE[1]), s=(sz * 100,) * 2),
-             group("ember", ellipse((16, 11)), fill(FIRE[3]), s=(sz * 100,) * 2)]
-        if i % 3 == 0:  # a few bigger, amber
-            g[1] = group("ember", ellipse((19, 13)), fill(FIRE[2]), s=(sz * 100,) * 2)
-        out.append(layer("fx_spark_%d" % i, *g, p=track(*pk), s=track(*sk), o=track(*ok), r=rotd,
+            vx *= 0.95; vy = vy * 0.95 - 0.10
+        sz = rng.uniform(1.0, 1.3)
+        g = [group("ember", ellipse((20, 14)), fill(FIRE[2] if i % 2 else FIRE[3]), s=(sz * 100,) * 2),
+             group("hot", ellipse((11, 7)), fill(FIRE[0]), s=(sz * 100,) * 2)]
+        out.append(layer("fx_spark_%d" % i, *g, p=track(*pk), s=track(*sk), o=track(*ok), r=math.degrees(ang),
                          parent="head", ip=t0, op=t0 + life + 1))
     return out
 
@@ -213,7 +175,7 @@ def _puff_groups(cl, wtrack, fillc, hic):
     ell = lambda dx, dy, r: ellipse(r * 2, p=(dx, dy))
     hi = [group("hl", ellipse(19, p=(cl[0][0] - 8, cl[0][1] - 9)), fill(hic)),
           group("hl2", ellipse(8, p=(cl[1][0] - 2, cl[1][1] - 4)), fill(hic))]
-    fl = group("fill", *[ell(dx - 1.8, dy - 2.5, r - 3.2) for dx, dy, r in cl], fill(fillc))
+    fl = group("fill", *[ell(dx - 1.4, dy - 2.0, r - 2.6) for dx, dy, r in cl], fill(fillc))
     sh = group("shade", *[ell(dx, dy, r) for dx, dy, r in cl], fill(SMOKE_SHADE))
     ol = group("outline", *[ell(dx, dy, r) for dx, dy, r in cl], fill(SMOKE_OUT), stroke(SMOKE_OUT, wtrack))
     return hi + [fl, sh, ol]
@@ -270,23 +232,28 @@ def smoke_layers(emitters, paw=None):
             shove = False
             if pv and not fl and age > 2 and math.hypot(pv[0], pv[1]) > SHOVE_SPEED:
                 d = math.hypot(p["x"] - pv[2][0], p["y"] - pv[2][1])
-                if d < 85:
+                if d < 120:
                     sp = math.hypot(pv[0], pv[1])
-                    D = 60 + 40 * (1 - d / 85)
-                    p["fly"] = (f, p["x"], p["y"], pv[0] / sp * D, pv[1] / sp * D)
-                    p["vx"], p["vy"] = pv[0] / sp * 1.2, pv[1] / sp * 1.2
+                    ax, ay = p["x"] - pv[2][0], p["y"] - pv[2][1]
+                    al = math.hypot(ax, ay) or 1.0
+                    dx, dy = ax / al * 0.9 + pv[0] / sp * 0.3, ay / al * 0.35 + pv[1] / sp * 0.15 + 0.05
+                    dl = math.hypot(dx, dy)
+                    dx, dy = dx / dl, dy / dl
+                    D = 55 + 45 * (1 - d / 120)
+                    p["fly"] = (f, p["x"], p["y"], dx * D, dy * D)
+                    p["vx"], p["vy"] = dx * 1.2, dy * 1.2
                     shove = True
                     p["end"] = min(p["end"], f + (17 if not p["child"] else 14))
                     p["shr"] = 9 if not p["child"] else 8
                     if not p["child"]:
                         R = p["size"]
-                        n = 3 if R >= 30 else 2
+                        n = 3 if R >= 34 else 2
                         ex, ey = p["x"] + p["fly"][3], p["y"] + p["fly"][4]
                         for c in range(n):
                             ang = c / n * 6.28 + p["ph"]
                             ch = _new_puff(f + 8, (ex + math.cos(ang) * R * 0.45, ey + math.sin(ang) * R * 0.45),
                                            (p["vx"] + math.cos(ang) * 0.9, p["vy"] + math.sin(ang) * 0.9 - 0.2),
-                                           R * 0.46, 26, rng, False, True)
+                                           R * 0.56, 26, rng, False, True)
                             pending.append(ch); allp.append(ch)
                         pending.sort(key=lambda q: q["t0"])
             flying = p["fly"] and f - p["fly"][0] <= 10
@@ -303,7 +270,7 @@ def smoke_layers(emitters, paw=None):
         S = [r[1] for r in rec]
         T = lambda i, e="linear": [(k[0], k[i], e) for k in ks]
         wsel = [i for i in range(len(rec)) if i % 3 == 0 or i == len(rec) - 1]
-        wk = track(*[(ks[i][0], _r(11 * (S[i] / 100) ** -0.6), "linear") for i in wsel])
+        wk = track(*[(ks[i][0], _r(min(7.0, 4.2 * (S[i] / 100) ** -0.5)), "linear") for i in wsel])
         cl = CLUSTERS[p["cl"]]
         if p["mir"] < 0:
             cl = [(-dx, dy, r) for dx, dy, r in cl]
