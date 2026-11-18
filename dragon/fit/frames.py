@@ -119,7 +119,7 @@ HIND = ['hind_leg', 'hind_leg_line', 'hind_knee']
 HIND_PIVOT = (1611.0, 1085.5)     # the frog's rfeet anchor in K0 pixels
 
 FRAMES['K8'] = dict(
-    register=[CROWN], rotate=[(HIND, 55.0, HIND_PIVOT)],
+    register=[CROWN],
     tps=dict(nose=(515, 665), lip=(500, 780), n1=(525, 670), n2=(690, 700), mmid=(700, 845), mback=(840, 790),
              fang=(688, 858), chin=(630, 930), throat=(850, 960), feye=(595, 512), eye=(995, 580)),
     snap=[s for s in SNAP_IDS if s not in HIND],
@@ -139,7 +139,21 @@ def _k8_post(P, P0):
                          20: (650, 929), 21: (590, 920), 22: (535, 890), 23: (500, 845)})
 
 
-FRAMES['K8']['post'] = [_k8_post]
+def _k8_hind(P, P0):
+    # raised leg at the cheek: thigh mass + shin column + foot with toes on top (measured on the K8 frame)
+    _m.place(P['hind_leg'], {1: (1545, 1060), 2: (1320, 888), 3: (1322, 800), 4: (1238, 746), 5: (1152, 778), 6: (1158, 1100), 7: (1583, 1132)})
+    nd = _m.Nodes(P['hind_leg'])
+    nd.pos[0] = (1545, 1060)
+    nd.out[1] = nd.pos[1] + (120, -5); nd.inn[0] = nd.pos[0] + (-6, -115)
+    nd.put()
+    _m.place(P['hind_leg_line'], {1: (1312, 842), 2: (1305, 930), 3: (1303, 1030), 4: (1320, 1108), 5: (1380, 1148)})
+    _m.similarity(P['hind_knee'], [(1491, 1210), (1519, 1088)], [(1223, 1068), (1223, 955)])
+    for _, ps in P['hind_knee'].cmds:
+        for pt in ps:
+            pt[0] = 1223 + (pt[0] - 1223) * 0.45
+
+
+FRAMES['K8']['post'] = [_k8_post, _k8_hind]
 
 # --- belly / front leg of the leaning poses (K4 inhale, K8 embarrassed): measured on the storyboard frames
 LEG = ['leg_front_near', 'leg_front_near_line']
@@ -160,11 +174,44 @@ def _rect8(x0, y0, x1, y1):
 FRAMES['K4']['translate'] = [(LEG, 258, 18), (TOES, 280, 15)]
 FRAMES['K4']['place'] = {'belly': BELLY_K4, 'belly_under': _rect8(1165, 1222, 1237, 1322)}
 FRAMES['K4']['shapes'].update(STRIPES_K4)
-FRAMES['K4']['place']['cheek_puff_far'] = [(318, 730), (335, 640), (395, 578), (462, 625), (438, 725), (428, 810), (385, 880), (335, 820)]
+FRAMES['K4']['place']['cheek_puff_far'] = [(352, 735), (366, 655), (405, 603), (462, 640), (440, 725), (430, 805), (395, 862), (360, 815)]
 FRAMES['K8']['translate'] = [(LEG, 258, 18), (TOES, 280, 15)]
 FRAMES['K8']['place'] = {'belly': [(x, y if i in (0, 1, 2, 12) else y + 15) for i, (x, y) in enumerate(BELLY_K4)],
                          'belly_under': _rect8(1170, 1232, 1255, 1312)}
 FRAMES['K8']['shapes'].update({k: [(x, y + (0 if k == 'belly_stripe_1' else 12)) for x, y in v] for k, v in STRIPES_K4.items()})
+
+def _enclose(cx, cy, rx, ry, rot=0, m=16):
+    """post step: route the head contour (A3-A5) around the far eye so the eye sits inside the head silhouette"""
+    import numpy as np
+
+    def fn(P, P0):
+        c, s = np.cos(np.radians(rot)), np.sin(np.radians(rot))
+        pts = {}
+        for idx, ang in ((3, 160), (4, 235), (5, 290)):
+            a = np.radians(ang)
+            x, y = (rx + m) * np.cos(a), (ry + m) * np.sin(a)
+            pts[idx] = (cx + c * x - s * y, cy + s * x + c * y)
+        _m.place(P['head'], pts)
+    return fn
+
+
+for _k, _eye in {'K2': (532, 540, 30, 55, 10), 'K3': (545, 525, 48, 70, 8), 'K4': (548, 528, 42, 28, 28),
+                 'K5': (590, 462, 34, 40), 'K6': (578, 468, 26, 14, -10), 'K7': (592, 457, 42, 44), 'K8': (595, 512, 45, 35)}.items():
+    FRAMES[_k].setdefault('post', []).append(_enclose(*_eye))
+
+def _jaw_back(P, P0):
+    """jaw corner -> chin underside (A13-A17) with K0's rounded profile scaled to this pose (no boxy chin)"""
+    import numpy as np
+    k0 = np.array([a for a, _ in _m.Nodes(P0['jaw']).path.anchors()])
+    cor = _m.Nodes(P['mouth_line']).pos[-1]
+    a18 = _m.Nodes(P['jaw']).pos[17]
+    sx = (cor[0] - a18[0]) / (k0[11][0] - k0[17][0]); sy = (a18[1] - cor[1]) / (k0[17][1] - k0[11][1])
+    pts = {13 + i: (cor[0] + (k0[12 + i][0] - k0[11][0]) * sx, cor[1] + (k0[12 + i][1] - k0[11][1]) * sy) for i in range(5)}
+    _m.place(P['jaw'], pts)
+
+
+for _k in ('K3', 'K4'):
+    FRAMES[_k].setdefault('post', []).append(_jaw_back)
 
 # the wing and the hind leg are driven by the rig (rotation), so frames keep their K0 geometry
 for _k, _f in FRAMES.items():

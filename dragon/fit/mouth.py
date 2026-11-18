@@ -176,7 +176,22 @@ def place(path, pts, smooth=()):
             touched.add((a - 1 + d) % n if path.closed else min(max(a - 1 + d, 0), n - 1))
     for i in touched:
         if not path.closed and i in (0, n - 1):
+            if i == 0:
+                nd.out[0] = nd.pos[0] + (nd.pos[1] - nd.pos[0]) / 3
+            else:
+                nd.inn[n - 1] = nd.pos[n - 1] - (nd.pos[n - 1] - nd.pos[n - 2]) / 3
             continue
         t = (nd.pos[(i + 1) % n] - nd.pos[i - 1]) / 6
         nd.inn[i] = nd.pos[i] - t; nd.out[i] = nd.pos[i] + t
     nd.put()
+
+
+def similarity(path, src2, dst2):
+    """move every point of `path` by the similarity (rotation+scale+shift) taking the two points src2 onto dst2"""
+    (a, b), (c, d) = [np.asarray(p, float) for p in src2], [np.asarray(p, float) for p in dst2]
+    zs, zd = complex(*(b - a)), complex(*(d - c))
+    k = zd / zs
+    for _, ps in path.cmds:
+        for pt in ps:
+            z = k * complex(pt[0] - a[0], pt[1] - a[1])
+            pt[0], pt[1] = c[0] + z.real, c[1] + z.imag
