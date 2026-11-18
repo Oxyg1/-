@@ -140,3 +140,14 @@ The one reusable motion is the hind-foot wave: layer `rfeet` rotates about layer
 | `kiss` (0, 0) (closed, 6 vtx) | lower kiss print (6 vtx closed) | v1->`kiss_lower` A5 (25); v2->`kiss_lower` A3 (6); v3->`kiss_lower` A15 (8); v4->`kiss_lower` A12 (17); v5->`kiss_lower` A10 (42); v6->`kiss_lower` A8 (56) |
 
 Frog layers without a template counterpart: `eyel` (far eye, frog-px near (594,435) K0: tiny shapes), `складк` (fold line over the mouth), `щеки`/`щеки 2` (cheek ellipse + 2-vertex lines), `larm`/`rarm` second stroke copies, `body` stroke sub-shapes (2,0,x) = frog head/mouth line strokes, `body` (4,0,0) 3-vertex shading shape, `body` (0,0) 2-vertex tiny shape, `orb*` particle layers.
+
+## v2: frog contours (current template)
+
+`build_template_v2.py` replaced these parts with the **original Kissed Frog contours** (same points and order as in
+`ref/kissed-frog-original.json`, frame 0, evaluated by lottie-web, mapped `x = 2.76·x + 264`, `y = 2.76·y + 156`;
+silhouette IoU 0.964): `body`, `body_shade`, `back_shade`, `body_rim`, `chin_highlight`, `spot_6`, `foot_front_far`,
+`leg_front_near`, `leg_front_near_line`, `hind_leg`, `hind_leg_line`, `hind_knee`, `eye_near_outer`, `eye_near_iris`,
+`eye_near_crease`, `kiss_upper`, `kiss_lower`, `brow_fold`. Removed as redundant: `toe_far_1/2`, `paw_front_near`, `hind_toes`.
+The frog layer/shape index for each is in `frog/frog_parts.json`, so the frog's own animation of those parts
+(for example the `rfeet` hind-paw wave) carries over. The v1 template is kept as `dragon_template_v1.svg`.
+The tables above describe v1; for the frog parts the point counts are whatever `count_points.py` reports on the template.

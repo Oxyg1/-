@@ -1,0 +1,110 @@
+{
+ "foot_front_far": {
+  "group": "g_legs",
+  "frog_layer": "larm",
+  "frog_layer_ind": 23,
+  "frog_index": 0
+ },
+ "body": {
+  "group": "g_body",
+  "frog_layer": "body",
+  "frog_layer_ind": 22,
+  "frog_index": 0
+ },
+ "body_shade": {
+  "group": "g_body",
+  "frog_layer": "body",
+  "frog_layer_ind": 22,
+  "frog_index": 2
+ },
+ "back_shade": {
+  "group": "g_body",
+  "frog_layer": "body",
+  "frog_layer_ind": 22,
+  "frog_index": 3
+ },
+ "body_rim": {
+  "group": "g_body",
+  "frog_layer": "body",
+  "frog_layer_ind": 22,
+  "frog_index": 4
+ },
+ "chin_highlight": {
+  "group": "g_body",
+  "frog_layer": "body",
+  "frog_layer_ind": 22,
+  "frog_index": 5
+ },
+ "spot_6": {
+  "group": "g_spots",
+  "frog_layer": "body",
+  "frog_layer_ind": 22,
+  "frog_index": 7
+ },
+ "kiss_upper": {
+  "group": "g_marks",
+  "frog_layer": "kiss",
+  "frog_layer_ind": 21,
+  "frog_index": 0
+ },
+ "kiss_lower": {
+  "group": "g_marks",
+  "frog_layer": "kiss",
+  "frog_layer_ind": 21,
+  "frog_index": 1
+ },
+ "eye_near_crease": {
+  "group": "g_eye_near",
+  "frog_layer": "eyer",
+  "frog_layer_ind": 20,
+  "frog_index": 0
+ },
+ "eye_near_outer": {
+  "group": "g_eye_near",
+  "frog_layer": "eyer",
+  "frog_layer_ind": 20,
+  "frog_index": 1
+ },
+ "eye_near_iris": {
+  "group": "g_eye_near",
+  "frog_layer": "eyer",
+  "frog_layer_ind": 20,
+  "frog_index": 2
+ },
+ "brow_fold": {
+  "group": "g_head",
+  "frog_layer": "fold",
+  "frog_layer_ind": 18,
+  "frog_index": 0
+ },
+ "hind_leg": {
+  "group": "g_legs",
+  "frog_layer": "rfeet",
+  "frog_layer_ind": 17,
+  "frog_index": 0
+ },
+ "hind_leg_line": {
+  "group": "g_legs",
+  "frog_layer": "rfeet",
+  "frog_layer_ind": 17,
+  "frog_index": 1
+ },
+ "hind_knee": {
+  "group": "g_legs",
+  "frog_layer": "rfeet",
+  "frog_layer_ind": 17,
+  "frog_index": 2
+ },
+ "leg_front_near": {
+  "group": "g_legs",
+  "frog_layer": "rarm",
+  "frog_layer_ind": 16,
+  "frog_index": 0
+ },
+ "leg_front_near_line": {
+  "group": "g_legs",
+  "frog_layer": "rarm",
+  "frog_layer_ind": 16,
+  "frog_index": 1
+ }
+}
