@@ -58,3 +58,9 @@ Models link "dragon + fire" to flight and redraw the whole body. Here's what hel
 The chosen frames named `K1.png` … `K11.png` (the same size as the reference, 2000×1609).
 I'll check that they're aligned and then we move on to tracing the contours (instructions and the
 contour template come in the next step).
+
+## Status (received frames)
+
+K0–K8 are in `ref/storyboard/` (K5–K8 came in 2304×1854 and are scaled to 2000×1609; after scaling they line up with K0).
+K9/K10 are **not needed**. The hind-paw wave is done the way it is in the original frog: one raised pose (K8)
+plus rotation oscillation in code. K11 = K1 (the lazy blink in profile) mirrored in time on the way back.
